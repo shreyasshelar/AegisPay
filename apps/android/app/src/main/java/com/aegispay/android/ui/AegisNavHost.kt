@@ -1,0 +1,150 @@
+package com.aegispay.android.ui
+
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.*
+import androidx.navigation.compose.*
+import com.aegispay.android.auth.AuthState
+import com.aegispay.android.ui.auth.AuthViewModel
+import com.aegispay.android.ui.auth.LoginScreen
+import com.aegispay.android.ui.backoffice.BackOfficeScreen
+import com.aegispay.android.ui.dashboard.DashboardScreen
+import com.aegispay.android.ui.notifications.NotificationsScreen
+import com.aegispay.android.ui.profile.ProfileScreen
+import com.aegispay.android.ui.sendmoney.SendMoneyScreen
+import com.aegispay.android.ui.transactions.TransactionDetailScreen
+import com.aegispay.android.ui.transactions.TransactionListScreen
+
+// ── Route constants ───────────────────────────────────────────────────────────
+
+object Route {
+    const val LOGIN              = "login"
+    const val DASHBOARD          = "dashboard"
+    const val TRANSACTIONS       = "transactions"
+    const val TRANSACTION_DETAIL = "transactions/{transactionId}"
+    const val SEND_MONEY         = "send"
+    const val NOTIFICATIONS      = "notifications"
+    const val PROFILE            = "profile"
+    const val BACK_OFFICE        = "backoffice"
+
+    fun transactionDetail(id: String) = "transactions/$id"
+}
+
+private val BACK_OFFICE_ROLES = setOf("BACK_OFFICE", "ADMIN", "MERCHANT_OPS")
+
+// ── Nav host ──────────────────────────────────────────────────────────────────
+
+@Composable
+fun AegisNavHost(
+    authViewModel:   AuthViewModel,
+    onStartAuthFlow: () -> Unit,
+    modifier:        Modifier = Modifier,
+) {
+    val navController = rememberNavController()
+    val authState by authViewModel.authState.collectAsState()
+
+    // Derive role from auth state (safe — doesn't hit the token store on every recomposition)
+    val userRole = (authState as? AuthState.Authenticated)?.user?.role ?: ""
+    val isBackOfficeUser = userRole in BACK_OFFICE_ROLES
+
+    // React to auth state changes
+    LaunchedEffect(authState) {
+        when (authState) {
+            is AuthState.Authenticated -> {
+                navController.navigate(Route.DASHBOARD) {
+                    popUpTo(Route.LOGIN) { inclusive = true }
+                }
+            }
+            is AuthState.Unauthenticated -> {
+                navController.navigate(Route.LOGIN) {
+                    popUpTo(0) { inclusive = true }
+                }
+            }
+            else -> Unit
+        }
+    }
+
+    NavHost(
+        navController    = navController,
+        startDestination = if (authState is AuthState.Authenticated) Route.DASHBOARD else Route.LOGIN,
+        modifier         = modifier,
+    ) {
+
+        composable(Route.LOGIN) {
+            LoginScreen(
+                viewModel       = authViewModel,
+                onStartAuthFlow = onStartAuthFlow,
+            )
+        }
+
+        composable(Route.DASHBOARD) {
+            DashboardScreen(
+                viewModel                 = hiltViewModel(),
+                onNavigateToTransactions  = { navController.navigate(Route.TRANSACTIONS) },
+                onNavigateToDetail        = { id -> navController.navigate(Route.transactionDetail(id)) },
+                onNavigateToSend          = { navController.navigate(Route.SEND_MONEY) },
+                onNavigateToNotifications = { navController.navigate(Route.NOTIFICATIONS) },
+                onNavigateToProfile       = { navController.navigate(Route.PROFILE) },
+                onNavigateToBackOffice    = { navController.navigate(Route.BACK_OFFICE) },
+            )
+        }
+
+        composable(Route.TRANSACTIONS) {
+            TransactionListScreen(
+                viewModel        = hiltViewModel(),
+                onNavigateToDetail = { id -> navController.navigate(Route.transactionDetail(id)) },
+                onNavigateUp     = { navController.navigateUp() },
+            )
+        }
+
+        composable(
+            route     = Route.TRANSACTION_DETAIL,
+            arguments = listOf(navArgument("transactionId") { type = NavType.StringType }),
+        ) { back ->
+            val txId = back.arguments!!.getString("transactionId")!!
+            TransactionDetailScreen(
+                transactionId = txId,
+                viewModel     = hiltViewModel(),
+                onNavigateUp  = { navController.navigateUp() },
+            )
+        }
+
+        composable(Route.SEND_MONEY) {
+            SendMoneyScreen(
+                viewModel          = hiltViewModel(),
+                onNavigateUp       = { navController.navigateUp() },
+                onNavigateToDetail = { id ->
+                    navController.navigate(Route.transactionDetail(id)) {
+                        popUpTo(Route.DASHBOARD)
+                    }
+                },
+            )
+        }
+
+        composable(Route.NOTIFICATIONS) {
+            NotificationsScreen(
+                viewModel    = hiltViewModel(),
+                onNavigateUp = { navController.navigateUp() },
+            )
+        }
+
+        composable(Route.PROFILE) {
+            ProfileScreen(
+                viewModel    = hiltViewModel(),
+                onNavigateUp = { navController.navigateUp() },
+                onSignOut    = { authViewModel.signOut() },
+            )
+        }
+
+        // ── Back-office (role-gated) ──────────────────────────────────────────
+        if (isBackOfficeUser) {
+            composable(Route.BACK_OFFICE) {
+                BackOfficeScreen(
+                    viewModel    = hiltViewModel(),
+                    onNavigateUp = { navController.navigateUp() },
+                )
+            }
+        }
+    }
+}
