@@ -1,0 +1,128 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Dev environment overrides
+# Image tags are patched here by the CD pipeline (cd-dev.yml via yq)
+# ─────────────────────────────────────────────────────────────────────────────
+
+global:
+  namespace: aegispay-dev
+  imagePullPolicy: Always
+
+services:
+  api_gateway:
+    replicas: 1
+    image:
+      tag: latest  # patched by CI: yq e '.services.api_gateway.image.tag = "<sha>"'
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    autoscaling:
+      enabled: false
+    ingress:
+      enabled: true
+      hosts:
+        - host: api.dev.aegispay.io
+      tls: []
+    rateLimiter:
+      maxRequests: 200
+
+  user_service:
+    replicas: 1
+    image:
+      tag: latest
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    autoscaling:
+      enabled: false
+
+  transaction_service:
+    replicas: 1
+    image:
+      tag: latest
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 768Mi
+    autoscaling:
+      enabled: false
+
+  ledger_service:
+    replicas: 1
+    image:
+      tag: latest
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 768Mi
+    autoscaling:
+      enabled: false
+
+  payment_orchestrator:
+    replicas: 1
+    image:
+      tag: latest
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    autoscaling:
+      enabled: false
+
+  risk_engine:
+    replicas: 1
+    image:
+      tag: latest
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    autoscaling:
+      enabled: false
+
+  notification_service:
+    replicas: 1
+    image:
+      tag: latest
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    autoscaling:
+      enabled: false
+
+  ai_platform:
+    replicas: 1
+    image:
+      tag: latest
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+    autoscaling:
+      enabled: false

@@ -1,14 +1,107 @@
-node_modules/
-.next/
-dist/
+# ============================================================
+# AegisPay Monorepo — unified .gitignore
+# (Java/Maven • Node/Turborepo • Swift/iOS • Kotlin/Android)
+# ============================================================
+
+# ── Java / Maven ────────────────────────────────────────────
+target/
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+# ── Gradle (Android) ────────────────────────────────────────
+.gradle/
 build/
-storybook-static/
-coverage/
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/main/**/build/
+!**/src/test/**/build/
+local.properties
+*.iml
+
+# ── Node / Turborepo ────────────────────────────────────────
+node_modules/
 .turbo/
+dist/
+.next/
+out/
+.vercel/
+storybook-static/
+.env
+.env.local
+.env.*.local
 *.env.local
 *.env.development.local
 *.env.test.local
 *.env.production.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-store/
+*.tsbuildinfo
+
+# ── Swift / iOS / Xcode ─────────────────────────────────────
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+DerivedData/
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+*.xccheckout
+*.moved-aside
+*.xcscmblueprint
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+Pods/
+Carthage/Build/
+
+# ── Android specifics ───────────────────────────────────────
+apps/android/app/release/
+apps/android/**/*.apk
+apps/android/**/*.aab
+*.keystore
+*.jks
+
+# ── IDEs & editors ──────────────────────────────────────────
+.idea/
+*.iws
+.vscode/
+*.swp
+*.swo
 .DS_Store
+Thumbs.db
+
+# ── Secrets & credentials ───────────────────────────────────
+*.pem
+*.p12
+*.p8
+secrets/
+**/application-local.yml
+**/application-secret*.yml
+
+# ── Helm / K8s generated ────────────────────────────────────
+infra/helm/**/charts/
+infra/helm/**/*.lock.yaml
+
+# ── Test artefacts ──────────────────────────────────────────
+coverage/
+.nyc_output/
+surefire-reports/
+failsafe-reports/
+
+# ── Misc ────────────────────────────────────────────────────
 *.log
-.vercel/
+*.tmp
+*.bak

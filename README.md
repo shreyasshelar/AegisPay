@@ -424,8 +424,11 @@ docker        # for local infra
 git clone https://github.com/shreyasshelar/AegisPay.git
 cd AegisPay
 
-# Frontend monorepo
-npm install          # installs all workspaces (web + packages)
+# Install JS/TS workspaces (web + packages)
+npm install
+
+# Build shared Java libraries + all backend services
+mvn clean install -DskipTests
 ```
 
 ### 2 — Spin up local infra
@@ -466,56 +469,107 @@ mvn spring-boot:run -Dspring-boot.run.profiles=local
 ## 📦 Monorepo Structure
 
 ```
-AegisPay/
+AegisPay/                              ← single GitHub repository
 │
-├── apps/
-│   ├── web/                   Next.js 15 App Router
-│   │   ├── app/(dashboard)/   Customer-facing screens
-│   │   ├── app/(back-office)/ BACK_OFFICE / ADMIN only
-│   │   └── components/        Shared UI components
+├── apps/                              ← Multi-platform frontends
+│   ├── web/                           Next.js 15 App Router
+│   │   ├── app/(dashboard)/           Customer-facing screens
+│   │   ├── app/(back-office)/         BACK_OFFICE / ADMIN only
+│   │   └── components/                Shared UI components
 │   │
-│   ├── ios/                   SwiftUI (iOS 17+)
+│   ├── ios/                           SwiftUI (iOS 17+)
 │   │   └── AegisPay/
-│   │       ├── Features/      Screen-level feature modules
-│   │       ├── Network/       ApiClient, Services, Endpoints
-│   │       └── DesignSystem/  Tokens, Components
+│   │       ├── Features/              Screen-level feature modules
+│   │       ├── Network/               ApiClient, Services, Endpoints
+│   │       └── DesignSystem/          Tokens, Components
 │   │
-│   └── android/               Jetpack Compose (API 26+)
+│   └── android/                       Jetpack Compose (API 26+)
 │       └── app/src/main/java/com/aegispay/android/
-│           ├── ui/            Screen + ViewModel per feature
-│           ├── network/       Retrofit service + Moshi models
-│           └── push/          FCM service + badge state
+│           ├── ui/                    Screen + ViewModel per feature
+│           ├── network/               Retrofit service + Moshi models
+│           └── push/                  FCM service + badge state
 │
-├── packages/
-│   ├── api-client/            Shared TypeScript API client + React hooks
-│   ├── shared-types/          Zod schemas shared across web packages
-│   └── design-system/         Tailwind tokens + component library
+├── packages/                          ← Shared TypeScript packages
+│   ├── api-client/                    API client + TanStack Query hooks
+│   ├── shared-types/                  Zod schemas shared across web
+│   └── design-system/                 Tailwind tokens + component library
 │
-└── services/ (Java 21 backend)
-    ├── api-gateway/
-    ├── user-service/
-    ├── transaction-service/
-    ├── ledger-service/
-    ├── payment-orchestrator/
-    ├── risk-engine/
-    ├── notification-service/
-    └── ai-platform/
+├── services/                          ← Java 21 microservices (Spring Boot 3.3)
+│   ├── api-gateway/                   Spring Cloud Gateway — auth, rate-limit, trace
+│   ├── user-service/                  KYC state machine, multi-IdP federation
+│   ├── transaction-service/           Payment state machine, CQRS, WebSocket
+│   ├── ledger-service/                Immutable append-only ledger
+│   ├── payment-orchestrator/          Saga coordinator (5-step + compensation)
+│   ├── risk-engine/                   Rules engine + RAG fraud copilot
+│   ├── notification-service/          WebSocket registry, email/SMS adapters
+│   └── ai-platform/                   RAG pipeline, agents, OCR+KYC
+│
+├── libs/                              ← Shared Java libraries
+│   ├── common-domain/                 Kafka event POJOs, enums, base exceptions
+│   ├── common-security/               JWT filter, RBAC, ActorContext
+│   ├── common-kafka/                  Producer template, Outbox scheduler, DLQ
+│   └── common-observability/          MDC logging, tracing, field masking
+│
+├── infra/
+│   ├── helm/aegispay/                 Umbrella Helm chart (all 8 services)
+│   │   ├── values.yaml                Base values
+│   │   ├── values-dev.yaml
+│   │   ├── values-staging.yaml
+│   │   └── values-prod.yaml
+│   └── argocd/                        ArgoCD ApplicationSet (dev / staging / prod)
+│
+├── docs/adr/                          Architecture Decision Records
+│   ├── 001-saga-orchestration.md
+│   ├── 002-outbox-pattern.md
+│   ├── 003-cqrs-read-models.md
+│   └── 004-ai-platform-design.md
+│
+├── .github/workflows/
+│   ├── ci-web.yml                     Next.js lint + build + test
+│   ├── ci-ios.yml                     Xcode build + unit tests
+│   ├── ci-android.yml                 Gradle build + instrumented tests
+│   ├── ci-java.yml                    Maven build matrix (libs + 8 services)
+│   ├── cd-dev.yml                     Push to main → image tag patch → ArgoCD sync
+│   ├── cd-staging.yml                 On tag → staging deploy
+│   ├── cd-prod.yml                    Manual approval gate → prod deploy
+│   └── security-scan.yml              OWASP dep-check + Trivy image scan
+│
+├── pom.xml                            Maven root (manages all Java modules)
+├── package.json                       pnpm workspaces root
+├── turbo.json                         Turborepo pipeline config
+└── tsconfig.base.json                 Shared TypeScript config
 ```
 
 ---
 
 ## 🎯 Feature Phases
 
+### Frontend (all 3 platforms — Web · iOS · Android)
+
 | Phase | Status | Description |
 |---|---|---|
-| **F1** | ✅ | Auth (OAuth2 PKCE), splash, login — all 3 platforms |
-| **F2** | ✅ | Dashboard — balance, recent transactions, navigation |
+| **F1** | ✅ | Auth — OAuth2 PKCE, splash screen, login flow |
+| **F2** | ✅ | Dashboard — live balance card, recent transactions, navigation |
 | **F3** | ✅ | Send Money — 4-step wizard, STOMP live status, AI error resolution |
 | **F4** | ✅ | KYC — camera/gallery, OCR quality scoring, tamper detection, extracted data review |
 | **F5** | ✅ | Push Notifications — APNs (iOS), FCM (Android), WebSocket badge (web) |
 | **F6** | ✅ | Back-office — risk case queue, AI fraud explanation, incident triage agent |
 | **F7** | 🔜 | Hardening — biometric auth, certificate pinning, accessibility, Baseline Profiles |
-| **B1–B10** | 🔜 | Java backend — all 8 microservices, Kafka sagas, ArgoCD deploy |
+
+### Backend (Java 21 — Spring Boot 3.3 microservices)
+
+| Phase | Status | Description |
+|---|---|---|
+| **B1** | ✅ | Foundation — shared libs, Maven multi-module skeleton, CI/CD, Helm charts, ArgoCD |
+| **B2** | ✅ | API Gateway — OAuth2, Redis rate limiting, JWT relay, W3C tracing |
+| **B3** | ✅ | User Service — KYC state machine (5 states), multi-IdP federation, outbox |
+| **B4** | ✅ | Transaction Service — payment state machine, CQRS + MongoDB read models, WebSocket |
+| **B5** | ✅ | Ledger Service — immutable append-only ledger, optimistic locking, balance reservation |
+| **B6** | ✅ | Payment Orchestrator — 5-step Saga + compensation, timeout detection, external gateway |
+| **B7** | ✅ | Risk Engine — velocity/geo/amount rules, RAG fraud copilot, blacklist management |
+| **B8** | ✅ | Notification Service — WebSocket registry, email/SMS adapters, notification history |
+| **B9** | ✅ | AI Platform — RAG pipeline, Fraud Copilot, Error Agent, Incident Triage Agent, OCR+KYC |
+| **B10** | 🔜 | Integration hardening — e2e Testcontainers, Secrets Operator, load test, runbooks |
 
 ---
 
@@ -524,10 +578,9 @@ AegisPay/
 - [ ] **Biometric auth** — Face ID / Touch ID (iOS) + BiometricPrompt (Android)
 - [ ] **Certificate pinning** — TrustKit (iOS) + OkHttp CertificatePinner (Android)
 - [ ] **Android Baseline Profiles** — startup time optimisation
-- [ ] **Backend Phase B1** — Foundation: shared libs + Maven multi-module + CI/CD
-- [ ] **Backend Phase B2** — API Gateway with Redis rate limiting
-- [ ] **Backend Phase B6** — Payment Orchestrator Saga engine
-- [ ] **Backend Phase B9** — AI Platform: RAG pipeline + agentic incident triage
+- [ ] **Backend B10** — Integration hardening: e2e Testcontainers compose, k6 load test, External Secrets Operator, full ArgoCD ApplicationSet
+- [ ] **Observability** — Prometheus alert rules (DLQ depth, saga timeout, balance drift), Grafana dashboards
+- [ ] **Multi-tenancy** — tenantId propagation through JWT claims → database row-level security
 
 ---
 

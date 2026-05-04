@@ -1,0 +1,69 @@
+name: CD — Deploy to Dev
+
+on:
+  workflow_run:
+    workflows: ["CI — Build & Test"]
+    types: [completed]
+    branches: [main]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/aegispay
+  HELM_VALUES_FILE: infra/helm/aegispay/values-dev.yaml
+
+jobs:
+  deploy-dev:
+    name: Update image tags & trigger ArgoCD sync
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GIT_DEPLOY_TOKEN }}
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name  "aegispay-ci[bot]"
+          git config user.email "aegispay-ci@users.noreply.github.com"
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Update image tags in values-dev.yaml
+        env:
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          SERVICES=(api-gateway user-service transaction-service ledger-service payment-orchestrator risk-engine notification-service ai-platform)
+          for svc in "${SERVICES[@]}"; do
+            KEY=$(echo "$svc" | tr '-' '_')
+            yq e ".services.${KEY}.image.tag = \"${SHA}\"" -i ${{ env.HELM_VALUES_FILE }}
+          done
+
+      - name: Commit and push updated values-dev.yaml
+        env:
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          git add ${{ env.HELM_VALUES_FILE }}
+          git diff --staged --quiet && echo "No changes" && exit 0
+          git commit -m "chore(cd): deploy sha=${SHA:0:12} to dev"
+          git push origin main
+
+      # ArgoCD watches the repo — the commit above triggers auto-sync.
+      # Optionally force-sync immediately if ArgoCD CLI is available:
+      # - name: Force ArgoCD sync
+      #   run: argocd app sync aegispay-dev --auth-token ${{ secrets.ARGOCD_TOKEN }} --server ${{ secrets.ARGOCD_SERVER }}
+
+      - name: Smoke test (health checks)
+        env:
+          GATEWAY_URL: ${{ secrets.DEV_GATEWAY_URL }}
+        run: |
+          echo "Waiting 90s for pods to roll..."
+          sleep 90
+          curl --fail --retry 5 --retry-delay 10 "${GATEWAY_URL}/actuator/health"

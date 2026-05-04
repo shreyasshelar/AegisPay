@@ -1,0 +1,91 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Production environment overrides
+# Image tags updated ONLY via manual promotion workflow
+# ─────────────────────────────────────────────────────────────────────────────
+
+global:
+  namespace: aegispay-prod
+  imagePullPolicy: IfNotPresent
+
+services:
+  api_gateway:
+    replicas: 3
+    image:
+      tag: latest
+    autoscaling:
+      enabled: true
+      minReplicas: 3
+      maxReplicas: 10
+
+  user_service:
+    replicas: 3
+    image:
+      tag: latest
+
+  transaction_service:
+    replicas: 5
+    image:
+      tag: latest
+    autoscaling:
+      minReplicas: 5
+      maxReplicas: 20
+
+  ledger_service:
+    replicas: 5
+    image:
+      tag: latest
+    autoscaling:
+      minReplicas: 5
+      maxReplicas: 20
+
+  payment_orchestrator:
+    replicas: 3
+    image:
+      tag: latest
+
+  risk_engine:
+    replicas: 4
+    image:
+      tag: latest
+
+  notification_service:
+    replicas: 3
+    image:
+      tag: latest
+
+  ai_platform:
+    replicas: 3
+    image:
+      tag: latest
+
+ingress:
+  enabled: true
+  host: api.aegispay.io
+  tls:
+    enabled: true
+    secretName: aegispay-prod-tls
+
+pdb:
+  minAvailable: 2
+
+monitoring:
+  prometheusRules:
+    enabled: true
+  thresholds:
+    sagaTimeoutRatePerMin: 0.05     # tighter threshold in prod
+    kafkaConsumerLagMax: 2000
+
+secrets:
+  useVault: true
+  vault:
+    address: https://vault.aegispay-prod.svc.cluster.local:8200
+    path: aegispay/prod
+    role: aegispay-prod-app
+  db:
+    secretPath: aegispay/prod/db
+  redis:
+    secretPath: aegispay/prod/redis
+  ai:
+    secretPath: aegispay/prod/ai-keys
+  kafka:
+    secretPath: aegispay/prod/kafka

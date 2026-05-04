@@ -1,0 +1,3 @@
+{{- if .Values.services.payment_orchestrator.enabled }}
+{{ include "aegispay.serviceService" (dict "name" "payment-orchestrator" "svc" .Values.services.payment_orchestrator "context" .) }}
+{{- end }}

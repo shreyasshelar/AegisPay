@@ -1,0 +1,3 @@
+{{- if .Values.services.ai_platform.enabled }}
+{{ include "aegispay.serviceNetworkPolicy" (dict "name" "ai-platform" "svc" .Values.services.ai_platform "context" .) }}
+{{- end }}
