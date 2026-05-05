@@ -16,16 +16,26 @@
 <p>
   <img src="https://img.shields.io/badge/PostgreSQL-16_+_pgvector-4169E1?style=for-the-badge&logo=postgresql&logoColor=white"/>
   <img src="https://img.shields.io/badge/Redis-7-DC382D?style=for-the-badge&logo=redis&logoColor=white"/>
+  <img src="https://img.shields.io/badge/ClickHouse-OLAP_Analytics-FFCC01?style=for-the-badge&logo=clickhouse&logoColor=black"/>
+  <img src="https://img.shields.io/badge/Apache_Superset-Dashboard-20A6C9?style=for-the-badge&logo=apache&logoColor=white"/>
+  <img src="https://img.shields.io/badge/Stripe-Payments-635BFF?style=for-the-badge&logo=stripe&logoColor=white"/>
+</p>
+
+<!-- Badges row 3 -->
+<p>
   <img src="https://img.shields.io/badge/Claude_AI-Anthropic-D97706?style=for-the-badge&logo=anthropic&logoColor=white"/>
   <img src="https://img.shields.io/badge/Kubernetes-Helm_+_ArgoCD-326CE5?style=for-the-badge&logo=kubernetes&logoColor=white"/>
+  <img src="https://img.shields.io/badge/Spring_Batch-Reconciliation-6DB33F?style=for-the-badge&logo=spring&logoColor=white"/>
+  <img src="https://img.shields.io/badge/Kafka_Streams-Real--time_Analytics-231F20?style=for-the-badge&logo=apachekafka&logoColor=white"/>
   <img src="https://img.shields.io/badge/License-MIT-22c55e?style=for-the-badge"/>
 </p>
 
 <br/>
 
 > **AegisPay** is a full-stack, event-driven fintech platform built to production standards —  
-> multi-platform frontends (Web · iOS · Android), 8 Java microservices, AI-augmented fraud detection,  
-> real-time transactions, and immutable ledger accounting — all orchestrated via Kafka Sagas.
+> multi-platform frontends (Web · iOS · Android), **10 Java microservices**, AI-augmented fraud detection,  
+> real-time transactions, immutable ledger accounting, **Stripe-native payments**, and a complete  
+> **data engineering layer** (ClickHouse + Kafka Streams + Spring Batch reconciliation + Superset dashboards) — all orchestrated via Kafka Sagas.
 
 <br/>
 
@@ -45,10 +55,12 @@
 - [📱 Frontend Platforms](#-frontend-platforms)
 - [⚙️ Backend Microservices](#️-backend-microservices)
 - [🤖 AI Components](#-ai-components)
+- [📊 Data Engineering Layer](#-data-engineering-layer)
 - [🔐 Security Model](#-security-model)
 - [📡 Event Topology](#-event-topology)
 - [🗄️ Data Architecture](#️-data-architecture)
 - [🚀 Getting Started](#-getting-started)
+- [🌿 Branch Guide](#-branch-guide)
 - [📦 Monorepo Structure](#-monorepo-structure)
 - [🎯 Feature Phases](#-feature-phases)
 - [🔭 Roadmap](#-roadmap)
@@ -108,6 +120,31 @@ Not a PWA — three real native apps, feature-parity across all:
 
 </td>
 </tr>
+<tr>
+<td width="50%">
+
+### 💳 Real Stripe Integration
+
+Not a mock gateway — live Stripe PaymentIntents:
+
+- **PaymentIntent confirm** — server-side creation + 3DS async webhook flow
+- **Stripe Webhooks** — signature-verified `payment_intent.succeeded` / `.payment_failed`
+- **Zero-decimal currency** — JPY, KRW, etc. handled correctly in both directions
+- **Daily reconciliation** — Spring Batch compares every Stripe settlement to the immutable ledger
+
+</td>
+<td width="50%">
+
+### 🔢 Production Data Engineering
+
+Three real fintech analytics problems solved:
+
+- **Settlement Reconciliation** — daily Spring Batch job catches `MISSING_IN_STRIPE`, `MISSING_IN_LEDGER`, and `AMOUNT_MISMATCH` breaks vs Stripe's Balance Transactions API
+- **Fraud Velocity Streaming** — Kafka Streams tumbling-window aggregations detect card-testing rings in real time
+- **Superset Dashboards** — ClickHouse MergeTree + Materialized Views power instant OLAP over billions of payment events
+
+</td>
+</tr>
 </table>
 
 ---
@@ -150,16 +187,49 @@ Not a PWA — three real native apps, feature-parity across all:
 ┌───────▼──────┐    ┌──────────▼──────┐    ┌─────────────▼─────────┐
 │ledger-service│    │payment-orchestr.│    │notification-service   │
 │  :8083       │    │  :8084          │    │  :8086 (+ WS)         │
-│Immutable     │    │Saga Coordinator │    │WebSocket · Email · SMS │
-│Append-only   │    │Compensation     │    │                       │
+│Immutable     │    │Saga + Stripe    │    │WebSocket · Email · SMS │
+│Append-only   │    │PaymentIntents   │    │                       │
 └──────────────┘    └─────────────────┘    └───────────────────────┘
-                               │
-                    ┌──────────▼──────────┐
-                    │    ai-platform      │
-                    │  :8088              │
-                    │  RAG · Agents · OCR │
-                    │  pgvector · Claude  │
-                    └─────────────────────┘
+         │                     │
+         │         ┌───────────▼──────────┐
+         │         │    ai-platform       │
+         │         │  :8088               │
+         │         │  RAG · Agents · OCR  │
+         │         │  pgvector · Claude   │
+         │         └──────────────────────┘
+         │
+         │  ◄──────── writes reconciliation breaks
+         │
+┌────────▼─────────────────────────────────────────────────────────┐
+│                  DATA ENGINEERING LAYER                           │
+│                                                                   │
+│  ┌─────────────────────┐    ┌─────────────────────────────────┐  │
+│  │  data-pipeline :8089 │    │  reconciliation-service :8087   │  │
+│  │  Kafka Streams       │    │  Spring Batch (daily 06:00 UTC)  │  │
+│  │  - TransactionMetrics│    │  Ledger COMMIT vs Stripe API    │  │
+│  │  - RiskAnalytics     │    │  MISSING_IN_STRIPE / LEDGER     │  │
+│  │  - Velocity windows  │    │  AMOUNT_MISMATCH detection      │  │
+│  └─────────┬───────────┘    └──────────────┬──────────────────┘  │
+│            │  batch flush (5s)              │ batchUpdate         │
+│            └────────────────┬──────────────┘                     │
+│                             ▼                                     │
+│              ┌──────────────────────────────┐                    │
+│              │   ClickHouse  :8123           │                    │
+│              │   aegispay_analytics DB       │                    │
+│              │   transaction_facts           │                    │
+│              │   risk_assessments            │                    │
+│              │   saga_latencies              │                    │
+│              │   reconciliation_breaks       │                    │
+│              │   + 3 Materialized Views      │                    │
+│              └──────────────┬───────────────┘                    │
+│                             │ SQL (clickhouse-connect)           │
+│              ┌──────────────▼───────────────┐                    │
+│              │   Apache Superset  :8088      │                    │
+│              │   Finance dashboards          │                    │
+│              │   Reconciliation reports      │                    │
+│              │   Fraud velocity charts       │                    │
+│              └──────────────────────────────┘                    │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -241,14 +311,16 @@ Not a PWA — three real native apps, feature-parity across all:
 
 ```
 services/
-├── api-gateway/          :8080  Spring Cloud Gateway — auth, rate-limit, trace
-├── user-service/         :8081  KYC state machine, multi-IdP federation
-├── transaction-service/  :8082  Payment state machine, CQRS, WebSocket status
-├── ledger-service/       :8083  Immutable append-only ledger, balance reservation
-├── payment-orchestrator/ :8084  Saga coordinator — 5-step, full compensation
-├── risk-engine/          :8085  Rules engine + RAG fraud copilot
-├── notification-service/ :8086  WebSocket registry, email/SMS adapters
-└── ai-platform/          :8088  RAG pipeline, agents, OCR+KYC
+├── api-gateway/              :8080  Spring Cloud Gateway — auth, rate-limit, trace
+├── user-service/             :8081  KYC state machine, multi-IdP federation
+├── transaction-service/      :8082  Payment state machine, CQRS, WebSocket status
+├── ledger-service/           :8083  Immutable append-only ledger, balance reservation
+├── payment-orchestrator/     :8084  Saga + Stripe PaymentIntents + webhooks
+├── risk-engine/              :8085  Rules engine + RAG fraud copilot
+├── notification-service/     :8086  WebSocket registry, email/SMS adapters
+├── reconciliation-service/   :8087  Spring Batch — daily Stripe vs ledger reconciliation
+├── ai-platform/              :8088  RAG pipeline, agents, OCR+KYC
+└── data-pipeline/            :8089  Kafka Streams — real-time fraud analytics → ClickHouse
 ```
 
 ### Saga Transaction Flow
@@ -303,6 +375,81 @@ Each step has a **compensating transaction** — a failure at step N triggers ro
 </table>
 
 **AI audit trail**: every LLM call is logged to `ai_audit_log` with masked inputs, model version, and latency — required for RBI / DPDP regulatory compliance.
+
+---
+
+## 📊 Data Engineering Layer
+
+Phase 11 adds a complete data platform solving three real fintech problems that every payments company eventually hits.
+
+### Problem 1 — "Did Stripe actually settle what our ledger says?"
+
+**`reconciliation-service`** runs a Spring Batch job daily at 06:00 UTC:
+
+```
+AegisPay Ledger (PostgreSQL)          Stripe Balance Transactions API
+ COMMIT entries for yesterday    ←→   auto-paginated BalanceTransaction.list()
+         │                                        │
+         └──────────── match by PaymentIntent ID ─┘
+                                │
+                     ┌──────────▼──────────────┐
+                     │  Break Detection         │
+                     │  MISSING_IN_STRIPE       │ ← ledger COMMIT, no Stripe PI
+                     │  MISSING_IN_LEDGER       │ ← Stripe settled, no ledger entry
+                     │  AMOUNT_MISMATCH         │ ← diff > 1 minor unit tolerance
+                     └──────────┬──────────────┘
+                                │ batchUpdate
+                     ┌──────────▼──────────────┐
+                     │  ClickHouse              │
+                     │  reconciliation_breaks   │
+                     └─────────────────────────┘
+```
+
+**REST API:**
+
+| Endpoint | Description |
+|---|---|
+| `GET /api/v1/reconciliation/reports/{date}` | All breaks for a date (paginated, filterable by breakType / breakStatus) |
+| `GET /api/v1/reconciliation/summary/{date}` | Aggregated stats — break counts by type, total break amount |
+| `POST /api/v1/reconciliation/run?date=2024-01-15` | Trigger an ad-hoc reconciliation run |
+| `PATCH /api/v1/reconciliation/breaks/{id}/status` | Mark a break CLOSED / IN_REVIEW / ESCALATED |
+
+---
+
+### Problem 2 — "Are we being card-tested right now?"
+
+**`data-pipeline`** runs Kafka Streams topologies consuming every transaction and risk event:
+
+- `TransactionMetricsStream` — 1-minute tumbling windows over `transaction.completed/failed/rolled-back`
+- `RiskAnalyticsStream` — tracks rule flags from `risk.assessed`, surfaces REJECTED velocity spikes
+- `ClickHouseSink` — buffers writes in `ConcurrentLinkedQueue`, batch-flushes to ClickHouse every 5 seconds (no per-event round trips)
+
+**Health check:**
+```bash
+curl http://localhost:8089/api/v1/pipeline/status
+# → { "status": "HEALTHY", "kafkaStreamsState": "RUNNING", "clickhouseConnected": true, "totalFlushedRecords": 14832 }
+```
+
+---
+
+### Problem 3 — "Show me yesterday's P&L reconciliation summary before the morning standup"
+
+**ClickHouse schema** (`infra/clickhouse/init.sql`):
+
+| Table | Engine | Retention | Purpose |
+|---|---|---|---|
+| `transaction_facts` | MergeTree | 2 years | Every completed payment fact |
+| `risk_assessments` | MergeTree | 1 year | Fraud scores + rule flags per transaction |
+| `saga_latencies` | MergeTree | 1 year | End-to-end saga duration SLA tracking |
+| `reconciliation_breaks` | MergeTree | 3 years | All Stripe vs ledger discrepancies |
+| `mv_hourly_transaction_summary` | Materialized View | — | Pre-aggregated hourly payment totals |
+| `mv_hourly_risk_summary` | Materialized View | — | Pre-aggregated hourly risk decision counts |
+| `mv_daily_reconciliation_summary` | Materialized View | — | Pre-aggregated daily break amounts |
+
+**Superset** at `http://localhost:8088` (admin / admin) is pre-wired to ClickHouse via `clickhouse-connect`. Connect the ClickHouse datasource once on first login:
+1. **Databases → + Database → ClickHouse Connect**
+2. SQLALCHEMY URI: `clickhouse+native://default:@clickhouse:9000/aegispay_analytics`
+3. Save → **Datasets** → import from `aegispay_analytics` tables above → build charts
 
 ---
 
@@ -369,6 +516,15 @@ Each step has a **compensating transaction** — a failure at step N triggers ro
 
 Every topic has a `.DLQ` counterpart. Retention: financial topics → 30 days · notification topics → 7 days.
 
+**Data Engineering consumers (read-only, no side-effects):**
+
+| Topic | Consumer | Purpose |
+|---|---|---|
+| `transaction.completed` | data-pipeline | Metrics stream → ClickHouse `transaction_facts` |
+| `transaction.failed` | data-pipeline | Failure rate aggregation |
+| `transaction.rolled-back` | data-pipeline | Compensation rate tracking |
+| `risk.assessed` | data-pipeline | Fraud velocity analytics → ClickHouse `risk_assessments` |
+
 </details>
 
 ---
@@ -380,7 +536,9 @@ Every topic has a `.DLQ` counterpart. Retention: financial topics → 30 days ·
 | **PostgreSQL 16 + pgvector** | 5432 | Primary write models per service + AI vector embeddings |
 | **MongoDB 7** | 27017 | CQRS read models — `transaction_views`, notification history |
 | **Redis 7** | 6379 | Idempotency keys, rate-limit token buckets, session cache |
-| **Kafka 3.7 (KRaft)** | 9094 | All async inter-service messaging (18 topics) |
+| **Kafka 3.7 (KRaft)** | 9094 | All async inter-service messaging (18 topics + DLQs) |
+| **ClickHouse 24** | 8123 | OLAP analytics — payment facts, fraud scores, reconciliation breaks |
+| **Apache Superset 3.1** | 8088 | Business intelligence dashboards over ClickHouse |
 
 Each microservice owns its own PostgreSQL **database** (not just schema) for full isolation:
 
@@ -449,8 +607,10 @@ This starts:
 | Kafka (KRaft) | `localhost:9094` | no auth (local only) |
 | Kafka UI | http://localhost:8090 | no auth |
 | Keycloak 24 | http://localhost:8180 | admin: `admin` / `admin` |
+| **ClickHouse** | http://localhost:8123 | user: `default` / no password |
+| **Apache Superset** | http://localhost:8088 | admin: `admin` / `admin` |
 
-Wait ~60 seconds for Keycloak to finish importing the realm before running backend services.
+Wait ~60 seconds for Keycloak to finish importing the realm. Superset takes ~90 seconds on first boot (runs DB migrations on startup).
 
 **Check everything is healthy:**
 ```bash
@@ -460,6 +620,8 @@ docker compose ps
 
 **Six per-service databases are created automatically** by `infra/local/postgres/init/01_create_databases.sql` on first startup:
 `aegispay_users`, `aegispay_transactions`, `aegispay_ledger`, `aegispay_sagas`, `aegispay_risk`, `aegispay_ai`
+
+**ClickHouse** initialises the `aegispay_analytics` database and all 4 tables + 3 Materialized Views from `infra/clickhouse/init.sql` on first startup — no manual step needed.
 
 ---
 
@@ -520,18 +682,30 @@ Each service reads config from environment variables with sensible local default
 # Terminal 4 — Ledger Service
 ./mvnw -pl services/ledger-service spring-boot:run
 
-# Terminal 5 — Payment Orchestrator
+# Terminal 5 — Payment Orchestrator (set Stripe keys for real payments)
+STRIPE_SECRET_KEY=sk_test_... \
+STRIPE_WEBHOOK_SECRET=whsec_... \
 ./mvnw -pl services/payment-orchestrator spring-boot:run
 
 # Terminal 6 — Risk Engine
 ./mvnw -pl services/risk-engine spring-boot:run
 
 # Terminal 7 — Notification Service
+SMTP_PASSWORD=your-gmail-app-password \
 ./mvnw -pl services/notification-service spring-boot:run
 
 # Terminal 8 — AI Platform (requires ANTHROPIC_API_KEY)
 ANTHROPIC_API_KEY=sk-ant-... \
 ./mvnw -pl services/ai-platform spring-boot:run
+
+# Terminal 9 — Reconciliation Service (Spring Batch + ClickHouse)
+STRIPE_SECRET_KEY=sk_test_... \
+CLICKHOUSE_URL=jdbc:clickhouse://localhost:8123/aegispay_analytics \
+./mvnw -pl services/reconciliation-service spring-boot:run
+
+# Terminal 10 — Data Pipeline (Kafka Streams → ClickHouse)
+CLICKHOUSE_URL=jdbc:clickhouse://localhost:8123/aegispay_analytics \
+./mvnw -pl services/data-pipeline spring-boot:run
 ```
 
 **Option B — All at once with Maven (background):**
@@ -539,22 +713,31 @@ ANTHROPIC_API_KEY=sk-ant-... \
 ```bash
 ./mvnw -pl services/api-gateway,services/user-service,services/transaction-service, \
             services/ledger-service,services/payment-orchestrator,services/risk-engine, \
-            services/notification-service \
+            services/notification-service,services/data-pipeline,services/reconciliation-service \
        spring-boot:run -Dspring-boot.run.fork=true
 ```
 
 **Service ports at a glance:**
 
-| Service | Port | Health endpoint |
-|---|---|---|
-| api-gateway | 8080 | http://localhost:8080/actuator/health |
-| user-service | 8081 | http://localhost:8081/actuator/health |
-| transaction-service | 8082 | http://localhost:8082/actuator/health |
-| ledger-service | 8083 | http://localhost:8083/actuator/health |
-| payment-orchestrator | 8084 | http://localhost:8084/actuator/health |
-| risk-engine | 8085 | http://localhost:8085/actuator/health |
-| notification-service | 8086 | http://localhost:8086/actuator/health |
-| ai-platform | 8088 | http://localhost:8088/actuator/health |
+| Service | Port | Health endpoint | Notes |
+|---|---|---|---|
+| api-gateway | 8080 | http://localhost:8080/actuator/health | Entry point for all clients |
+| user-service | 8081 | http://localhost:8081/actuator/health | |
+| transaction-service | 8082 | http://localhost:8082/actuator/health | WS at :8082/ws/transactions/{id}/status |
+| ledger-service | 8083 | http://localhost:8083/actuator/health | |
+| payment-orchestrator | 8084 | http://localhost:8084/actuator/health | Stripe webhook at :8084/internal/webhooks/stripe |
+| risk-engine | 8085 | http://localhost:8085/actuator/health | |
+| notification-service | 8086 | http://localhost:8086/actuator/health | WS at :8086/ws/notifications |
+| reconciliation-service | 8087 | http://localhost:8087/actuator/health | Batch runs daily at 06:00 UTC |
+| ai-platform | 8088 | http://localhost:8088/actuator/health | Needs ANTHROPIC_API_KEY |
+| data-pipeline | 8089 | http://localhost:8089/api/v1/pipeline/status | Kafka Streams health |
+
+**Stripe local webhook testing** (optional — only needed for 3DS / async payment flows):
+```bash
+# Install Stripe CLI, then forward events to your local payment-orchestrator:
+stripe listen --forward-to http://localhost:8084/internal/webhooks/stripe
+# Stripe CLI will print the webhook signing secret — set as STRIPE_WEBHOOK_SECRET above
+```
 
 ---
 
@@ -652,6 +835,119 @@ docker compose down -v       # stop containers AND delete all data (full reset)
 
 ---
 
+## 🌿 Branch Guide
+
+AegisPay maintains three long-lived branches targeting different deployment environments.
+
+| Branch | Purpose | Infra cost | CD target |
+|---|---|---|---|
+| `feat/monorepo-restructure` | **Production-grade** — AWS EKS, managed Kafka (MSK), RDS, ElastiCache, Vault Agent Injector, full resource limits, replicas ≥ 2 for all services | High | ArgoCD → prod EKS cluster |
+| `feat/cost-optimised-onprem` | **Dev / on-prem** — k3s single-node, Kafka in-cluster, Postgres + Redis in-cluster, OpenRouter API (free tier AI), replicas = 1, reduced resource requests | Low | ArgoCD → `app-onprem.yaml` watches `dev` branch |
+| `feat/data-engineering` | Source branch for Phase 11 — merged into both above | — | (merged, no direct CD) |
+
+### What differs between the two runnable branches
+
+<details>
+<summary><b>feat/monorepo-restructure (prod)</b></summary>
+
+```yaml
+# infra/helm/aegispay/values.yaml defaults
+global:
+  kafka.brokers: "kafka-headless.aegispay-infra.svc.cluster.local:9092"
+  clickhouse.url: "jdbc:clickhouse://clickhouse.aegispay-infra.svc.cluster.local:8123/aegispay_analytics"
+
+# Services run with replicas ≥ 2, CPU/memory limits sized for production traffic
+# Secrets from HashiCorp Vault or AWS Secrets Manager via External Secrets Operator
+# STRIPE_SECRET_KEY = sk_live_... (live mode)
+# ANTHROPIC_API_KEY = production Claude API key
+```
+
+**Running on prod branch locally** — use `values-dev.yaml` overrides:
+```bash
+git checkout feat/monorepo-restructure
+docker compose up -d          # starts all infra including ClickHouse + Superset
+./mvnw clean install -DskipTests -pl libs/common-domain,libs/common-security,libs/common-kafka,libs/common-observability
+# Then run individual services as described in Step 5 above
+```
+
+**Vault secrets initialisation** (one-time per environment):
+```bash
+export DB_PASSWORD="..."
+export STRIPE_SECRET_KEY="sk_live_..."
+export STRIPE_WEBHOOK_SECRET="whsec_..."
+export SMTP_PASSWORD="..."
+export SLACK_WEBHOOK_URL="..."
+export CLICKHOUSE_PASSWORD="..."    # leave empty for local dev
+bash infra/vault/init.sh prod
+```
+
+</details>
+
+<details>
+<summary><b>feat/cost-optimised-onprem (dev / k3s)</b></summary>
+
+```yaml
+# infra/helm/aegispay/values-dev.yaml overrides
+global:
+  clickhouse.url: "jdbc:clickhouse://localhost:8123/aegispay_analytics"
+
+# All services: replicas: 1, cpu requests: 100m, memory requests: 256Mi
+# Secrets from Vault running inside k3s (port-forwarded)
+# AI: OPENROUTER_API_KEY (free-tier models via OpenRouter instead of direct Anthropic)
+# STRIPE_SECRET_KEY = sk_test_... (test mode only)
+```
+
+**Running on on-prem branch locally** — identical docker-compose, just different env vars:
+```bash
+git checkout feat/cost-optimised-onprem
+docker compose up -d          # same stack, same ports
+# Set OPENROUTER_API_KEY instead of ANTHROPIC_API_KEY for AI Platform
+OPENROUTER_API_KEY=sk-or-... \
+./mvnw -pl services/ai-platform spring-boot:run
+```
+
+**Vault secrets initialisation** (k3s — uses kubectl port-forward):
+```bash
+export DB_PASSWORD="..."
+export OPENROUTER_API_KEY="sk-or-..."
+export KEYCLOAK_ADMIN_PASSWORD="admin"
+export GRAFANA_ADMIN_PASSWORD="grafana"
+export STRIPE_SECRET_KEY="sk_test_..."    # test mode
+export CLICKHOUSE_PASSWORD=""             # empty = no auth in dev
+bash infra/vault/init.sh
+```
+
+**ArgoCD on-prem deployment**:
+```bash
+# Apply the ArgoCD application (watches feat/cost-optimised-onprem branch)
+kubectl apply -f infra/argocd/app-onprem.yaml
+# ArgoCD auto-syncs on every push to the branch
+```
+
+</details>
+
+### Deploying Phase 11 services (both branches)
+
+Both branches already have the data engineering layer merged in. After deploying via Helm:
+
+```bash
+# Verify reconciliation-service is up
+kubectl get pods -n aegispay | grep reconciliation
+
+# Trigger a manual reconciliation run (replaces yesterday's date)
+curl -X POST "http://api.aegispay.io/api/v1/reconciliation/run?date=$(date -d yesterday +%F)" \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+
+# Check data-pipeline Kafka Streams health
+curl http://api.aegispay.io/api/v1/pipeline/status
+
+# View reconciliation breaks for today
+curl "http://api.aegispay.io/api/v1/reconciliation/summary/$(date -d yesterday +%F)" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq .
+```
+
+---
+
 ## 📦 Monorepo Structure
 
 ```
@@ -689,10 +985,12 @@ AegisPay/                              ← single GitHub repository
 │   ├── user-service/       :8081      KYC state machine, multi-IdP
 │   ├── transaction-service/:8082      Payment state machine, CQRS, WebSocket
 │   ├── ledger-service/     :8083      Immutable append-only ledger
-│   ├── payment-orchestrator/:8084     Saga coordinator (5-step + compensation)
+│   ├── payment-orchestrator/:8084     Saga + Stripe PaymentIntents + webhooks
 │   ├── risk-engine/        :8085      Rules engine + RAG fraud copilot
 │   ├── notification-service/:8086     WebSocket registry, email/SMS adapters
+│   ├── reconciliation-service/:8087   Spring Batch — daily Stripe vs ledger
 │   ├── ai-platform/        :8088      RAG pipeline, agents, OCR+KYC
+│   ├── data-pipeline/      :8089      Kafka Streams → ClickHouse analytics
 │   └── e2e-tests/                     Testcontainers end-to-end test suite
 │
 ├── libs/                              ← Shared Java libraries (built first)
@@ -705,12 +1003,20 @@ AegisPay/                              ← single GitHub repository
 │   ├── local/                         Local dev infra config
 │   │   ├── postgres/init/             SQL scripts run on first Postgres startup
 │   │   └── keycloak/realm-export.json Pre-seeded realm with test users + JWT claims
-│   ├── helm/aegispay/                 Umbrella Helm chart (all 8 services)
-│   │   ├── values.yaml                Base values
-│   │   ├── values-dev.yaml
+│   ├── clickhouse/
+│   │   └── init.sql                   ClickHouse schema + Materialized Views (auto-loaded)
+│   ├── superset/
+│   │   └── superset_config.py         Superset config (ClickHouse datasource, Redis cache)
+│   ├── helm/aegispay/                 Umbrella Helm chart (all 10 services)
+│   │   ├── values.yaml                Base values (includes global.clickhouse)
+│   │   ├── values-dev.yaml            On-prem k3s overrides (1 replica, 256Mi requests)
 │   │   ├── values-staging.yaml
 │   │   └── values-prod.yaml
+│   ├── helm/monitoring/               kube-prometheus-stack + Alertmanager routing
+│   │   ├── values-dev.yaml            On-prem Prometheus + Grafana config
+│   │   └── values-prod.yaml           Prod (30d retention, gp3, Slack + Gmail alerts)
 │   └── argocd/                        ArgoCD ApplicationSet (dev / staging / prod)
+│       └── app-onprem.yaml            Watches feat/cost-optimised-onprem branch
 │
 ├── docs/adr/                          Architecture Decision Records
 │   ├── 001-saga-orchestration.md
@@ -728,7 +1034,7 @@ AegisPay/                              ← single GitHub repository
 │   ├── cd-prod.yml                    Manual approval gate → prod deploy
 │   └── security-scan.yml              OWASP dep-check + Trivy image scan
 │
-├── docker-compose.yml                 ← Local dev stack (Postgres + Redis + Mongo + Kafka + Keycloak)
+├── docker-compose.yml                 ← Local dev stack (Postgres + Redis + Mongo + Kafka + Keycloak + ClickHouse + Superset)
 ├── pom.xml                            Maven root (manages all Java modules)
 ├── package.json                       npm workspaces root
 ├── turbo.json                         Turborepo pipeline config
@@ -764,20 +1070,35 @@ AegisPay/                              ← single GitHub repository
 | **B7** | ✅ | Risk Engine — velocity/geo/amount rules, RAG fraud copilot, blacklist management |
 | **B8** | ✅ | Notification Service — WebSocket registry, email/SMS adapters, notification history |
 | **B9** | ✅ | AI Platform — RAG pipeline, Fraud Copilot, Error Agent, Incident Triage Agent, OCR+KYC |
-| **B10** | 🔜 | Integration hardening — e2e Testcontainers, External Secrets Operator, k6 load test, full observability runbooks |
+| **B10** | ✅ | Integration hardening — Stripe live payments + webhooks, ESO secrets, Alertmanager routing (Slack + Gmail), AI knowledge base seed, expanded e2e Testcontainers suite (11 tests), cost-optimised on-prem k3s stack |
+| **B11** | ✅ | **Data Engineering** — Spring Batch settlement reconciliation vs Stripe, Kafka Streams fraud analytics, ClickHouse OLAP schema, Apache Superset dashboards, REST reconciliation API, `feat/data-engineering` branch merged to prod + dev |
 
 ---
 
 ## 🔭 Roadmap
 
+**Shipped ✅**
 - [x] **Biometric auth** — Face ID / Touch ID (iOS `BiometricAuthService`) + BiometricPrompt BIOMETRIC_STRONG (Android)
 - [x] **Certificate pinning** — SPKI SHA-256 pinning (iOS `CertificatePinningDelegate`) + OkHttp `CertificatePinner` (Android)
 - [x] **Android Baseline Profiles** — cold-start + navigation benchmarks via `BaselineProfileGenerator`
 - [x] **Accessibility** — VoiceOver labels (iOS `AccessibilityHelper`) + Compose semantics (Android) + ARIA roles (Web)
 - [x] **ApiResponse envelope unwrapping** — consistent across Axios (Web), OkHttp (Android), URLSession (iOS)
-- [ ] **Backend B10** — full e2e Testcontainers compose, k6 load test, External Secrets Operator, Prometheus alert rules
-- [ ] **Multi-tenancy** — `tenantId` propagation through JWT claims → database row-level security
-- [ ] **Payment gateway** — replace stub with real Razorpay / Stripe integration
+- [x] **Stripe live payments** — PaymentIntent confirm + 3DS webhook (`payment_intent.succeeded/.payment_failed`) + zero-decimal currency handling
+- [x] **External Secrets Operator** — Vault/AWS Secrets Manager → K8s secrets for Stripe, SMTP, Slack, ClickHouse
+- [x] **Alertmanager routing** — critical → Slack + Gmail, warning → Slack; secrets mounted as files
+- [x] **AI knowledge base** — 30 fraud cases + 30 bank error codes + 20 incident logs seeded to pgvector on startup
+- [x] **Settlement Reconciliation** — Spring Batch daily job, Stripe API pagination, 4 break types, REST API, ClickHouse write
+- [x] **Fraud velocity streaming** — Kafka Streams tumbling windows, ClickHouseSink batch flush, pipeline health endpoint
+- [x] **ClickHouse analytics schema** — 4 MergeTree tables + 3 Materialized Views, 2-3 year TTL
+- [x] **Apache Superset** — docker-compose integrated, pre-wired to ClickHouse, Superset config with Redis cache + SMTP alerts
+- [x] **Cost-optimised on-prem stack** — k3s `feat/cost-optimised-onprem` branch (1 replica, 256Mi, OpenRouter AI, no cloud costs)
+
+**Planned 🔜**
+- [ ] **Multi-tenancy** — `tenantId` propagation through JWT claims → PostgreSQL row-level security per tenant
+- [ ] **k6 load test** — happy-path transaction at 500 RPS, verify no double-spend under concurrency
+- [ ] **Superset pre-built dashboards** — export JSON for Finance Summary, Fraud Velocity, Reconciliation Breaks, SLA Tracking
+- [ ] **ClickHouse replication** — 2-shard 2-replica ClickHouseKeeper cluster for prod HA
+- [ ] **Stripe Radar rules** — custom fraud rules feeding back from risk-engine risk score
 
 ---
 
