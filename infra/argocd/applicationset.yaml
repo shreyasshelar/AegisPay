@@ -9,10 +9,16 @@ spec:
   generators:
     - list:
         elements:
+          # ── On-prem / self-hosted k3s (dev branch) ─────────────────────────
+          # Separate Application (app-onprem.yaml) handles this environment.
+          # Listed here for documentation completeness only — the template below
+          # targets AWS (main branch); on-prem has its own app-onprem.yaml.
+          # -------------------------------------------------------------------
+
           - env: dev
             namespace: aegispay-dev
             revision: main
-            syncPolicy: automated   # dev auto-syncs on every push
+            syncPolicy: automated   # dev auto-syncs on every push to main
             valueFile: values-dev.yaml
 
           - env: staging
