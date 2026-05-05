@@ -1,0 +1,127 @@
+name: CI — Web App
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'apps/web/**'
+      - 'packages/**'
+      - 'package.json'
+      - 'turbo.json'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'apps/web/**'
+      - 'packages/**'
+
+jobs:
+  lint-typecheck:
+    name: Lint & Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint --workspace=apps/web
+
+      - name: Typecheck
+        run: npm run typecheck --workspace=apps/web
+
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm run test --workspace=apps/web
+
+  build:
+    name: Next.js Build
+    runs-on: ubuntu-latest
+    needs: [lint-typecheck]
+    env:
+      # Dummy values so next build succeeds in CI without real IdP
+      NEXTAUTH_URL:    http://localhost:3000
+      NEXTAUTH_SECRET: ci-secret-not-real
+      KEYCLOAK_ID:     aegispay-web
+      KEYCLOAK_SECRET: ci-secret
+      KEYCLOAK_ISSUER: http://localhost:8180/realms/aegispay
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8080
+      NEXT_PUBLIC_WS_BASE_URL:  ws://localhost:8090
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build packages
+        run: npx turbo run build --filter=@aegispay/shared-types --filter=@aegispay/design-system --filter=@aegispay/api-client
+
+      - name: Build web app
+        run: npx turbo run build --filter=@aegispay/web
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nextjs-build
+          path: apps/web/.next
+          retention-days: 3
+
+  e2e:
+    name: E2E Tests (Playwright)
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run E2E tests
+        run: npm run test:e2e --workspace=apps/web
+        env:
+          NEXTAUTH_URL:    http://localhost:3000
+          NEXTAUTH_SECRET: ci-secret-not-real
+          KEYCLOAK_ID:     aegispay-web
+          KEYCLOAK_SECRET: ci-secret
+          KEYCLOAK_ISSUER: http://localhost:8180/realms/aegispay
+          NEXT_PUBLIC_API_BASE_URL: http://localhost:3000/api/mock
+          NEXT_PUBLIC_WS_BASE_URL:  ws://localhost:3000
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report
+          retention-days: 7

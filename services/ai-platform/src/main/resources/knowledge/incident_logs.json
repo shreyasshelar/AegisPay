@@ -1,0 +1,674 @@
+[
+  {
+    "id": "INC-2024-001",
+    "title": "Kafka consumer lag spike on transaction.initiated topic",
+    "severity": "P2",
+    "service": "payment-orchestrator",
+    "startTime": "2024-03-15T14:30:00Z",
+    "resolvedTime": "2024-03-15T15:45:00Z",
+    "symptoms": [
+      "Kafka consumer lag > 50,000 messages on transaction.initiated",
+      "Saga start latency increased from 200ms to 45 seconds",
+      "Alert fired: KafkaConsumerLagHigh"
+    ],
+    "rootCause": "GC pressure caused by a memory leak in payment-orchestrator saga state cache. Full GC pauses lasting 30s caused Kafka poll timeout, triggering consumer rebalance loop.",
+    "investigation": [
+      "Checked Grafana JVM dashboard - heap usage at 98%, long GC pauses",
+      "Thread dump showed most threads blocked waiting for GC",
+      "Heap dump revealed Saga objects not being evicted from in-memory cache",
+      "Cache TTL was not set correctly after refactoring in deploy v2.3.1"
+    ],
+    "resolution": [
+      "Increased JVM heap to 2GB (-Xmx2g)",
+      "Fixed cache TTL configuration in CacheConfig.java",
+      "Deployed fix to payment-orchestrator v2.3.2",
+      "Manually reset consumer group offset after fix deployed",
+      "Backlog cleared within 20 minutes of fix"
+    ],
+    "prevention": [
+      "Add cache TTL unit test",
+      "Alert on heap usage > 85%",
+      "Add Kafka consumer lag to SLO dashboard"
+    ],
+    "tags": ["kafka", "memory-leak", "gc", "payment-orchestrator", "consumer-lag"]
+  },
+  {
+    "id": "INC-2024-002",
+    "title": "PostgreSQL connection pool exhaustion in ledger-service",
+    "severity": "P1",
+    "service": "ledger-service",
+    "startTime": "2024-04-02T09:15:00Z",
+    "resolvedTime": "2024-04-02T10:00:00Z",
+    "symptoms": [
+      "ledger-service health check failing intermittently",
+      "balance.reserve.requested messages queuing in DLQ",
+      "Error: Unable to acquire JDBC Connection",
+      "All 3 ledger-service pods showing connection timeout errors"
+    ],
+    "rootCause": "A long-running database migration (V4__add_index.sql) held a lock on the accounts table for 8 minutes during peak hours. New requests couldn't get connections because all pool connections were waiting for the lock.",
+    "investigation": [
+      "Checked Hikari connection pool metrics - active connections at max (20/20)",
+      "pg_stat_activity showed all connections in 'lock wait' state",
+      "pg_locks showed lock held by migration flyway process",
+      "Migration V4 added index on accounts table without CONCURRENTLY keyword"
+    ],
+    "resolution": [
+      "Killed the blocking migration process",
+      "Redeployed with migration V4 changed to CREATE INDEX CONCURRENTLY",
+      "Increased connection pool to 30 during incident",
+      "DLQ messages replayed after service recovery"
+    ],
+    "prevention": [
+      "All new index migrations must use CONCURRENTLY",
+      "Run migrations in separate maintenance window for large tables",
+      "Add connection pool saturation alert at 80%",
+      "Migration review checklist added to PR template"
+    ],
+    "tags": ["postgresql", "connection-pool", "migration", "ledger-service", "lock"]
+  },
+  {
+    "id": "INC-2024-003",
+    "title": "Claude API rate limit causing AI Platform degradation",
+    "severity": "P2",
+    "service": "ai-platform",
+    "startTime": "2024-04-18T16:00:00Z",
+    "resolvedTime": "2024-04-18T16:30:00Z",
+    "symptoms": [
+      "Fraud copilot returning error: 'AI service temporarily unavailable'",
+      "Risk engine falling back to rule-only mode",
+      "ai-platform error rate > 40% on /ai/fraud/explain endpoint",
+      "Anthropic API returning HTTP 429"
+    ],
+    "rootCause": "Batch KYC processing job and real-time fraud explanation requests shared the same API key. Batch job consumed all available tokens during the busiest trading hour.",
+    "investigation": [
+      "ai-platform logs showed HTTP 429 from Anthropic API",
+      "Usage dashboard showed token consumption spike at 16:00",
+      "Traced spike to scheduled batch KYC job that ran at 16:00",
+      "Batch job was not rate-limited and consumed 80% of hourly quota"
+    ],
+    "resolution": [
+      "Stopped batch KYC job",
+      "Real-time endpoints recovered as rate limit window reset",
+      "Added rate limiter to batch processing (max 10 req/min)",
+      "Moved batch KYC to off-peak hours (2 AM - 4 AM)"
+    ],
+    "prevention": [
+      "Separate API keys for batch vs real-time workloads",
+      "Add token usage monitoring and alert at 70% of hourly limit",
+      "Implement graceful degradation - return cached/rule-based result when AI unavailable",
+      "Queue-based batch processing with rate limiting"
+    ],
+    "tags": ["ai-platform", "rate-limit", "anthropic", "batch-processing", "kyc"]
+  },
+  {
+    "id": "INC-2024-004",
+    "title": "Outbox scheduler double-publishing events",
+    "severity": "P1",
+    "service": "transaction-service",
+    "startTime": "2024-05-05T11:20:00Z",
+    "resolvedTime": "2024-05-05T12:45:00Z",
+    "symptoms": [
+      "Some transactions appearing to process twice",
+      "Duplicate transaction.completed events in Kafka",
+      "Balance deducted twice for 23 transactions",
+      "Idempotency checks catching some but not all duplicates"
+    ],
+    "rootCause": "After transaction-service pod restart during deployment, two pods briefly ran the outbox scheduler simultaneously due to a race condition in leader election. The new pod elected itself before the old pod fully terminated.",
+    "investigation": [
+      "Kafka consumer group showed duplicate message keys",
+      "Cross-referenced outbox table - PUBLISHED entries had been re-published",
+      "Deployment logs showed rolling update overlap of ~30 seconds",
+      "Leader election using Kubernetes lease, but TTL was 60s - too long"
+    ],
+    "resolution": [
+      "Manually reversed 23 duplicate balance deductions",
+      "Reduced lease TTL to 15 seconds",
+      "Added distributed lock (Redis SETNX) before outbox batch query",
+      "Added unique constraint on Kafka message key + partition in consumer idempotency table"
+    ],
+    "prevention": [
+      "Add exactly-once semantics to outbox publisher",
+      "Idempotency check at consumer level for all saga steps",
+      "Deployment strategy changed to Recreate for outbox-scheduler pods",
+      "Add monitoring for duplicate event detection"
+    ],
+    "tags": ["outbox", "duplicate-events", "transaction-service", "deployment", "idempotency"]
+  },
+  {
+    "id": "INC-2024-005",
+    "title": "Redis connection failure causing rate limiter bypass",
+    "severity": "P2",
+    "service": "api-gateway",
+    "startTime": "2024-05-12T03:30:00Z",
+    "resolvedTime": "2024-05-12T04:00:00Z",
+    "symptoms": [
+      "Redis connection errors in api-gateway logs",
+      "Rate limiting not being enforced - high request volumes passing",
+      "Backend services receiving 5x normal traffic",
+      "Redis sentinel not promoting replica after primary failure"
+    ],
+    "rootCause": "Redis primary node OOM-killed at 3:30 AM due to a key expiry scan that allocated excessive memory. Sentinel promotion took 4 minutes due to misconfigured quorum (only 1 of 3 sentinels was responsive).",
+    "investigation": [
+      "Redis MEMORY DOCTOR command showed fragmentation ratio > 5",
+      "Large SCAN operations triggered by expired key cleanup",
+      "Sentinel logs showed election timeout due to network partition",
+      "One sentinel pod was in CrashLoopBackOff state (unrelated issue)"
+    ],
+    "resolution": [
+      "Manually promoted Redis replica to primary",
+      "Fixed crashed sentinel pod",
+      "Restarted api-gateway to reconnect to Redis",
+      "Rate limiter restored - excessive traffic drained"
+    ],
+    "prevention": [
+      "Redis memory limit with allkeys-lru eviction policy",
+      "Fix all sentinel pods before next incident",
+      "api-gateway to fail-closed (allow-list only) when Redis unavailable",
+      "Alert on Redis memory usage > 70%"
+    ],
+    "tags": ["redis", "rate-limiting", "api-gateway", "sentinel", "oom"]
+  },
+  {
+    "id": "INC-2024-006",
+    "title": "Flyway migration failed in production causing rollout block",
+    "severity": "P2",
+    "service": "user-service",
+    "startTime": "2024-06-01T10:00:00Z",
+    "resolvedTime": "2024-06-01T11:30:00Z",
+    "symptoms": [
+      "user-service v2.1.0 pods in CrashLoopBackOff",
+      "Deployment rollout stuck - 0 of 3 pods ready",
+      "Error in logs: Flyway: Migration V3 failed",
+      "Old pods (v2.0.5) serving traffic normally"
+    ],
+    "rootCause": "V3 migration attempted to add a NOT NULL column without a default value to a table with 500K existing rows. Migration succeeded in staging (empty table) but failed in production.",
+    "investigation": [
+      "Logs showed: column 'push_token_platform' cannot be null",
+      "Checked migration V3 - ADD COLUMN push_token_platform VARCHAR NOT NULL",
+      "Staging had no users so constraint was fine; production has 500K users",
+      "Rollback: old pods were still running (rolling deployment), no data loss"
+    ],
+    "resolution": [
+      "Fixed migration to add column with DEFAULT ''",
+      "Released v2.1.1 with corrected migration",
+      "Flyway checksum updated for V3",
+      "Production deployment succeeded"
+    ],
+    "prevention": [
+      "Never add NOT NULL columns without default in migrations",
+      "Migration CI test runs against snapshot of production data size",
+      "Migration review checklist: check for NOT NULL without DEFAULT",
+      "Staging database seeded with representative data volume"
+    ],
+    "tags": ["flyway", "migration", "user-service", "deployment", "not-null"]
+  },
+  {
+    "id": "INC-2024-007",
+    "title": "Notification service WebSocket connections dropped on pod restart",
+    "severity": "P3",
+    "service": "notification-service",
+    "startTime": "2024-06-15T14:00:00Z",
+    "resolvedTime": "2024-06-15T14:20:00Z",
+    "symptoms": [
+      "~2,000 WebSocket connections dropped during rolling deployment",
+      "Users not receiving real-time transaction status updates",
+      "WebSocket reconnection rate spike in client logs",
+      "Resolved within 20 minutes as clients reconnected"
+    ],
+    "rootCause": "Rolling deployment of notification-service restarted pods that had active WebSocket connections. STOMP clients reconnected automatically but had a 10-second delay.",
+    "investigation": [
+      "Pod restart events correlated with connection drop time",
+      "WebSocket sessions are not shared across pods (in-memory registry)",
+      "Client-side reconnect logic was implemented but took longer than expected",
+      "Termination grace period was only 5 seconds - not enough for graceful WebSocket close"
+    ],
+    "resolution": [
+      "Increased terminationGracePeriodSeconds to 60",
+      "Added SIGTERM handler to send WebSocket close frames before shutdown",
+      "Client reconnect timer reduced from 10s to 3s exponential backoff"
+    ],
+    "prevention": [
+      "Implement sticky sessions for WebSocket connections",
+      "Consider distributed WebSocket session registry (Redis-backed)",
+      "Client reconnect logic should have < 3s initial retry",
+      "Pre-deployment notification via WebSocket before restart"
+    ],
+    "tags": ["notification-service", "websocket", "deployment", "reconnection", "graceful-shutdown"]
+  },
+  {
+    "id": "INC-2024-008",
+    "title": "Risk engine false positive surge after model update",
+    "severity": "P2",
+    "service": "risk-engine",
+    "startTime": "2024-07-10T09:00:00Z",
+    "resolvedTime": "2024-07-10T11:00:00Z",
+    "symptoms": [
+      "Transaction decline rate jumped from 2% to 18%",
+      "Customer support receiving high volume of false decline calls",
+      "Risk scores for normal transactions elevated by 20-30 points",
+      "REVIEW decisions increased 8x"
+    ],
+    "rootCause": "Risk rule configuration update changed velocity check window from 1 hour to 15 minutes without recalibrating thresholds. Lunch hour transaction spike was now hitting the 15-minute limit.",
+    "investigation": [
+      "Grafana risk dashboard showed score distribution shift",
+      "Correlated with config-map update deployed at 8:55 AM",
+      "Velocity rule: max 5 transactions in window - window changed from 60m to 15m",
+      "Average customer makes 3-4 transactions in lunch hour = 3-4 per 15min → triggering"
+    ],
+    "resolution": [
+      "Reverted velocity check window to 60 minutes",
+      "REVIEW transactions auto-cleared via back-office tool",
+      "Threshold recalibration process defined before next rule change"
+    ],
+    "prevention": [
+      "Risk rule changes require A/B testing in canary deployment",
+      "Automated alert: decline rate > 5% triggers review",
+      "Rule change requires back-test against 30 days of historical transactions",
+      "Shadow mode testing for rule changes before production"
+    ],
+    "tags": ["risk-engine", "false-positive", "configuration", "velocity-rule", "decline-rate"]
+  },
+  {
+    "id": "INC-2024-009",
+    "title": "DLQ depth accumulation on balance.rollback.requested",
+    "severity": "P2",
+    "service": "ledger-service",
+    "startTime": "2024-08-05T16:45:00Z",
+    "resolvedTime": "2024-08-05T18:15:00Z",
+    "symptoms": [
+      "Alert: KafkaDlqDepthNonZero for balance.rollback.requested.DLQ",
+      "DLQ depth: 847 messages",
+      "Some sagas stuck in COMPENSATING state",
+      "ledger-service logs: 'Balance lock not found for rollback'"
+    ],
+    "rootCause": "Balance lock expiry scheduler ran ahead of schedule and expired locks that were still needed for rollback. Rollback consumer couldn't find the lock and threw exception after 3 retries → DLQ.",
+    "investigation": [
+      "DLQ messages all had same error: BalanceLockNotFoundException",
+      "Checked balance_locks table - expired column was true for all affected records",
+      "Scheduler ran at 16:30, 15 minutes earlier than expected",
+      "Cron expression had timezone issue: running in UTC but configured for IST"
+    ],
+    "resolution": [
+      "Fixed cron timezone to Asia/Kolkata explicitly",
+      "Replayed DLQ messages after regenerating balance locks for affected transactions",
+      "Manually resolved stuck sagas via back-office admin endpoint",
+      "Verified balance consistency for all affected accounts"
+    ],
+    "prevention": [
+      "Always specify timezone in cron expressions explicitly",
+      "Balance lock rollback should work without lock (use ledger entry to calculate rollback amount)",
+      "DLQ replay automation with admin dashboard",
+      "Saga stuck detection alert for > 30 min in COMPENSATING state"
+    ],
+    "tags": ["dlq", "ledger-service", "scheduler", "timezone", "balance-lock", "rollback"]
+  },
+  {
+    "id": "INC-2024-010",
+    "title": "ArgoCD sync failed after Helm values conflict",
+    "severity": "P3",
+    "service": "infrastructure",
+    "startTime": "2024-09-01T10:30:00Z",
+    "resolvedTime": "2024-09-01T11:00:00Z",
+    "symptoms": [
+      "ArgoCD app aegispay-prod showing OutOfSync status",
+      "Sync failed: Error: YAML parse error on values-prod.yaml",
+      "Production deployment blocked - no new versions deploying",
+      "Last good sync was 2 hours ago"
+    ],
+    "rootCause": "A CI/CD script used yq to patch image tags but introduced a YAML formatting error (duplicate key in services block). ArgoCD couldn't render Helm templates and rejected the sync.",
+    "investigation": [
+      "ArgoCD UI showed render error on values-prod.yaml",
+      "helm lint on the file revealed duplicate key: payment_orchestrator",
+      "Git blame showed change was made by the image-tag-update CI job",
+      "yq appended instead of updating when key already existed"
+    ],
+    "resolution": [
+      "Manually fixed YAML in values-prod.yaml and pushed to main",
+      "ArgoCD sync succeeded after fix",
+      "Updated yq script to use correct merge operator (-i flag with explicit path)"
+    ],
+    "prevention": [
+      "Add helm lint as step in CI before committing values changes",
+      "helm template dry-run in CI pipeline",
+      "PR required for values-prod.yaml changes (auto-commit bypasses this)",
+      "yamllint pre-commit hook in repository"
+    ],
+    "tags": ["argocd", "helm", "yaml", "ci-cd", "deployment-blocked"]
+  },
+  {
+    "id": "INC-2024-011",
+    "title": "pgvector extension not installed causing ai-platform startup failure",
+    "severity": "P2",
+    "service": "ai-platform",
+    "startTime": "2024-09-15T08:00:00Z",
+    "resolvedTime": "2024-09-15T09:30:00Z",
+    "symptoms": [
+      "ai-platform CrashLoopBackOff on new staging environment",
+      "Error: relation 'knowledge_documents' does not exist",
+      "Flyway migration V1 failed: extension 'vector' does not exist",
+      "New PostgreSQL RDS instance provisioned without pgvector"
+    ],
+    "rootCause": "New staging environment was provisioned with standard PostgreSQL RDS without the pgvector extension. The CREATE EXTENSION vector; in V1 migration failed silently and table creation failed.",
+    "investigation": [
+      "Checked RDS parameter groups - pgvector not in installed extensions",
+      "Migration V1 had CREATE EXTENSION IF NOT EXISTS vector - IF NOT EXISTS masked the error",
+      "Table creation after extension install failed because extension wasn't there",
+      "Terraform module for RDS didn't include pgvector in engine version requirements"
+    ],
+    "resolution": [
+      "Enabled pgvector on RDS instance via AWS console",
+      "Ran flyway repair to reset migration checksum",
+      "Redeployed ai-platform"
+    ],
+    "prevention": [
+      "Terraform RDS module to enforce pgvector-compatible engine version",
+      "Migration V1 should fail FAST if vector extension not installed (remove IF NOT EXISTS)",
+      "Environment provisioning checklist includes pgvector verification",
+      "Add health check that verifies vector extension present"
+    ],
+    "tags": ["ai-platform", "pgvector", "postgresql", "rds", "migration", "staging"]
+  },
+  {
+    "id": "INC-2024-012",
+    "title": "JWT token expiry causing cascade failure across services",
+    "severity": "P1",
+    "service": "api-gateway",
+    "startTime": "2024-10-03T00:00:00Z",
+    "resolvedTime": "2024-10-03T00:45:00Z",
+    "symptoms": [
+      "All authenticated API calls returning 401 at midnight",
+      "api-gateway logs: 'JWT expired'",
+      "Keycloak logs showing valid token issuance",
+      "Mobile apps failing to refresh tokens automatically"
+    ],
+    "rootCause": "Service account token used by api-gateway for inter-service calls had a hard-coded expiry of 24 hours, last generated at midnight the previous day. Exact midnight expiry caused all in-flight requests to fail simultaneously.",
+    "investigation": [
+      "Token inspection showed exp claim at midnight exactly",
+      "Keycloak service account token generated by startup script at deploy time",
+      "Token not being refreshed automatically - only at service startup",
+      "Rolling deployment at midnight triggered all pods with same token"
+    ],
+    "resolution": [
+      "Restarted api-gateway pods to generate fresh tokens",
+      "Implemented automatic token refresh 5 minutes before expiry",
+      "Changed service account token expiry to 1 hour with auto-refresh"
+    ],
+    "prevention": [
+      "Never use hard-coded expiry time based on clock time",
+      "Implement token refresh before expiry for all service accounts",
+      "Add token expiry monitoring alert at 90% of TTL elapsed",
+      "Use Kubernetes ServiceAccount tokens with projected volumes (auto-rotated)"
+    ],
+    "tags": ["jwt", "api-gateway", "token-expiry", "keycloak", "midnight-failure"]
+  },
+  {
+    "id": "INC-2024-013",
+    "title": "Saga stuck in RUNNING state after Kafka partition rebalance",
+    "severity": "P2",
+    "service": "payment-orchestrator",
+    "startTime": "2024-10-20T14:00:00Z",
+    "resolvedTime": "2024-10-20T15:30:00Z",
+    "symptoms": [
+      "15 sagas stuck in RUNNING state for > 30 minutes",
+      "balance.commit.requested messages in Kafka but saga not advancing",
+      "payment-orchestrator consumer group rebalancing repeatedly",
+      "BALANCED consumer lag oscillating up and down"
+    ],
+    "rootCause": "payment-orchestrator HPA scaled from 2 to 4 pods during high load, triggering consumer group rebalance. During rebalance, messages were buffered but not processed. Rebalance took unusually long due to all 4 pods joining simultaneously.",
+    "investigation": [
+      "Consumer group status showed REBALANCING for 15 minutes",
+      "HPA event log showed scale-up at 13:58",
+      "Kafka coordinator logs showed repeated join group requests",
+      "Max poll interval (5 min) was being exceeded during rebalance + processing"
+    ],
+    "resolution": [
+      "Reduced max.poll.records to 10 to speed up poll cycles",
+      "Increased session.timeout.ms to account for rebalance time",
+      "Stuck sagas advanced manually via admin endpoint after consumer stabilized",
+      "SagaTimeoutScheduler automatically caught remaining stuck sagas"
+    ],
+    "prevention": [
+      "Use static group membership (group.instance.id) to reduce rebalance disruption",
+      "Incremental cooperative rebalancing (partition.assignment.strategy=CooperativeStickyAssignor)",
+      "Reduce max.poll.records for saga reply consumer",
+      "Stuck saga alert threshold reduced from 30m to 15m"
+    ],
+    "tags": ["kafka", "payment-orchestrator", "saga", "rebalance", "hpa", "scaling"]
+  },
+  {
+    "id": "INC-2024-014",
+    "title": "MongoDB read model out of sync after transaction-service restart",
+    "severity": "P3",
+    "service": "transaction-service",
+    "startTime": "2024-11-05T10:00:00Z",
+    "resolvedTime": "2024-11-05T12:00:00Z",
+    "symptoms": [
+      "Transaction dashboard showing stale status for some transactions",
+      "GET /transactions/{id} returning PENDING status for completed transactions",
+      "MongoDB transaction_views not reflecting recent state changes",
+      "PostgreSQL write model correct; MongoDB read model lagging"
+    ],
+    "rootCause": "transaction-service restart caused the CQRS consumer (TransactionReadModelConsumer) to lose its consumer group offset. Kafka auto.offset.reset=latest caused it to skip all events during downtime.",
+    "investigation": [
+      "Compared PostgreSQL and MongoDB for affected transactions - PostgreSQL correct",
+      "Consumer group lag for transaction-service-read-model was 0 (wrongly)",
+      "Checked consumer group committed offset - reset to latest after pod restart",
+      "auto.offset.reset=latest meant events during downtime were skipped"
+    ],
+    "resolution": [
+      "Changed auto.offset.reset to earliest for read model consumer",
+      "Reset consumer group offset to before restart time",
+      "Read model consumer replayed and caught up within 15 minutes",
+      "Verified consistency for all affected transactions"
+    ],
+    "prevention": [
+      "Read model consumers should always use auto.offset.reset=earliest",
+      "Add consistency check: periodic comparison of PostgreSQL vs MongoDB counts",
+      "Admin endpoint to trigger read model rebuild for specific transaction range",
+      "Consumer group offset committed more frequently (every 100ms vs 5s)"
+    ],
+    "tags": ["mongodb", "cqrs", "read-model", "transaction-service", "kafka-offset", "consistency"]
+  },
+  {
+    "id": "INC-2024-015",
+    "title": "Vault seal after Kubernetes node restart",
+    "severity": "P1",
+    "service": "infrastructure",
+    "startTime": "2024-11-20T03:00:00Z",
+    "resolvedTime": "2024-11-20T04:00:00Z",
+    "symptoms": [
+      "All services returning 'Secret injection failed' errors",
+      "ESO operator logs: 'Vault sealed'",
+      "All new pods failing to start (can't fetch secrets)",
+      "Vault pod running but in sealed state"
+    ],
+    "rootCause": "Kubernetes node running Vault pod was rebooted by AWS for maintenance at 3 AM. Vault auto-unsealing was not configured. Vault came back up but sealed, blocking all ESO secret fetches.",
+    "investigation": [
+      "kubectl describe pod vault-0 showed Ready but Vault CLI showed sealed",
+      "ESO operator logs confirmed Vault unavailability",
+      "Checked Vault auto-unseal config - was not set",
+      "AWS KMS key was available and could have been used for auto-unseal"
+    ],
+    "resolution": [
+      "Manually unsealed Vault using stored unseal keys",
+      "ESO operator reconnected automatically within 30 seconds",
+      "All pending pods started successfully after Vault became unsealed"
+    ],
+    "prevention": [
+      "Configure Vault auto-unseal with AWS KMS",
+      "Store unseal keys in AWS Secrets Manager for operational recovery",
+      "Vault HA setup with 3 nodes to avoid single-node failure",
+      "Alert immediately when Vault sealed status detected"
+    ],
+    "tags": ["vault", "sealed", "eso", "infrastructure", "auto-unseal", "node-restart"]
+  },
+  {
+    "id": "INC-2024-016",
+    "title": "Stripe webhook signature verification failures",
+    "severity": "P2",
+    "service": "payment-orchestrator",
+    "startTime": "2024-12-01T14:00:00Z",
+    "resolvedTime": "2024-12-01T14:30:00Z",
+    "symptoms": [
+      "Stripe webhook endpoint returning 400 for all events",
+      "Stripe dashboard showing webhook delivery failures",
+      "payment_intent.succeeded events not advancing sagas",
+      "Transactions stuck in PROCESS_PAYMENT step"
+    ],
+    "rootCause": "Webhook secret was rotated in Stripe dashboard but the new secret was not updated in Vault. STRIPE_WEBHOOK_SECRET env var had the old value, causing all signature verifications to fail.",
+    "investigation": [
+      "payment-orchestrator logs: SignatureVerificationException",
+      "Stripe dashboard showed webhook secret rotation 2 hours prior",
+      "Vault secret still had old webhook secret value",
+      "ESO refresh interval is 24h - new secret not yet synced"
+    ],
+    "resolution": [
+      "Updated webhook secret in Vault immediately",
+      "Forced ESO ExternalSecret refresh",
+      "Rolling restart of payment-orchestrator to pick up new secret",
+      "Replayed failed webhook events from Stripe dashboard"
+    ],
+    "prevention": [
+      "Webhook secret rotation runbook: always update Vault before rotating in Stripe",
+      "ESO refresh interval reduced to 1h for payment credentials",
+      "Alert on webhook failure rate > 0% in Stripe",
+      "Two-phase rotation: new + old secret accepted simultaneously during transition"
+    ],
+    "tags": ["stripe", "webhook", "payment-orchestrator", "secret-rotation", "vault"]
+  },
+  {
+    "id": "INC-2024-017",
+    "title": "High error rate on /ai/kyc/process endpoint",
+    "severity": "P2",
+    "service": "ai-platform",
+    "startTime": "2024-12-10T10:00:00Z",
+    "resolvedTime": "2024-12-10T11:00:00Z",
+    "symptoms": [
+      "KYC document processing failing for 60% of requests",
+      "Error: 'Image quality too low for OCR processing'",
+      "Mobile app update released on app stores at 09:00",
+      "Error only on iOS devices, not Android"
+    ],
+    "rootCause": "iOS app v2.1.0 had a regression in image compression. Documents were being compressed to 15% quality before upload (instead of 75%). OCR model requires minimum 30% quality. Android update (v2.1.1) had the correct compression settings.",
+    "investigation": [
+      "ai-platform logs showed quality score < 0.3 for all failing docs",
+      "Downloaded sample document from failing request - very low resolution",
+      "Git diff on iOS changes showed compression quality constant changed from 0.75 to 0.15",
+      "Android version not affected"
+    ],
+    "resolution": [
+      "iOS v2.1.1 hotfix released with correct compression quality",
+      "Server-side: added quality threshold check before sending to LLM",
+      "Users on v2.1.0 asked to update app for KYC functionality"
+    ],
+    "prevention": [
+      "Add image quality check on server side before OCR processing",
+      "Integration test that validates document upload quality end-to-end",
+      "iOS image compression constant should be a configuration value, not hardcoded",
+      "Canary rollout for mobile apps to detect regressions before full release"
+    ],
+    "tags": ["ai-platform", "kyc", "ocr", "ios", "image-quality", "regression"]
+  },
+  {
+    "id": "INC-2024-018",
+    "title": "Notification service email delivery bounce rate spike",
+    "severity": "P3",
+    "service": "notification-service",
+    "startTime": "2024-12-20T09:00:00Z",
+    "resolvedTime": "2024-12-20T10:00:00Z",
+    "symptoms": [
+      "Gmail SMTP returning hard bounces for 15% of emails",
+      "notification-service logs: 'SMTP authentication failed intermittently'",
+      "Gmail app password expired after Google policy change",
+      "Users not receiving transaction confirmation emails"
+    ],
+    "rootCause": "Google changed its security policy to require re-verification of app passwords every 90 days. The app password expired and SMTP authentication started failing intermittently as the grace period expired.",
+    "investigation": [
+      "SMTP error: 535-5.7.8 Username and Password not accepted",
+      "Google account security page showed app password expired",
+      "Secret in Vault had the 90-day-old password",
+      "No alert was configured for email delivery failure rate"
+    ],
+    "resolution": [
+      "Generated new Gmail app password",
+      "Updated Vault secret",
+      "Forced ESO refresh and rolling restart of notification-service",
+      "Email delivery restored"
+    ],
+    "prevention": [
+      "Alert on SMTP authentication failure rate > 0%",
+      "Calendar reminder for app password rotation every 80 days",
+      "Consider migrating to AWS SES for production (no app password expiry)",
+      "Email delivery health check endpoint that validates SMTP connection"
+    ],
+    "tags": ["notification-service", "email", "smtp", "gmail", "app-password", "expiry"]
+  },
+  {
+    "id": "INC-2024-019",
+    "title": "Concurrent saga start caused by duplicate transaction.initiated events",
+    "severity": "P1",
+    "service": "payment-orchestrator",
+    "startTime": "2024-12-28T15:00:00Z",
+    "resolvedTime": "2024-12-28T16:00:00Z",
+    "symptoms": [
+      "3 transactions had two sagas each - duplicate saga records",
+      "Both sagas processed independently - double balance deduction",
+      "transaction.initiated topic had duplicate message keys",
+      "Outbox scheduler published same entry twice"
+    ],
+    "rootCause": "Outbox scheduler had a bug where the same PENDING entry was selected by two threads simultaneously during a database failover. The pessimistic lock on the select query was not being held across the transaction due to connection pool configuration.",
+    "investigation": [
+      "saga table showed two saga rows for same transactionId",
+      "outbox_entries table showed same entry marked PUBLISHED twice",
+      "Thread dump during failover showed two threads in publishAndMark method",
+      "Connection pool returned connections before transaction fully committed"
+    ],
+    "resolution": [
+      "Fixed: saga.startSaga() now has explicit idempotency check at entry",
+      "Fixed outbox scheduler to use SELECT FOR UPDATE SKIP LOCKED",
+      "Manually reversed duplicate balance deductions",
+      "Retroactively merged duplicate sagas"
+    ],
+    "prevention": [
+      "SELECT FOR UPDATE SKIP LOCKED for all outbox reads",
+      "Saga start must be idempotent at DB level (unique constraint on transactionId)",
+      "Add duplicate saga detection alert",
+      "Connection pool autocommit must be false for all outbox operations"
+    ],
+    "tags": ["saga", "payment-orchestrator", "outbox", "duplicate", "concurrency", "database-failover"]
+  },
+  {
+    "id": "INC-2024-020",
+    "title": "k3s node disk full causing pod evictions",
+    "severity": "P2",
+    "service": "infrastructure",
+    "startTime": "2025-01-05T02:00:00Z",
+    "resolvedTime": "2025-01-05T03:30:00Z",
+    "symptoms": [
+      "Multiple pods being evicted on on-prem k3s node",
+      "DiskPressure condition true on node",
+      "Postgres container crashed: no space left on device",
+      "Logs: kubelet disk eviction threshold exceeded"
+    ],
+    "rootCause": "Grafana logs directory grew unbounded over 6 months. /var/log/containers accumulated 45GB of log files. Default k3s log rotation was not configured.",
+    "investigation": [
+      "df -h showed /dev/sda1 at 98% usage",
+      "du -sh /var/log/containers showed 45GB",
+      "Grafana loki container was logging at DEBUG level generating 500MB/day",
+      "No logrotate configured for container logs"
+    ],
+    "resolution": [
+      "Deleted old log files to free space",
+      "Configured logrotate for container logs",
+      "Changed Grafana log level to WARN",
+      "Added 500GB additional disk and mounted at /var/lib/rancher"
+    ],
+    "prevention": [
+      "Monitor node disk usage > 70% alert",
+      "Configure container log rotation (max-size: 10m, max-file: 3) in k3s config",
+      "Set log levels to WARN or higher for infrastructure components",
+      "Scheduled disk cleanup cron for old logs"
+    ],
+    "tags": ["k3s", "disk-full", "eviction", "log-rotation", "on-prem", "infrastructure"]
+  }
+]
