@@ -138,6 +138,17 @@ services:
       minReplicas: 2
       maxReplicas: 8
       targetCPUUtilizationPercentage: 70
+    extraEnv:
+      - name: STRIPE_SECRET_KEY
+        valueFrom:
+          secretKeyRef:
+            name: aegispay-stripe-secret
+            key: secret-key
+      - name: STRIPE_WEBHOOK_SECRET
+        valueFrom:
+          secretKeyRef:
+            name: aegispay-stripe-secret
+            key: webhook-secret
 
   risk_engine:
     enabled: true
@@ -178,6 +189,12 @@ services:
       minReplicas: 2
       maxReplicas: 6
       targetCPUUtilizationPercentage: 70
+    extraEnv:
+      - name: SMTP_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: aegispay-smtp-secret
+            key: password
 
   ai_platform:
     enabled: true
@@ -198,6 +215,12 @@ services:
       minReplicas: 2
       maxReplicas: 6
       targetCPUUtilizationPercentage: 60
+    extraEnv:
+      - name: ANTHROPIC_API_KEY
+        valueFrom:
+          secretKeyRef:
+            name: aegispay-ai-secret
+            key: anthropic-api-key
 
 # ─── Ingress (api-gateway only) ───────────────────────────────────────────────
 ingress:
@@ -229,6 +252,12 @@ secrets:
     secretPath: "aegispay/ai-keys"
   kafka:
     secretPath: "aegispay/kafka"
+  stripe:
+    secretPath: "aegispay/stripe"
+  smtp:
+    secretPath: "aegispay/smtp"
+  slack:
+    secretPath: "aegispay/slack"
 
 # ─── Monitoring & Alerting ───────────────────────────────────────────────────
 monitoring:

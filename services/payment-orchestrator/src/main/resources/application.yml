@@ -56,14 +56,15 @@ management:
     tags:
       service: ${spring.application.name}
 
+stripe:
+  # Injected from K8s Secret aegispay-stripe-secret (via ESO → Vault)
+  secret-key: ${STRIPE_SECRET_KEY}
+  webhook-secret: ${STRIPE_WEBHOOK_SECRET}
+
 aegispay:
   saga:
     timeout-minutes: 10
     timeout-check-interval-ms: 60000
-  external-payment-gateway:
-    base-url: ${PAYMENT_GATEWAY_URL:http://payment-gateway-mock:9090}
-    connect-timeout-ms: 5000
-    read-timeout-ms: 30000
 
 resilience4j:
   circuitbreaker:
