@@ -136,11 +136,95 @@ services:
       start_period: 60s
     restart: unless-stopped
 
+  # ── ClickHouse (OLAP analytics store) ────────────────────────────────────────
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.4-alpine
+    container_name: aegispay-clickhouse
+    environment:
+      CLICKHOUSE_DB: aegispay_analytics
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: ""          # empty for local dev
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+    ports:
+      - "8123:8123"    # HTTP interface (JDBC)
+      - "9000:9000"    # Native protocol
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - ./infra/clickhouse/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8123/ping | grep -q Ok"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    restart: unless-stopped
+
+  # ── Apache Superset (analytics dashboard) ────────────────────────────────────
+  superset-db:
+    image: postgres:16-alpine
+    container_name: aegispay-superset-db
+    environment:
+      POSTGRES_DB: superset
+      POSTGRES_USER: superset
+      POSTGRES_PASSWORD: superset
+    volumes:
+      - superset_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U superset"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  superset:
+    image: apache/superset:3.1.3
+    container_name: aegispay-superset
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+      superset-db:
+        condition: service_healthy
+    environment:
+      SUPERSET_SECRET_KEY: "aegispay-superset-dev-secret-change-in-prod"
+      SUPERSET_LOAD_EXAMPLES: "no"
+      DATABASE_DB: superset
+      DATABASE_HOST: superset-db
+      DATABASE_PASSWORD: superset
+      DATABASE_USER: superset
+      DATABASE_PORT: "5432"
+      DATABASE_DIALECT: postgresql
+    ports:
+      - "8088:8088"
+    volumes:
+      - ./infra/superset/superset_config.py:/app/pythonpath/superset_config.py:ro
+      - superset_home:/app/superset_home
+    command: >
+      bash -c "
+        superset fab create-admin --username admin --firstname Admin --lastname User --email admin@aegispay.io --password admin 2>/dev/null || true &&
+        superset db upgrade &&
+        superset init &&
+        gunicorn --bind 0.0.0.0:8088 --workers 4 --timeout 120 --limit-request-line 0 --limit-request-field_size 0 'superset.app:create_app()'
+      "
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8088/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   redis_data:
   mongodb_data:
   kafka_data:
+  clickhouse_data:
+  superset_home:
+  superset_db_data:
 
 networks:
   default:

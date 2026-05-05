@@ -31,6 +31,8 @@
     <module>services/risk-engine</module>
     <module>services/notification-service</module>
     <module>services/ai-platform</module>
+    <module>services/data-pipeline</module>
+    <module>services/reconciliation-service</module>
     <module>services/e2e-tests</module>
   </modules>
 

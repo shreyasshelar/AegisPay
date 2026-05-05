@@ -1,0 +1,3 @@
+{{- if .Values.services.data_pipeline.enabled }}
+{{ include "aegispay.serviceDeployment" (dict "name" "data-pipeline" "key" "data_pipeline" "svc" .Values.services.data_pipeline "context" .) }}
+{{- end }}

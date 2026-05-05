@@ -77,7 +77,7 @@ write_secret() {
 required_vars=(
   DB_PASSWORD REDIS_PASSWORD KAFKA_SASL_USERNAME KAFKA_SASL_PASSWORD
   ANTHROPIC_API_KEY STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET
-  SMTP_PASSWORD SLACK_WEBHOOK_URL
+  SMTP_PASSWORD SLACK_WEBHOOK_URL CLICKHOUSE_PASSWORD
 )
 for var in "${required_vars[@]}"; do
   if [ -z "${!var:-}" ]; then
@@ -113,6 +113,9 @@ write_secret "smtp" \
 
 write_secret "slack" \
   webhook_url="${SLACK_WEBHOOK_URL}"
+
+write_secret "clickhouse" \
+  password="${CLICKHOUSE_PASSWORD}"
 
 # ── Enable Kubernetes auth if not already ─────────────────────────────────────
 if ! vault auth list | grep -q "^kubernetes/"; then
@@ -150,7 +153,7 @@ echo "────────────────────────�
 echo "✅ Vault initialisation complete for environment: $ENV"
 echo ""
 echo "Secrets written to: secret/aegispay/${ENV}/"
-echo "  db, redis, kafka, ai-keys, stripe, smtp, slack"
+echo "  db, redis, kafka, ai-keys, stripe, smtp, slack, clickhouse"
 echo ""
 echo "Next steps:"
 echo "  1. Apply ESO ExternalSecrets:  helm upgrade --install aegispay infra/helm/aegispay ..."
