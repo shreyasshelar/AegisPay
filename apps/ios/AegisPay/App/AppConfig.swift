@@ -36,4 +36,22 @@ enum AppConfig {
 
     // ── Keychain ──────────────────────────────────────────────────────────────
     static let keychainService = "io.aegispay.app"
+
+    // ── Certificate Pinning ───────────────────────────────────────────────────
+    /// SHA-256 base64 hashes of the server's SubjectPublicKeyInfo (SPKI) bytes.
+    /// In production these are injected via the `PINNED_CERT_HASHES` Info.plist
+    /// key as a comma-separated string.
+    /// When empty (local dev), the `CertificatePinningDelegate` passes all
+    /// challenges through so development still works without a pinned cert.
+    static let pinnedCertificateHashes: [String] = {
+        guard let raw = Bundle.main.object(forInfoDictionaryKey: "PINNED_CERT_HASHES") as? String,
+              !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else {
+            return []
+        }
+        return raw
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }()
 }

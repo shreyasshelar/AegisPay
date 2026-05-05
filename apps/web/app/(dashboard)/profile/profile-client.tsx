@@ -16,8 +16,9 @@ import {
   AlertTriangle,
   FileCheck,
   ChevronDown,
+  Fingerprint,
 } from 'lucide-react'
-import { useUser, useProcessKyc, useConfirmKyc } from '@aegispay/api-client'
+import { useUser, useProcessKyc, useConfirmKyc, useBiometric } from '@aegispay/api-client'
 import { Header } from '@/components/header'
 import { Button as AegisButton } from '@aegispay/design-system'
 import { cn } from '@/lib/utils'
@@ -330,6 +331,9 @@ export function ProfileClient({ userId }: { userId: string }) {
           </div>
         )}
 
+        {/* ── Security (WebAuthn biometric) ────────────────────────────────── */}
+        <BiometricSetupCard />
+
         {/* ── KYC result panel ─────────────────────────────────────────────── */}
         {kycResult && (
           <div className="rounded-xl bg-white p-6 shadow-sm ring-1 ring-slate-200 space-y-5">
@@ -410,5 +414,104 @@ export function ProfileClient({ userId }: { userId: string }) {
         )}
       </div>
     </>
+  )
+}
+
+// ── Biometric setup card ──────────────────────────────────────────────────────
+
+function BiometricSetupCard() {
+  const {
+    isSupported,
+    isRegistered,
+    isEnabled,
+    isAuthenticating,
+    error,
+    register,
+    setEnabled,
+    reset,
+  } = useBiometric()
+
+  if (!isSupported) return null
+
+  async function handleToggle(checked: boolean) {
+    if (checked && !isRegistered) {
+      const ok = await register()
+      if (!ok) return
+      toast.success('Biometric unlock enabled')
+    } else {
+      setEnabled(checked)
+      if (!checked) toast.success('Biometric unlock disabled')
+    }
+  }
+
+  return (
+    <div className="rounded-xl bg-white p-6 shadow-sm ring-1 ring-slate-200 space-y-4">
+      {/* Header */}
+      <div className="flex items-center gap-2.5">
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-50">
+          <Fingerprint className="h-5 w-5 text-primary-600" />
+        </div>
+        <h3 className="text-sm font-semibold text-slate-900">Security</h3>
+      </div>
+
+      <div className="border-t border-slate-100" />
+
+      {/* Toggle row */}
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <p className="text-sm font-medium text-slate-800">Biometric Unlock</p>
+          <p className="text-xs text-slate-400 mt-0.5">
+            {isRegistered
+              ? 'Uses your device passkey (Face ID, Touch ID, Windows Hello) to re-authenticate.'
+              : 'Register a passkey to unlock AegisPay with your device biometric.'}
+          </p>
+        </div>
+
+        {/* Accessible toggle */}
+        <button
+          role="switch"
+          aria-checked={isEnabled}
+          aria-label="Biometric unlock"
+          disabled={isAuthenticating}
+          onClick={() => handleToggle(!isEnabled)}
+          className={cn(
+            'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500',
+            isEnabled ? 'bg-primary-600' : 'bg-slate-200',
+            isAuthenticating && 'opacity-50 cursor-not-allowed',
+          )}
+        >
+          <span
+            className={cn(
+              'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+              isEnabled ? 'translate-x-5' : 'translate-x-0',
+            )}
+          />
+        </button>
+      </div>
+
+      {/* Loading state */}
+      {isAuthenticating && (
+        <div className="flex items-center gap-2 text-xs text-slate-500">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          Waiting for biometric prompt…
+        </div>
+      )}
+
+      {/* Error */}
+      {error && (
+        <p className="text-xs text-danger-600">{error}</p>
+      )}
+
+      {/* Reset link */}
+      {isRegistered && (
+        <button
+          type="button"
+          onClick={() => { reset(); toast.success('Passkey removed') }}
+          className="text-xs text-slate-400 underline hover:text-slate-600"
+        >
+          Remove passkey
+        </button>
+      )}
+    </div>
   )
 }

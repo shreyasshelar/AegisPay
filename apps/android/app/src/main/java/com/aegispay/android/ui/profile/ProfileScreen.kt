@@ -25,11 +25,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
+import com.aegispay.android.auth.BiometricAuthManager
 import com.aegispay.android.network.KycDocumentType
 import com.aegispay.android.network.KycExtractedData
 import com.aegispay.android.network.KycProcessingResult
@@ -56,15 +59,22 @@ private fun kycConfig(s: KycStatus) = when (s) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
-    viewModel:    ProfileViewModel,
-    onNavigateUp: () -> Unit,
-    onSignOut:    () -> Unit,
+    viewModel:             ProfileViewModel,
+    onNavigateUp:          () -> Unit,
+    onSignOut:             () -> Unit,
+    biometricAuthManager:  BiometricAuthManager? = null,
 ) {
     val uiState   = viewModel.uiState.collectAsState().value
     val context   = LocalContext.current
     var showSignOutDialog    by remember { mutableStateOf(false) }
     var showSourceDialog     by remember { mutableStateOf(false) }
     var docTypeExpanded      by remember { mutableStateOf(false) }
+
+    // Biometric pref state — drives the toggle without recomposing the whole screen
+    var biometricEnabled by remember {
+        mutableStateOf(biometricAuthManager?.isEnabled ?: false)
+    }
+    val biometricAvailable = remember { biometricAuthManager?.isAvailable ?: false }
 
     // Temp URI for camera capture
     val cameraUri = remember {
@@ -342,6 +352,74 @@ fun ProfileScreen(
                         ProfileInfoRow("User ID",  viewModel.currentUserId ?: "—")
                         ProfileInfoRow("Email",    viewModel.currentUserEmail ?: "—")
                         ProfileInfoRow("Role",     profile.role)
+                    }
+                }
+            }
+
+            // ── Security (biometric toggle) ───────────────────────────────────
+            if (biometricAvailable) {
+                AegisCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Row(
+                            verticalAlignment     = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            Box(
+                                modifier         = Modifier
+                                    .size(36.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(AegisColor.Primary.copy(alpha = 0.12f)),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(
+                                    Icons.Default.Fingerprint,
+                                    contentDescription = null,
+                                    tint     = AegisColor.Primary,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
+                            Text(
+                                "Security",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                                color = AegisColor.Text,
+                            )
+                        }
+
+                        HorizontalDivider(color = AegisColor.Border)
+
+                        Row(
+                            modifier              = Modifier
+                                .fillMaxWidth()
+                                .semantics { contentDescription = "Biometric unlock toggle" },
+                            verticalAlignment     = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    "Biometric Unlock",
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                                    color = AegisColor.Text,
+                                )
+                                Text(
+                                    "Require fingerprint when returning to the app",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = AegisColor.TextMuted,
+                                )
+                            }
+                            Switch(
+                                checked         = biometricEnabled,
+                                onCheckedChange = { enabled ->
+                                    biometricEnabled = enabled
+                                    biometricAuthManager?.isEnabled = enabled
+                                },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor       = Color.White,
+                                    checkedTrackColor       = AegisColor.Primary,
+                                    uncheckedThumbColor     = AegisColor.TextSubtle,
+                                    uncheckedTrackColor     = AegisColor.Border,
+                                ),
+                            )
+                        }
                     }
                 }
             }

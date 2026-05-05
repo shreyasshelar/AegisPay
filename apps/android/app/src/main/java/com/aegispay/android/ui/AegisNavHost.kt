@@ -6,6 +6,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.*
 import androidx.navigation.compose.*
 import com.aegispay.android.auth.AuthState
+import com.aegispay.android.auth.BiometricAuthManager
 import com.aegispay.android.ui.auth.AuthViewModel
 import com.aegispay.android.ui.auth.LoginScreen
 import com.aegispay.android.ui.backoffice.BackOfficeScreen
@@ -37,9 +38,10 @@ private val BACK_OFFICE_ROLES = setOf("BACK_OFFICE", "ADMIN", "MERCHANT_OPS")
 
 @Composable
 fun AegisNavHost(
-    authViewModel:   AuthViewModel,
-    onStartAuthFlow: () -> Unit,
-    modifier:        Modifier = Modifier,
+    authViewModel:        AuthViewModel,
+    onStartAuthFlow:      () -> Unit,
+    modifier:             Modifier = Modifier,
+    biometricAuthManager: BiometricAuthManager? = null,
 ) {
     val navController = rememberNavController()
     val authState by authViewModel.authState.collectAsState()
@@ -131,9 +133,10 @@ fun AegisNavHost(
 
         composable(Route.PROFILE) {
             ProfileScreen(
-                viewModel    = hiltViewModel(),
-                onNavigateUp = { navController.navigateUp() },
-                onSignOut    = { authViewModel.signOut() },
+                viewModel            = hiltViewModel(),
+                onNavigateUp         = { navController.navigateUp() },
+                onSignOut            = { authViewModel.signOut() },
+                biometricAuthManager = biometricAuthManager,
             )
         }
 

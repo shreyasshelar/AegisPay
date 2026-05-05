@@ -41,6 +41,7 @@ struct CameraPickerView: UIViewControllerRepresentable {
 
 struct ProfileView: View {
     @EnvironmentObject var authStore: AuthStore
+    @EnvironmentObject var biometricService: BiometricAuthService
     @StateObject private var vm = ProfileViewModel()
 
     @State private var showSourceSheet  = false
@@ -66,6 +67,7 @@ struct ProfileView: View {
                     if let result = vm.kycResult {
                         kycResultCard(result)
                     }
+                    securitySection
                     signOutButton
                 }
                 .padding(.horizontal, 16)
@@ -418,6 +420,69 @@ struct ProfileView: View {
                     .disabled(!vm.canConfirm || vm.isConfirming)
                 }
             }
+        }
+    }
+
+    // MARK: — Security section
+
+    @ViewBuilder
+    private var securitySection: some View {
+        if biometricService.isAvailable {
+            AegisCard {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 10) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(Color.aegisPrimaryLight)
+                                .frame(width: 34, height: 34)
+                            Image(systemName: biometricIconName)
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundStyle(Color.aegisPrimary)
+                        }
+                        Text("Security")
+                            .font(.aegisSubhead)
+                            .foregroundStyle(Color.aegisText)
+                        Spacer()
+                    }
+
+                    Divider()
+
+                    Toggle(isOn: Binding(
+                        get: { biometricService.isEnabled },
+                        set: { biometricService.isEnabled = $0 }
+                    )) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(biometricToggleLabel)
+                                .font(.aegisBodySmall)
+                                .fontWeight(.medium)
+                                .foregroundStyle(Color.aegisText)
+                        }
+                    }
+                    .tint(Color.aegisPrimary)
+
+                    Text("When enabled, you'll be asked to authenticate when returning to the app.")
+                        .font(.aegisCaption)
+                        .foregroundStyle(Color.aegisTextSubtle)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+
+    private var biometricIconName: String {
+        switch biometricService.biometricType {
+        case .faceID, .opticID: return "faceid"
+        case .touchID:          return "touchid"
+        case .none:             return "lock.fill"
+        }
+    }
+
+    private var biometricToggleLabel: String {
+        switch biometricService.biometricType {
+        case .faceID:   return "Face ID"
+        case .opticID:  return "Optic ID"
+        case .touchID:  return "Touch ID"
+        case .none:     return "Biometric Unlock"
         }
     }
 

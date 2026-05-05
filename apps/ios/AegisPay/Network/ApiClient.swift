@@ -39,7 +39,11 @@ final class ApiClient: ObservableObject {
         let config                    = URLSessionConfiguration.default
         config.timeoutIntervalForRequest  = 30
         config.timeoutIntervalForResource = 60
-        session = URLSession(configuration: config)
+        session = URLSession(
+            configuration: config,
+            delegate: CertificatePinningDelegate(),
+            delegateQueue: nil
+        )
 
         decoder = JSONDecoder()
         decoder.keyDecodingStrategy   = .convertFromSnakeCase
