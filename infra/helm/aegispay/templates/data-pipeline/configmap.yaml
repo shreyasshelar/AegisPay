@@ -1,0 +1,17 @@
+{{- if .Values.services.data_pipeline.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: data-pipeline-config
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "aegispay.labels" . | nindent 4 }}
+    app.kubernetes.io/name: data-pipeline
+data:
+  KAFKA_BOOTSTRAP_SERVERS: {{ .Values.global.kafka.brokers | quote }}
+  CLICKHOUSE_URL: {{ .Values.global.clickhouse.url | quote }}
+  CLICKHOUSE_USERNAME: {{ .Values.global.clickhouse.username | quote }}
+  SERVER_PORT: "8089"
+  SPRING_APPLICATION_NAME: "data-pipeline"
+  MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: "health,prometheus,info"
+{{- end }}

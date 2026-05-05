@@ -24,6 +24,9 @@ global:
     uri: "mongodb://mongodb.aegispay-infra.svc.cluster.local:27017"
   oauth2:
     issuerUri: "http://keycloak.aegispay-infra.svc.cluster.local:8080/realms/aegispay"
+  clickhouse:
+    url: "jdbc:clickhouse://clickhouse.aegispay-infra.svc.cluster.local:8123/aegispay_analytics"
+    username: "default"
 
 # ─── Service definitions ──────────────────────────────────────────────────────
 services:
@@ -222,6 +225,60 @@ services:
             name: aegispay-ai-secret
             key: anthropic-api-key
 
+  data_pipeline:
+    enabled: true
+    image:
+      repository: data-pipeline
+      tag: latest
+    replicas: 2
+    port: 8089
+    resources:
+      requests:
+        cpu: 300m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 6
+      targetCPUUtilizationPercentage: 70
+    extraEnv:
+      - name: CLICKHOUSE_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: aegispay-clickhouse-secret
+            key: password
+
+  reconciliation_service:
+    enabled: true
+    image:
+      repository: reconciliation-service
+      tag: latest
+    replicas: 1          # batch job — single instance is fine
+    port: 8087
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+    autoscaling:
+      enabled: false     # reconciliation is scheduled, not latency-sensitive
+    extraEnv:
+      - name: STRIPE_SECRET_KEY
+        valueFrom:
+          secretKeyRef:
+            name: aegispay-stripe-secret
+            key: secret_key
+      - name: CLICKHOUSE_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: aegispay-clickhouse-secret
+            key: password
+
 # ─── Ingress (api-gateway only) ───────────────────────────────────────────────
 ingress:
   enabled: false
@@ -258,6 +315,8 @@ secrets:
     secretPath: "aegispay/smtp"
   slack:
     secretPath: "aegispay/slack"
+  clickhouse:
+    secretPath: "aegispay/clickhouse"
 
 # ─── Monitoring & Alerting ───────────────────────────────────────────────────
 monitoring:

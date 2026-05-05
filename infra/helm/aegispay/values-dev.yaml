@@ -126,3 +126,36 @@ services:
         memory: 1Gi
     autoscaling:
       enabled: false
+
+  data_pipeline:
+    replicas: 1
+    image:
+      tag: latest
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    autoscaling:
+      enabled: false
+
+  reconciliation_service:
+    replicas: 1
+    image:
+      tag: latest
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    autoscaling:
+      enabled: false
+
+global:
+  clickhouse:
+    url: "jdbc:clickhouse://localhost:8123/aegispay_analytics"
+    username: "default"

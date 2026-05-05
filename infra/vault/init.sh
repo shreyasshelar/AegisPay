@@ -129,6 +129,10 @@ info "Writing Slack alerting secrets..."
 vault kv put secret/aegispay/slack \
   webhook_url="${SLACK_WEBHOOK_URL:-}"
 
+info "Writing ClickHouse analytics DB password..."
+vault kv put secret/aegispay/clickhouse \
+  password="${CLICKHOUSE_PASSWORD:-}"
+
 info "Writing OpenRouter API key (AI — on-prem free tier)..."
 vault kv put secret/aegispay/ai-keys \
   openrouter_api_key="$OPENROUTER_API_KEY" \
