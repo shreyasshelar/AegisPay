@@ -56,6 +56,14 @@ public class User {
     @Builder.Default
     private boolean active = true;
 
+    /** FCM registration token (Android) or APNs device token (iOS). Nullable — set on first login. */
+    @Column(name = "push_token", length = 512)
+    private String pushToken;
+
+    /** "ios" or "android" */
+    @Column(name = "push_token_platform", length = 10)
+    private String pushTokenPlatform;
+
     @Version
     private Long version;
 

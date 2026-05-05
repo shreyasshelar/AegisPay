@@ -14,9 +14,20 @@ struct ApiError: LocalizedError {
 
 // ── Response envelope ─────────────────────────────────────────────────────────
 
+/// Matches the `ApiResponse<T>` envelope returned by every AegisPay backend endpoint:
+/// `{ "success": true, "data": <T>, "timestamp": "..." }`
+private struct ApiEnvelope<T: Decodable>: Decodable {
+    let success: Bool
+    let data:    T?
+    let error:   ErrorBody?
+}
+
 private struct ErrorBody: Decodable {
     let message:   String?
     let errorCode: String?
+    let code:      String?   // some error shapes use "code" instead of "errorCode"
+
+    var resolvedCode: String? { errorCode ?? code }
 }
 
 // ── ApiClient ─────────────────────────────────────────────────────────────────
@@ -125,16 +136,23 @@ final class ApiClient: ObservableObject {
 
         // Error responses
         guard (200..<300).contains(http.statusCode) else {
-            let body = (try? JSONDecoder().decode(ErrorBody.self, from: data))
+            // Try to unwrap ApiResponse envelope error first
+            let envelope = try? JSONDecoder().decode(ApiEnvelope<EmptyBody>.self, from: data)
+            let errBody  = envelope?.error
             throw ApiError(
                 statusCode: http.statusCode,
-                message:    body?.message ?? HTTPURLResponse.localizedString(forStatusCode: http.statusCode),
-                errorCode:  body?.errorCode
+                message:    errBody?.message ?? HTTPURLResponse.localizedString(forStatusCode: http.statusCode),
+                errorCode:  errBody?.resolvedCode
             )
         }
 
-        // Decode
-        return try decoder.decode(T.self, from: data)
+        // Unwrap ApiResponse<T> envelope → extract `.data` payload
+        // Every backend endpoint returns { success: true, data: <T>, timestamp: "..." }
+        let envelope = try decoder.decode(ApiEnvelope<T>.self, from: data)
+        guard let payload = envelope.data else {
+            throw ApiError(statusCode: http.statusCode, message: "Empty response payload", errorCode: "EMPTY_PAYLOAD")
+        }
+        return payload
     }
 }
 

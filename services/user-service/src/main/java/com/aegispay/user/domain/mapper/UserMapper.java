@@ -9,9 +9,18 @@ import org.mapstruct.Named;
 @Mapper(componentModel = "spring")
 public interface UserMapper {
 
-    @Mapping(target = "email", source = "email", qualifiedByName = "maskEmail")
-    @Mapping(target = "phone", source = "phone", qualifiedByName = "maskPhone")
+    @Mapping(target = "email",  source = "email",  qualifiedByName = "maskEmail")
+    @Mapping(target = "phone",  source = "phone",  qualifiedByName = "maskPhone")
+    @Mapping(target = "name",   expression = "java(buildName(user))")
     UserResponse toResponse(User user);
+
+    @Named("buildName")
+    static String buildName(User user) {
+        String first = user.getFirstName() != null ? user.getFirstName().trim() : "";
+        String last  = user.getLastName()  != null ? user.getLastName().trim()  : "";
+        String full  = (first + " " + last).trim();
+        return full.isEmpty() ? null : full;
+    }
 
     @Named("maskEmail")
     static String maskEmail(String email) {

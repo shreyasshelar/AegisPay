@@ -14,6 +14,7 @@ export type TransactionStatus = z.infer<typeof TransactionStatusSchema>
 export const TransactionSchema = z.object({
   transactionId: z.string().uuid(),
   userId: z.string().uuid(),
+  payerId: z.string().uuid().nullable(),
   payeeId: z.string().uuid(),
   amount: z.string(), // BigDecimal comes as string from JSON
   currency: z.string().length(3),
@@ -24,6 +25,7 @@ export const TransactionSchema = z.object({
   completedAt: z.string().datetime().nullable(),
   failureReason: z.string().nullable(),
   note: z.string().nullable(),
+  externalReference: z.string().nullable().optional(),
 })
 export type Transaction = z.infer<typeof TransactionSchema>
 

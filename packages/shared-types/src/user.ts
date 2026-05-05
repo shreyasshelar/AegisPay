@@ -21,12 +21,19 @@ export type UserRole = z.infer<typeof UserRoleSchema>
 
 export const UserSchema = z.object({
   id: z.string().uuid(),
-  email: z.string().email(),
+  externalId: z.string().optional(),
+  /** Full display name: "{firstName} {lastName}" */
+  name: z.string().nullable().optional(),
+  email: z.string(),          // masked server-side: j***@example.com
   phone: z.string().nullable(), // masked server-side
+  firstName: z.string().nullable().optional(),
+  lastName: z.string().nullable().optional(),
   kycStatus: KycStatusSchema,
   role: UserRoleSchema,
   tenantId: z.string().nullable(),
+  active: z.boolean().optional(),
   createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime().optional(),
 })
 export type User = z.infer<typeof UserSchema>
 

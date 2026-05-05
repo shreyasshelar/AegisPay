@@ -13,8 +13,11 @@ import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.runBlocking
 import okhttp3.CertificatePinner
 import okhttp3.Interceptor
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
+import okhttp3.ResponseBody.Companion.toResponseBody
 import okhttp3.logging.HttpLoggingInterceptor
+import org.json.JSONObject
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
 import java.util.Date
@@ -50,6 +53,26 @@ object NetworkModule {
                 .header("X-Correlation-ID", UUID.randomUUID().toString())
                 .build()
             chain.proceed(request)
+        }
+
+        // ── ApiResponse<T> unwrap interceptor ──────────────────────────────────
+        // The backend wraps every successful response in { success, data, timestamp }.
+        // This interceptor extracts the inner `data` field so Retrofit deserializes
+        // the payload directly into the expected model class.
+        val envelopeUnwrapInterceptor = Interceptor { chain ->
+            val response = chain.proceed(chain.request())
+            if (!response.isSuccessful) return@Interceptor response
+            val rawBody = response.body?.string() ?: return@Interceptor response
+            val unwrapped = try {
+                val json = JSONObject(rawBody)
+                if (json.has("data") && !json.isNull("data")) {
+                    json.get("data").toString()
+                } else rawBody
+            } catch (_: Exception) { rawBody }
+            val mediaType = "application/json; charset=utf-8".toMediaTypeOrNull()
+            response.newBuilder()
+                .body(unwrapped.toResponseBody(mediaType))
+                .build()
         }
 
         // ── Certificate pinning ────────────────────────────────────────────────
@@ -92,6 +115,7 @@ object NetworkModule {
             .readTimeout(30, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
             .addInterceptor(authInterceptor)
+            .addInterceptor(envelopeUnwrapInterceptor) // unwrap before logging so logs show real payload
             .addInterceptor(loggingInterceptor)
 
         if (rawHashes.isNotBlank() && pinnedHosts.isNotEmpty()) {

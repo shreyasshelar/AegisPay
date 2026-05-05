@@ -64,6 +64,20 @@ public class UserController {
     }
 
     /**
+     * User confirms the AI-reviewed KYC data and requests document submission.
+     * Transitions the KYC state from PENDING → DOCUMENT_SUBMITTED.
+     */
+    @PatchMapping("/{userId}/kyc")
+    public ResponseEntity<ApiResponse<KycStatusResponse>> confirmKycSubmission(
+            @PathVariable UUID userId,
+            @Valid @RequestBody KycConfirmRequest request,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        KycStatusResponse response = userService.confirmKycSubmission(userId, request, jwt.getSubject());
+        return ResponseEntity.ok(ApiResponse.ok(response));
+    }
+
+    /**
      * AI platform callback — updates KYC status with OCR results.
      * In production this endpoint should be protected by an internal API key or mTLS.
      * For now it is accessible to ADMIN role only.
@@ -76,5 +90,19 @@ public class UserController {
 
         KycStatusResponse response = userService.processAiCallback(userId, request);
         return ResponseEntity.ok(ApiResponse.ok(response));
+    }
+
+    /**
+     * Register a device push token (FCM or APNs) for the user.
+     * Called once per app session from iOS (APNs token) and Android (FCM token).
+     */
+    @PostMapping("/{userId}/push-token")
+    public ResponseEntity<Void> registerPushToken(
+            @PathVariable UUID userId,
+            @Valid @RequestBody PushTokenRequest request,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        userService.registerPushToken(userId, request, jwt.getSubject());
+        return ResponseEntity.noContent().build();
     }
 }

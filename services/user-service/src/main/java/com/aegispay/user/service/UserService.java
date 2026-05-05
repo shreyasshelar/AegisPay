@@ -194,6 +194,70 @@ public class UserService {
                 .build();
     }
 
+    /**
+     * User-facing KYC confirmation: transitions PENDING → DOCUMENT_SUBMITTED
+     * and creates a placeholder KYC document record.
+     * The actual AI processing was done client-side via ai-platform; this call
+     * records the user's intent to submit and triggers the outbox event.
+     */
+    @Transactional
+    public KycStatusResponse confirmKycSubmission(UUID userId,
+                                                  KycConfirmRequest request,
+                                                  String callerExternalId) {
+        User user = requireUser(userId);
+
+        // Enforce ownership — users can only submit their own KYC
+        if (!user.getExternalId().equals(callerExternalId)) {
+            throw new AegisPayException("FORBIDDEN",
+                    "You can only submit KYC for your own account.", HttpStatus.FORBIDDEN);
+        }
+
+        kycStateMachine.assertValidTransition(user.getKycStatus(), KycStatus.DOCUMENT_SUBMITTED);
+        user.setKycStatus(KycStatus.DOCUMENT_SUBMITTED);
+        userRepository.save(user);
+
+        // Create a minimal document record (documentRef will be updated by the AI pipeline)
+        KycDocument doc = KycDocument.builder()
+                .userId(user.getId())
+                .documentType(request.documentType())
+                .documentRef("pending")
+                .ocrStatus("PENDING")
+                .tamperedFlag(false)
+                .build();
+        kycDocumentRepository.save(doc);
+
+        OutboxEntry outboxEntry = eventProducer.buildKycStatusChangedEntry(
+                user, KycStatus.PENDING, request.documentType(), null);
+        outboxEntryRepository.save(outboxEntry);
+
+        log.info("KYC submission confirmed: userId={} docType={}", userId, request.documentType());
+
+        return KycStatusResponse.builder()
+                .userId(userId)
+                .kycStatus(user.getKycStatus())
+                .documentType(request.documentType())
+                .ocrStatus("PENDING")
+                .tamperedFlag(false)
+                .build();
+    }
+
+    /**
+     * Stores (or replaces) the user's push notification device token.
+     * Idempotent — safe to call on every app launch.
+     */
+    @Transactional
+    public void registerPushToken(UUID userId, PushTokenRequest request, String callerExternalId) {
+        User user = requireUser(userId);
+        if (!user.getExternalId().equals(callerExternalId)) {
+            throw new AegisPayException("FORBIDDEN",
+                    "You can only register push tokens for your own account.", HttpStatus.FORBIDDEN);
+        }
+        user.setPushToken(request.token());
+        user.setPushTokenPlatform(request.platform());
+        userRepository.save(user);
+        log.debug("Push token registered: userId={} platform={}", userId, request.platform());
+    }
+
     // ── Helpers ────────────────────────────────────────────────────────────────
 
     private User requireUser(UUID userId) {

@@ -13,6 +13,9 @@ import java.util.UUID;
 @Mapper(componentModel = "spring")
 public interface TransactionMapper {
 
+    @Mapping(target = "note",
+             expression = "java(transaction.getMetadata() != null ? " +
+                          "(String) transaction.getMetadata().get(\"note\") : null)")
     TransactionResponse toResponse(Transaction transaction);
 
     @Mapping(target = "transactionId", expression = "java(java.util.UUID.fromString(view.getId()))")

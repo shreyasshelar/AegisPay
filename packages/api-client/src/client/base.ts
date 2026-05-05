@@ -6,6 +6,19 @@ export interface ApiClientConfig {
   onUnauthorized?: () => void
 }
 
+/**
+ * Shape of the `ApiResponse<T>` envelope returned by all AegisPay backend endpoints.
+ * Every successful response is: { success: true, data: T, timestamp: "..." }
+ * Every error response is:      { success: false, error: { code, message }, timestamp: "..." }
+ */
+interface ApiEnvelope<T> {
+  success: boolean
+  data?: T
+  error?: { code?: string; message?: string }
+  correlationId?: string
+  timestamp?: string
+}
+
 export class AegisApiClient {
   readonly axios: AxiosInstance
 
@@ -22,14 +35,22 @@ export class AegisApiClient {
       if (token) {
         req.headers.Authorization = `Bearer ${token}`
       }
-      // Correlation ID for distributed tracing
+      // Correlation ID for distributed tracing (propagated server-side via MDC)
       req.headers['X-Correlation-ID'] = crypto.randomUUID()
       return req
     })
 
-    // Redirect to login on 401
+    // Unwrap ApiResponse<T> envelope + handle 401
     this.axios.interceptors.response.use(
-      (res) => res,
+      (res) => {
+        // The backend always returns { success, data, ... }
+        // Unwrap so callers receive T directly instead of the envelope.
+        const envelope = res.data as ApiEnvelope<unknown>
+        if (envelope && typeof envelope === 'object' && 'success' in envelope) {
+          res.data = envelope.data
+        }
+        return res
+      },
       (err: AxiosError) => {
         if (err.response?.status === 401) {
           config.onUnauthorized?.()
@@ -72,8 +93,9 @@ export class ApiError extends Error {
 }
 
 function mapApiError(err: AxiosError): ApiError {
-  const data = err.response?.data as { message?: string; errorCode?: string } | undefined
+  const envelope = err.response?.data as ApiEnvelope<never> | undefined
   const status = err.response?.status ?? 0
-  const message = data?.message ?? err.message ?? 'Unknown error'
-  return new ApiError(message, status, data?.errorCode)
+  const message = envelope?.error?.message ?? err.message ?? 'Unknown error'
+  const errorCode = envelope?.error?.code
+  return new ApiError(message, status, errorCode)
 }
