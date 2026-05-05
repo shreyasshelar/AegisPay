@@ -1,0 +1,22 @@
+apiVersion: v2
+name: aegispay
+description: AegisPay — Production-grade event-driven fintech platform
+type: application
+version: 1.0.0
+appVersion: "1.0.0-SNAPSHOT"
+
+maintainers:
+  - name: AegisPay Engineering
+    email: platform@aegispay.io
+
+keywords:
+  - fintech
+  - payments
+  - microservices
+  - kafka
+  - saga
+
+annotations:
+  artifacthub.io/changes: |
+    - kind: added
+      description: Initial platform release

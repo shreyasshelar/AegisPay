@@ -1,0 +1,3 @@
+{{- if .Values.services.risk_engine.enabled }}
+{{ include "aegispay.servicePdb" (dict "name" "risk-engine" "context" .) }}
+{{- end }}

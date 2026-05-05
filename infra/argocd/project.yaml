@@ -1,0 +1,59 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: aegispay
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: AegisPay fintech platform — all environments
+
+  # Only deploy from this repo
+  sourceRepos:
+    - https://github.com/aegispay-org/aegispay.git
+
+  destinations:
+    - namespace: aegispay-dev
+      server: https://kubernetes.default.svc
+    - namespace: aegispay-staging
+      server: https://kubernetes.default.svc
+    - namespace: aegispay-prod
+      server: https://kubernetes.default.svc
+    - namespace: argocd
+      server: https://kubernetes.default.svc
+
+  # Allowed resource types
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+
+  namespaceResourceWhitelist:
+    - group: "apps"
+      kind: Deployment
+    - group: "apps"
+      kind: ReplicaSet
+    - group: ""
+      kind: Service
+    - group: ""
+      kind: ConfigMap
+    - group: ""
+      kind: ServiceAccount
+    - group: "autoscaling"
+      kind: HorizontalPodAutoscaler
+    - group: "policy"
+      kind: PodDisruptionBudget
+    - group: "networking.k8s.io"
+      kind: Ingress
+    - group: "networking.k8s.io"
+      kind: NetworkPolicy
+    - group: "external-secrets.io"
+      kind: ExternalSecret
+
+  # Role: CI/CD can sync any app in this project
+  roles:
+    - name: ci-deployer
+      description: Pipeline role for automated deployments
+      policies:
+        - p, proj:aegispay:ci-deployer, applications, sync, aegispay/*, allow
+        - p, proj:aegispay:ci-deployer, applications, get, aegispay/*, allow
+      jwtTokens: []

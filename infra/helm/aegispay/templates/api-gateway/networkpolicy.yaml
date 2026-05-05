@@ -1,0 +1,79 @@
+{{- if .Values.services.api_gateway.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: api-gateway
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "aegispay.labels" . | nindent 4 }}
+    app.kubernetes.io/name: api-gateway
+    app.kubernetes.io/component: api-gateway
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "aegispay.selectorLabels" (dict "name" "api-gateway" "context" .) | nindent 6 }}
+
+  policyTypes:
+    - Ingress
+    - Egress
+
+  ingress:
+    # Allow traffic from the ingress controller (nginx)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: {{ .Values.services.api_gateway.port }}
+    # Allow Prometheus scraping from monitoring namespace
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: {{ .Values.services.api_gateway.port }}
+
+  egress:
+    # Allow outbound to all aegispay services in the same namespace
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.global.namespace }}
+      ports:
+        - protocol: TCP
+          port: 8081  # user-service
+        - protocol: TCP
+          port: 8082  # transaction-service
+        - protocol: TCP
+          port: 8083  # ledger-service
+        - protocol: TCP
+          port: 8084  # payment-orchestrator
+        - protocol: TCP
+          port: 8085  # risk-engine
+        - protocol: TCP
+          port: 8086  # notification-service
+        - protocol: TCP
+          port: 8088  # ai-platform
+    # Allow Redis access (infra namespace)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: aegispay-infra
+      ports:
+        - protocol: TCP
+          port: 6379
+    # Allow DNS resolution
+    - to: []
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Allow outbound HTTPS for OAuth2 JWKS endpoints (external IdPs)
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 443
+{{- end }}

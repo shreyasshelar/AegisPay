@@ -1,0 +1,168 @@
+name: CD — Deploy to On-Prem (dev branch)
+
+# Triggers when CI passes on the dev branch.
+# Builds Docker images → pushes to GHCR → patches image tags in values-onprem.yaml
+# → commits → ArgoCD detects the change and rolls out the new version.
+
+on:
+  workflow_run:
+    workflows: ["CI — Build & Test"]
+    types: [completed]
+    branches: [dev]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/aegispay
+  HELM_VALUES_FILE: infra/helm/aegispay/values-onprem.yaml
+
+jobs:
+  build-and-push:
+    name: Build & push ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - api-gateway
+          - user-service
+          - transaction-service
+          - ledger-service
+          - payment-orchestrator
+          - risk-engine
+          - notification-service
+          - ai-platform
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: dev
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: "21"
+          distribution: temurin
+          cache: maven
+
+      - name: Build JAR (shared libs + service)
+        run: |
+          ./mvnw --batch-mode --no-transfer-progress clean package \
+            -pl libs/common-domain,libs/common-security,libs/common-kafka,libs/common-observability,services/${{ matrix.service }} \
+            --also-make \
+            -DskipTests
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v5
+        with:
+          context: services/${{ matrix.service }}
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/${{ matrix.service }}:dev-latest
+            ${{ env.IMAGE_PREFIX }}/${{ matrix.service }}:dev-${{ github.event.workflow_run.head_sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            JAR_FILE=target/${{ matrix.service }}-*.jar
+
+  # Build Next.js web app image
+  build-web:
+    name: Build & push web
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: dev
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push web image
+        uses: docker/build-push-action@v5
+        with:
+          context: apps/web
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/web:dev-latest
+            ${{ env.IMAGE_PREFIX }}/web:dev-${{ github.event.workflow_run.head_sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # Patch image tags in values-onprem.yaml → commit → ArgoCD picks up the change
+  update-image-tags:
+    name: Patch values-onprem.yaml
+    runs-on: ubuntu-latest
+    needs: [build-and-push, build-web]
+
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: dev
+          token: ${{ secrets.GIT_DEPLOY_TOKEN }}
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name  "aegispay-ci[bot]"
+          git config user.email "aegispay-ci@users.noreply.github.com"
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Patch image tags
+        env:
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          SERVICES=(api_gateway user_service transaction_service ledger_service \
+                    payment_orchestrator risk_engine notification_service ai_platform web)
+          IMAGES=(api-gateway user-service transaction-service ledger-service \
+                  payment-orchestrator risk-engine notification-service ai-platform web)
+
+          for i in "${!SERVICES[@]}"; do
+            svc="${SERVICES[$i]}"
+            img="${IMAGES[$i]}"
+            yq e ".services.${svc}.image.tag = \"dev-${SHA}\"" -i "${{ env.HELM_VALUES_FILE }}"
+          done
+
+      - name: Commit and push
+        env:
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          git add "${{ env.HELM_VALUES_FILE }}"
+          git diff --staged --quiet && echo "No tag changes" && exit 0
+          git commit -m "chore(cd-onprem): deploy sha=${SHA:0:12} to on-prem"
+          git push origin dev
+
+      # ArgoCD watches the dev branch and auto-syncs when values-onprem.yaml changes.
+      # The app-onprem.yaml Application has automated syncPolicy, so no manual trigger needed.

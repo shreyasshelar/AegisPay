@@ -1,0 +1,21 @@
+{{- if .Values.services.ledger_service.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ledger-service-config
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "aegispay.labels" . | nindent 4 }}
+    app.kubernetes.io/name: ledger-service
+data:
+  DB_HOST: {{ .Values.global.postgresql.host | quote }}
+  DB_PORT: {{ .Values.global.postgresql.port | quote }}
+  DB_USERNAME: {{ .Values.global.postgresql.username | quote }}
+  DB_NAME: "aegispay_ledger"
+  KAFKA_BOOTSTRAP_SERVERS: {{ .Values.global.kafka.brokers | quote }}
+  REDIS_HOST: {{ .Values.global.redis.host | quote }}
+  REDIS_PORT: {{ .Values.global.redis.port | quote }}
+  MONGODB_URI: {{ .Values.global.mongodb.uri | quote }}
+  OAUTH2_ISSUER_URI: {{ .Values.global.oauth2.issuerUri | quote }}
+  SERVER_PORT: "8083"
+{{- end }}

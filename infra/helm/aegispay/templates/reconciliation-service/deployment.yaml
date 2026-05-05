@@ -1,0 +1,3 @@
+{{- if .Values.services.reconciliation_service.enabled }}
+{{ include "aegispay.serviceDeployment" (dict "name" "reconciliation-service" "key" "reconciliation_service" "svc" .Values.services.reconciliation_service "context" .) }}
+{{- end }}

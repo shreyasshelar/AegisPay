@@ -1,0 +1,92 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ───────────────────────────────────────────────────────────
+   CSS custom properties — used by design-system components
+   for theming without Tailwind class names in library code.
+─────────────────────────────────────────────────────────── */
+@layer base {
+  :root {
+    /* Brand */
+    --color-primary:        #3b82f6;
+    --color-primary-dark:   #1d4ed8;
+    --color-primary-light:  #eff6ff;
+
+    /* Semantic */
+    --color-success:        #22c55e;
+    --color-danger:         #ef4444;
+    --color-warning:        #f59e0b;
+
+    /* Neutrals */
+    --color-bg:             #f8fafc;
+    --color-surface:        #ffffff;
+    --color-border:         #e2e8f0;
+    --color-text:           #0f172a;
+    --color-text-muted:     #64748b;
+
+    /* Typography */
+    --font-sans: 'Inter', system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+
+  html {
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background-color: var(--color-bg);
+    color: var(--color-text);
+  }
+
+  /* Smooth focus ring for keyboard navigation */
+  *:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* Remove default button/input browser styles */
+  button, input, textarea, select {
+    font-family: inherit;
+  }
+}
+
+/* ───────────────────────────────────────────────────────────
+   Utility classes used across pages
+─────────────────────────────────────────────────────────── */
+@layer utilities {
+  /* Skeleton shimmer loader */
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      #e2e8f0 25%,
+      #f1f5f9 50%,
+      #e2e8f0 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite linear;
+  }
+
+  /* Hide scrollbar but keep scroll behaviour */
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Truncate to N lines */
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+}
+
+/* ───────────────────────────────────────────────────────────
+   Page transition — fade-in on route change
+─────────────────────────────────────────────────────────── */
+main {
+  animation: fade-in 0.15s ease-out;
+}
