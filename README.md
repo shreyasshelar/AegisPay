@@ -29,7 +29,8 @@
 
 <br/>
 
-[![CI](https://img.shields.io/github/actions/workflow/status/shreyasshelar/AegisPay/ci.yml?branch=main&label=CI&style=flat-square&logo=githubactions)](https://github.com/shreyasshelar/AegisPay/actions)
+[![CI](https://img.shields.io/github/actions/workflow/status/shreyasshelar/AegisPay/ci-java.yml?branch=main&label=CI%20Java&style=flat-square&logo=githubactions)](https://github.com/shreyasshelar/AegisPay/actions)
+[![CI Web](https://img.shields.io/github/actions/workflow/status/shreyasshelar/AegisPay/ci-web.yml?branch=main&label=CI%20Web&style=flat-square&logo=githubactions)](https://github.com/shreyasshelar/AegisPay/actions)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](https://github.com/shreyasshelar/AegisPay/pulls)
 [![Stars](https://img.shields.io/github/stars/shreyasshelar/AegisPay?style=flat-square&color=fbbf24)](https://github.com/shreyasshelar/AegisPay/stargazers)
 
@@ -92,8 +93,8 @@ Three distinct AI integration patterns:
 Not a PWA — three real native apps, feature-parity across all:
 
 - **Web** — Next.js 15 App Router, TanStack Query v5, Zustand v5
-- **iOS** — SwiftUI with `@MainActor`, AppAuth PKCE, native APNs
-- **Android** — Jetpack Compose + Hilt, FCM, Material 3
+- **iOS** — SwiftUI with `@MainActor`, AppAuth PKCE, native APNs, Face ID / Touch ID
+- **Android** — Jetpack Compose + Hilt, FCM, Material 3, BiometricPrompt
 
 </td>
 <td width="50%">
@@ -123,7 +124,7 @@ Not a PWA — three real native apps, feature-parity across all:
 └──────────┼──────────────────┼────────────────────────┼──────────────────┘
            │  HTTPS + JWT     │                        │
 ┌──────────▼──────────────────▼────────────────────────▼──────────────────┐
-│                    API GATEWAY  (Spring Cloud Gateway)                   │
+│                    API GATEWAY  (Spring Cloud Gateway)  :8080            │
 │         OAuth2 · Rate Limiting (Redis) · JWT Relay · Tracing             │
 └──────────────────────────────┬──────────────────────────────────────────┘
                                │ REST (JWT forwarded)
@@ -131,6 +132,7 @@ Not a PWA — three real native apps, feature-parity across all:
         │                      │                          │
 ┌───────▼──────┐    ┌──────────▼──────┐    ┌─────────────▼─────────┐
 │ user-service │    │transaction-svc  │    │  risk-engine          │
+│  :8081       │    │  :8082          │    │  :8085                │
 │ KYC · PKCE   │    │ State Machine   │    │  Rules + RAG + AI     │
 │ Multi-IdP    │    │ CQRS + Outbox   │    │                       │
 └───────┬──────┘    └──────────┬──────┘    └─────────────┬─────────┘
@@ -140,18 +142,21 @@ Not a PWA — three real native apps, feature-parity across all:
                    ┌───────────▼───────────┐
                    │     APACHE KAFKA      │
                    │   18 topics · KRaft   │
+                   │   localhost:9094      │
                    └───────────┬───────────┘
                                │
         ┌──────────────────────┼──────────────────────────┐
         │                      │                          │
 ┌───────▼──────┐    ┌──────────▼──────┐    ┌─────────────▼─────────┐
 │ledger-service│    │payment-orchestr.│    │notification-service   │
+│  :8083       │    │  :8084          │    │  :8086 (+ WS)         │
 │Immutable     │    │Saga Coordinator │    │WebSocket · Email · SMS │
 │Append-only   │    │Compensation     │    │                       │
 └──────────────┘    └─────────────────┘    └───────────────────────┘
                                │
                     ┌──────────▼──────────┐
                     │    ai-platform      │
+                    │  :8088              │
                     │  RAG · Agents · OCR │
                     │  pgvector · Claude  │
                     └─────────────────────┘
@@ -193,16 +198,17 @@ Not a PWA — three real native apps, feature-parity across all:
 |---|---|
 | UI | SwiftUI with `@MainActor`, `@StateObject`, `@EnvironmentObject` |
 | Auth | AppAuth-iOS (PKCE) → Keycloak + `UNUserNotificationCenter` APNs |
-| Networking | `URLSession` with generic `ApiClient<T: Decodable>` |
+| Networking | `URLSession` with generic `ApiClient<T: Decodable>` + `ApiResponse<T>` unwrapping |
+| Security | Face ID / Touch ID (`BiometricAuthService`) + SPKI certificate pinning |
 | Realtime | STOMP WebSocket client + 4 s polling fallback |
 | Camera | `UIViewControllerRepresentable` wrapping `UIImagePickerController` |
-| Layout | Custom `FlowLayout: Layout` for dynamic rule-flag chips |
+| Accessibility | `AccessibilityHelper` extension — VoiceOver labels on all interactive elements |
 
 **Key screens:**
 - MainTabView with dynamic back-office tab (role-gated, BACK_OFFICE / ADMIN)
 - 4-step Send Money with `AegisStatusTimeline` + `HapticFeedback.success()`
 - KYC profile — camera / gallery picker, `QualityBarRow`, tamper detection, extracted data
-- Back-office — `RiskCase` with custom `Decodable` for arbitrary `ruleFlags` JSON object
+- `BiometricLockView` overlay — app locks on backgrounding, unlocks with biometric
 
 </details>
 
@@ -215,17 +221,17 @@ Not a PWA — three real native apps, feature-parity across all:
 |---|---|
 | UI | Jetpack Compose + Material 3 + Hilt |
 | Auth | AppAuth-Android (PKCE) + `EncryptedSharedPreferences` |
-| Networking | Retrofit 2 + Moshi (`KotlinJsonAdapterFactory`) |
+| Networking | Retrofit 2 + Moshi + OkHttp envelope-unwrap interceptor |
+| Security | `BiometricPrompt` (BIOMETRIC_STRONG) + OkHttp `CertificatePinner` |
+| Performance | Android Baseline Profiles (`BaselineProfileGenerator`) |
 | Push | Firebase Cloud Messaging + `@AndroidEntryPoint` service |
-| Badge state | `@Singleton NotificationBadgeState` (`StateFlow<Int>`) |
 | Camera | `ActivityResultContracts.TakePicture` + `FileProvider` |
-| Animations | `AnimatedContent` with slide + fade transitions |
 
 **Key screens:**
 - Dashboard with `BadgedBox` notification badge + role-gated "Back Office" card
 - Send Money `AnimatedContent` wizard + `VibrationEffect` on COMPLETED
 - KYC `LinearProgressIndicator` quality bars + extracted data cards
-- Back-office `TabRow` — risk case detail panel + incident triage with monospace report card
+- `BiometricLockOverlay` composable — biometric gate on every app resume
 
 </details>
 
@@ -235,14 +241,14 @@ Not a PWA — three real native apps, feature-parity across all:
 
 ```
 services/
-├── api-gateway/          Spring Cloud Gateway — auth, rate-limit, trace
-├── user-service/         KYC state machine, multi-IdP federation
-├── transaction-service/  Payment state machine, CQRS, WebSocket status
-├── ledger-service/       Immutable append-only ledger, balance reservation
-├── payment-orchestrator/ Saga coordinator — 5-step, full compensation
-├── risk-engine/          Rules engine + RAG fraud copilot
-├── notification-service/ WebSocket registry, email/SMS adapters
-└── ai-platform/          RAG pipeline, agents, OCR+KYC
+├── api-gateway/          :8080  Spring Cloud Gateway — auth, rate-limit, trace
+├── user-service/         :8081  KYC state machine, multi-IdP federation
+├── transaction-service/  :8082  Payment state machine, CQRS, WebSocket status
+├── ledger-service/       :8083  Immutable append-only ledger, balance reservation
+├── payment-orchestrator/ :8084  Saga coordinator — 5-step, full compensation
+├── risk-engine/          :8085  Rules engine + RAG fraud copilot
+├── notification-service/ :8086  WebSocket registry, email/SMS adapters
+└── ai-platform/          :8088  RAG pipeline, agents, OCR+KYC
 ```
 
 ### Saga Transaction Flow
@@ -275,38 +281,22 @@ Each step has a **compensating transaction** — a failure at step N triggers ro
 <th>Input → Output</th>
 </tr>
 <tr>
-<td>
-
-**Fraud Copilot**
-
-</td>
+<td><b>Fraud Copilot</b></td>
 <td>RAG + Claude</td>
 <td>Risk score + rule flags → pgvector similarity search over historical fraud KB → LLM explanation</td>
 </tr>
 <tr>
-<td>
-
-**Error Resolution Agent**
-
-</td>
+<td><b>Error Resolution Agent</b></td>
 <td>RAG + Claude</td>
 <td>Bank error code → incident log KB search → plain-English fix + retry CTA</td>
 </tr>
 <tr>
-<td>
-
-**Incident Triage Agent**
-
-</td>
+<td><b>Incident Triage Agent</b></td>
 <td>Agentic AI (tool use)</td>
 <td>Service name + symptoms → reads logs → queries metrics → checks deployments → root cause report</td>
 </tr>
 <tr>
-<td>
-
-**OCR + KYC AI**
-
-</td>
+<td><b>OCR + KYC AI</b></td>
 <td>Multimodal LLM</td>
 <td>Document image → name, DOB, ID number extraction + tampering detection + quality score</td>
 </tr>
@@ -325,7 +315,7 @@ Each step has a **compensating transaction** — a failure at step N triggers ro
 └──────────────────────┬──────────────────────────┘
                        │ PKCE / OIDC
 ┌──────────────────────▼──────────────────────────┐
-│              API GATEWAY                        │
+│              API GATEWAY  :8080                 │
 │  • JWT validation (multi-JWKS)                  │
 │  • Rate limiting — Redis token bucket           │
 │    per-userId AND per-IP (dual-key)             │
@@ -345,9 +335,9 @@ Each step has a **compensating transaction** — a failure at step N triggers ro
 ```
 
 **Mobile security:**
-- iOS — `EncryptedSharedPreferences`-equivalent Keychain via AppAuth token storage
-- Android — `EncryptedSharedPreferences` (AES256-SIV keys + AES256-GCM values)
-- Both — certificate pinning ready, biometric auth hook points in Phase F7
+- iOS — Keychain token storage (AppAuth) + Face ID / Touch ID app lock + SPKI certificate pinning
+- Android — `EncryptedSharedPreferences` (AES256) + `BiometricPrompt` BIOMETRIC_STRONG + OkHttp `CertificatePinner`
+- Both — `ApiResponse<T>` envelope unwrapping at the client layer; no raw JSON exposure
 
 ---
 
@@ -385,12 +375,23 @@ Every topic has a `.DLQ` counterpart. Retention: financial topics → 30 days ·
 
 ## 🗄️ Data Architecture
 
-| Store | Usage |
+| Store | Port | Usage |
+|---|---|---|
+| **PostgreSQL 16 + pgvector** | 5432 | Primary write models per service + AI vector embeddings |
+| **MongoDB 7** | 27017 | CQRS read models — `transaction_views`, notification history |
+| **Redis 7** | 6379 | Idempotency keys, rate-limit token buckets, session cache |
+| **Kafka 3.7 (KRaft)** | 9094 | All async inter-service messaging (18 topics) |
+
+Each microservice owns its own PostgreSQL **database** (not just schema) for full isolation:
+
+| Service | Database |
 |---|---|
-| **PostgreSQL 16** | Primary write models — transactions, users, ledger, sagas |
-| **PostgreSQL + pgvector** | AI knowledge base — fraud cases, error codes, incident logs (1536-dim embeddings) |
-| **MongoDB 7** | CQRS read models — `transaction_views` collection, notification history |
-| **Redis 7** | Idempotency keys, rate-limit token buckets, API-gateway session cache |
+| user-service | `aegispay_users` |
+| transaction-service | `aegispay_transactions` |
+| ledger-service | `aegispay_ledger` |
+| payment-orchestrator | `aegispay_sagas` |
+| risk-engine | `aegispay_risk` |
+| ai-platform | `aegispay_ai` |
 
 ### Ledger Guarantee
 
@@ -402,7 +403,7 @@ FROM ledger_entries
 WHERE account_id = $1;
 ```
 
-An `@EntityListeners` guard throws `IllegalStateException` on any `@PreUpdate` or `@PreRemove` call — enforced at the ORM layer, not just convention.
+An `@EntityListeners` guard throws `IllegalStateException` on any `@PreUpdate` or `@PreRemove` — enforced at the ORM layer.
 
 ---
 
@@ -410,58 +411,243 @@ An `@EntityListeners` guard throws `IllegalStateException` on any `@PreUpdate` o
 
 ### Prerequisites
 
-```bash
-node >= 20    # for web
-java 21       # for backend services
-xcode 15+     # for iOS
-android studio hedgehog+  # for Android
-docker        # for local infra
-```
+| Tool | Version | Required for |
+|---|---|---|
+| Docker Desktop | 4.x+ | All local infra (Postgres, Redis, Kafka, Keycloak) |
+| Java (Temurin) | 21 | Backend microservices |
+| Maven | 3.9+ | Backend build (`./mvnw` wrapper included) |
+| Node.js | 20+ | Web app + shared TypeScript packages |
+| Xcode | 15+ | iOS app (macOS only) |
+| Android Studio | Hedgehog+ | Android app |
 
-### 1 — Clone & install
+---
+
+### Step 1 — Clone the repo
 
 ```bash
 git clone https://github.com/shreyasshelar/AegisPay.git
 cd AegisPay
-
-# Install JS/TS workspaces (web + packages)
-npm install
-
-# Build shared Java libraries + all backend services
-mvn clean install -DskipTests
 ```
 
-### 2 — Spin up local infra
+---
+
+### Step 2 — Start local infrastructure
+
+All infrastructure (Postgres, Redis, MongoDB, Kafka, Keycloak) runs via Docker Compose.
 
 ```bash
-docker compose up -d   # PostgreSQL + Redis + MongoDB + Kafka (KRaft)
+docker compose up -d
 ```
 
-### 3 — Run the web app
+This starts:
 
+| Service | URL / Port | Credentials |
+|---|---|---|
+| PostgreSQL 16 | `localhost:5432` | user: `aegispay` / pass: `aegispay_dev` |
+| Redis 7 | `localhost:6379` | pass: `aegispay_dev` |
+| MongoDB 7 | `localhost:27017` | user: `aegispay` / pass: `aegispay_dev` |
+| Kafka (KRaft) | `localhost:9094` | no auth (local only) |
+| Kafka UI | http://localhost:8090 | no auth |
+| Keycloak 24 | http://localhost:8180 | admin: `admin` / `admin` |
+
+Wait ~60 seconds for Keycloak to finish importing the realm before running backend services.
+
+**Check everything is healthy:**
 ```bash
-npm run dev --workspace=apps/web
-# → http://localhost:3000
+docker compose ps
+# All services should show "healthy" or "running"
 ```
 
-### 4 — Run iOS
+**Six per-service databases are created automatically** by `infra/local/postgres/init/01_create_databases.sql` on first startup:
+`aegispay_users`, `aegispay_transactions`, `aegispay_ledger`, `aegispay_sagas`, `aegispay_risk`, `aegispay_ai`
+
+---
+
+### Step 3 — Configure the web app
 
 ```bash
-open apps/ios/AegisPay.xcodeproj
-# Select simulator → ⌘R
+cp apps/web/.env.local.example apps/web/.env.local
 ```
 
-### 5 — Run Android
+Then edit `apps/web/.env.local`:
 
-```bash
-# Open apps/android in Android Studio → Run
+```env
+NEXTAUTH_URL=http://localhost:3000
+NEXTAUTH_SECRET=<generate with: openssl rand -base64 32>
+
+# Keycloak (started by docker compose above)
+KEYCLOAK_ID=aegispay-web
+KEYCLOAK_SECRET=                          # leave blank — public client in local realm
+KEYCLOAK_ISSUER=http://localhost:8180/realms/aegispay
+
+# API Gateway
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8080
+
+# WebSocket (notification-service)
+NEXT_PUBLIC_WS_BASE_URL=ws://localhost:8086
 ```
 
-### 6 — Run a backend service (example)
+---
+
+### Step 4 — Build shared Java libraries
+
+Shared libs must be installed into the local Maven repository before any service can compile.
 
 ```bash
-cd services/transaction-service
-mvn spring-boot:run -Dspring-boot.run.profiles=local
+./mvnw clean install \
+  -pl libs/common-domain,libs/common-security,libs/common-kafka,libs/common-observability \
+  -DskipTests
+```
+
+---
+
+### Step 5 — Run backend services
+
+Each service reads config from environment variables with sensible local defaults (see `application.yml` in each service). Run each in a separate terminal, or use your IDE's run configurations.
+
+**Option A — Individual services (separate terminals):**
+
+```bash
+# Terminal 1 — API Gateway (all external traffic enters here)
+./mvnw -pl services/api-gateway spring-boot:run
+
+# Terminal 2 — User Service
+./mvnw -pl services/user-service spring-boot:run
+
+# Terminal 3 — Transaction Service
+./mvnw -pl services/transaction-service spring-boot:run
+
+# Terminal 4 — Ledger Service
+./mvnw -pl services/ledger-service spring-boot:run
+
+# Terminal 5 — Payment Orchestrator
+./mvnw -pl services/payment-orchestrator spring-boot:run
+
+# Terminal 6 — Risk Engine
+./mvnw -pl services/risk-engine spring-boot:run
+
+# Terminal 7 — Notification Service
+./mvnw -pl services/notification-service spring-boot:run
+
+# Terminal 8 — AI Platform (requires ANTHROPIC_API_KEY)
+ANTHROPIC_API_KEY=sk-ant-... \
+./mvnw -pl services/ai-platform spring-boot:run
+```
+
+**Option B — All at once with Maven (background):**
+
+```bash
+./mvnw -pl services/api-gateway,services/user-service,services/transaction-service, \
+            services/ledger-service,services/payment-orchestrator,services/risk-engine, \
+            services/notification-service \
+       spring-boot:run -Dspring-boot.run.fork=true
+```
+
+**Service ports at a glance:**
+
+| Service | Port | Health endpoint |
+|---|---|---|
+| api-gateway | 8080 | http://localhost:8080/actuator/health |
+| user-service | 8081 | http://localhost:8081/actuator/health |
+| transaction-service | 8082 | http://localhost:8082/actuator/health |
+| ledger-service | 8083 | http://localhost:8083/actuator/health |
+| payment-orchestrator | 8084 | http://localhost:8084/actuator/health |
+| risk-engine | 8085 | http://localhost:8085/actuator/health |
+| notification-service | 8086 | http://localhost:8086/actuator/health |
+| ai-platform | 8088 | http://localhost:8088/actuator/health |
+
+---
+
+### Step 6 — Run the web app
+
+```bash
+npm install          # install all JS/TS workspace dependencies
+npm run dev          # starts Next.js at http://localhost:3000
+```
+
+---
+
+### Step 7 — Test with pre-seeded accounts
+
+The Keycloak realm includes two ready-to-use accounts:
+
+| Role | Email | Password | Notes |
+|---|---|---|---|
+| `CUSTOMER` | `customer@aegispay.local` | `Test@1234` | End-user flows, KYC, send money |
+| `ADMIN` | `admin@aegispay.local` | `Admin@1234` | Back-office tab, risk cases, incident triage |
+
+**Quick smoke test — register the customer user:**
+```bash
+# Get a token (replace with the token from Keycloak login)
+TOKEN=$(curl -s -X POST http://localhost:8180/realms/aegispay/protocol/openid-connect/token \
+  -d "grant_type=password&client_id=aegispay-web&username=customer@aegispay.local&password=Test@1234" \
+  | jq -r .access_token)
+
+# Register the user (idempotent — safe to call multiple times)
+curl -s -X POST http://localhost:8080/api/v1/users/register \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "X-Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"customer@aegispay.local","firstName":"Test","lastName":"Customer","phone":"+919876543210","tenantId":"default"}' \
+  | jq .
+```
+
+---
+
+### Step 8 — Run iOS (macOS only)
+
+```bash
+# Install dependencies
+cd apps/ios
+xcodegen generate   # if XcodeGen is used — otherwise open the .xcodeproj directly
+
+open AegisPay.xcodeproj
+# Select an iPhone simulator → ⌘R
+```
+
+The app reads `AppConfig.swift` for `apiBaseURL` and `keycloakIssuer`. Update the constants to point to `localhost:8080` and `localhost:8180` for local dev.
+
+---
+
+### Step 9 — Run Android
+
+```bash
+# Open in Android Studio:
+# File → Open → select apps/android/
+
+# Or build from CLI:
+cd apps/android
+./gradlew assembleDebug
+```
+
+Set `API_BASE_URL=http://10.0.2.2:8080` in `apps/android/app/build.gradle.kts` for the Android emulator (10.0.2.2 maps to the host machine's localhost).
+
+---
+
+### Running tests
+
+```bash
+# Java unit + integration tests (Testcontainers — requires Docker)
+./mvnw test
+
+# Java tests for a single service
+./mvnw -pl services/user-service test
+
+# Web linting + type checking
+npm run lint
+npm run typecheck
+
+# Web unit tests
+npm run test
+```
+
+---
+
+### Stopping everything
+
+```bash
+docker compose down          # stop containers, keep volumes
+docker compose down -v       # stop containers AND delete all data (full reset)
 ```
 
 ---
@@ -475,42 +661,50 @@ AegisPay/                              ← single GitHub repository
 │   ├── web/                           Next.js 15 App Router
 │   │   ├── app/(dashboard)/           Customer-facing screens
 │   │   ├── app/(back-office)/         BACK_OFFICE / ADMIN only
-│   │   └── components/                Shared UI components
+│   │   ├── components/                Shared UI components
+│   │   └── .env.local.example         ← copy to .env.local before running
 │   │
 │   ├── ios/                           SwiftUI (iOS 17+)
 │   │   └── AegisPay/
 │   │       ├── Features/              Screen-level feature modules
-│   │       ├── Network/               ApiClient, Services, Endpoints
+│   │       ├── Auth/                  BiometricAuthService, TokenStore
+│   │       ├── Network/               ApiClient (with envelope unwrap), Services, Endpoints
 │   │       └── DesignSystem/          Tokens, Components
 │   │
 │   └── android/                       Jetpack Compose (API 26+)
-│       └── app/src/main/java/com/aegispay/android/
-│           ├── ui/                    Screen + ViewModel per feature
-│           ├── network/               Retrofit service + Moshi models
-│           └── push/                  FCM service + badge state
+│       ├── app/src/main/java/com/aegispay/android/
+│       │   ├── ui/                    Screen + ViewModel per feature
+│       │   ├── auth/                  BiometricAuthManager
+│       │   ├── network/               Retrofit service + envelope-unwrap interceptor
+│       │   └── push/                  FCM service + badge state
+│       └── macrobenchmark/            Android Baseline Profile generator
 │
 ├── packages/                          ← Shared TypeScript packages
-│   ├── api-client/                    API client + TanStack Query hooks
-│   ├── shared-types/                  Zod schemas shared across web
+│   ├── api-client/                    Axios client (ApiResponse<T> unwrap) + TanStack Query hooks
+│   ├── shared-types/                  Zod schemas (Transaction, User, KYC, Risk…)
 │   └── design-system/                 Tailwind tokens + component library
 │
 ├── services/                          ← Java 21 microservices (Spring Boot 3.3)
-│   ├── api-gateway/                   Spring Cloud Gateway — auth, rate-limit, trace
-│   ├── user-service/                  KYC state machine, multi-IdP federation
-│   ├── transaction-service/           Payment state machine, CQRS, WebSocket
-│   ├── ledger-service/                Immutable append-only ledger
-│   ├── payment-orchestrator/          Saga coordinator (5-step + compensation)
-│   ├── risk-engine/                   Rules engine + RAG fraud copilot
-│   ├── notification-service/          WebSocket registry, email/SMS adapters
-│   └── ai-platform/                   RAG pipeline, agents, OCR+KYC
+│   ├── api-gateway/        :8080      Spring Cloud Gateway
+│   ├── user-service/       :8081      KYC state machine, multi-IdP
+│   ├── transaction-service/:8082      Payment state machine, CQRS, WebSocket
+│   ├── ledger-service/     :8083      Immutable append-only ledger
+│   ├── payment-orchestrator/:8084     Saga coordinator (5-step + compensation)
+│   ├── risk-engine/        :8085      Rules engine + RAG fraud copilot
+│   ├── notification-service/:8086     WebSocket registry, email/SMS adapters
+│   ├── ai-platform/        :8088      RAG pipeline, agents, OCR+KYC
+│   └── e2e-tests/                     Testcontainers end-to-end test suite
 │
-├── libs/                              ← Shared Java libraries
-│   ├── common-domain/                 Kafka event POJOs, enums, base exceptions
+├── libs/                              ← Shared Java libraries (built first)
+│   ├── common-domain/                 Kafka event POJOs, enums, base exceptions, ApiResponse<T>
 │   ├── common-security/               JWT filter, RBAC, ActorContext
 │   ├── common-kafka/                  Producer template, Outbox scheduler, DLQ
 │   └── common-observability/          MDC logging, tracing, field masking
 │
 ├── infra/
+│   ├── local/                         Local dev infra config
+│   │   ├── postgres/init/             SQL scripts run on first Postgres startup
+│   │   └── keycloak/realm-export.json Pre-seeded realm with test users + JWT claims
 │   ├── helm/aegispay/                 Umbrella Helm chart (all 8 services)
 │   │   ├── values.yaml                Base values
 │   │   ├── values-dev.yaml
@@ -528,14 +722,15 @@ AegisPay/                              ← single GitHub repository
 │   ├── ci-web.yml                     Next.js lint + build + test
 │   ├── ci-ios.yml                     Xcode build + unit tests
 │   ├── ci-android.yml                 Gradle build + instrumented tests
-│   ├── ci-java.yml                    Maven build matrix (libs + 8 services)
-│   ├── cd-dev.yml                     Push to main → image tag patch → ArgoCD sync
+│   ├── ci-java.yml                    Maven build matrix (libs first → 8 services in parallel)
+│   ├── cd-dev.yml                     Push to main → Docker image → yq patch → ArgoCD sync
 │   ├── cd-staging.yml                 On tag → staging deploy
 │   ├── cd-prod.yml                    Manual approval gate → prod deploy
 │   └── security-scan.yml              OWASP dep-check + Trivy image scan
 │
+├── docker-compose.yml                 ← Local dev stack (Postgres + Redis + Mongo + Kafka + Keycloak)
 ├── pom.xml                            Maven root (manages all Java modules)
-├── package.json                       pnpm workspaces root
+├── package.json                       npm workspaces root
 ├── turbo.json                         Turborepo pipeline config
 └── tsconfig.base.json                 Shared TypeScript config
 ```
@@ -554,7 +749,7 @@ AegisPay/                              ← single GitHub repository
 | **F4** | ✅ | KYC — camera/gallery, OCR quality scoring, tamper detection, extracted data review |
 | **F5** | ✅ | Push Notifications — APNs (iOS), FCM (Android), WebSocket badge (web) |
 | **F6** | ✅ | Back-office — risk case queue, AI fraud explanation, incident triage agent |
-| **F7** | 🔜 | Hardening — biometric auth, certificate pinning, accessibility, Baseline Profiles |
+| **F7** | ✅ | Hardening — biometric auth (Face ID / BiometricPrompt), certificate pinning, VoiceOver / TalkBack accessibility, Android Baseline Profiles |
 
 ### Backend (Java 21 — Spring Boot 3.3 microservices)
 
@@ -569,18 +764,20 @@ AegisPay/                              ← single GitHub repository
 | **B7** | ✅ | Risk Engine — velocity/geo/amount rules, RAG fraud copilot, blacklist management |
 | **B8** | ✅ | Notification Service — WebSocket registry, email/SMS adapters, notification history |
 | **B9** | ✅ | AI Platform — RAG pipeline, Fraud Copilot, Error Agent, Incident Triage Agent, OCR+KYC |
-| **B10** | 🔜 | Integration hardening — e2e Testcontainers, Secrets Operator, load test, runbooks |
+| **B10** | 🔜 | Integration hardening — e2e Testcontainers, External Secrets Operator, k6 load test, full observability runbooks |
 
 ---
 
 ## 🔭 Roadmap
 
-- [ ] **Biometric auth** — Face ID / Touch ID (iOS) + BiometricPrompt (Android)
-- [ ] **Certificate pinning** — TrustKit (iOS) + OkHttp CertificatePinner (Android)
-- [ ] **Android Baseline Profiles** — startup time optimisation
-- [ ] **Backend B10** — Integration hardening: e2e Testcontainers compose, k6 load test, External Secrets Operator, full ArgoCD ApplicationSet
-- [ ] **Observability** — Prometheus alert rules (DLQ depth, saga timeout, balance drift), Grafana dashboards
-- [ ] **Multi-tenancy** — tenantId propagation through JWT claims → database row-level security
+- [x] **Biometric auth** — Face ID / Touch ID (iOS `BiometricAuthService`) + BiometricPrompt BIOMETRIC_STRONG (Android)
+- [x] **Certificate pinning** — SPKI SHA-256 pinning (iOS `CertificatePinningDelegate`) + OkHttp `CertificatePinner` (Android)
+- [x] **Android Baseline Profiles** — cold-start + navigation benchmarks via `BaselineProfileGenerator`
+- [x] **Accessibility** — VoiceOver labels (iOS `AccessibilityHelper`) + Compose semantics (Android) + ARIA roles (Web)
+- [x] **ApiResponse envelope unwrapping** — consistent across Axios (Web), OkHttp (Android), URLSession (iOS)
+- [ ] **Backend B10** — full e2e Testcontainers compose, k6 load test, External Secrets Operator, Prometheus alert rules
+- [ ] **Multi-tenancy** — `tenantId` propagation through JWT claims → database row-level security
+- [ ] **Payment gateway** — replace stub with real Razorpay / Stripe integration
 
 ---
 
