@@ -1,0 +1,27 @@
+{{- if .Values.services.reconciliation_service.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: reconciliation-service-config
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "aegispay.labels" . | nindent 4 }}
+    app.kubernetes.io/name: reconciliation-service
+data:
+  # PostgreSQL (read-only, points to ledger-service DB)
+  DB_HOST: {{ .Values.global.postgresql.host | quote }}
+  DB_PORT: {{ .Values.global.postgresql.port | quote }}
+  DB_USERNAME: {{ .Values.global.postgresql.username | quote }}
+  DB_NAME: "aegispay_ledger"
+  # ClickHouse — write-side for breaks
+  CLICKHOUSE_URL: {{ .Values.global.clickhouse.url | quote }}
+  CLICKHOUSE_USERNAME: {{ .Values.global.clickhouse.username | quote }}
+  # Reconciliation tuning
+  RECONCILIATION_CHUNK_SIZE: "500"
+  RECONCILIATION_TOLERANCE_MINOR_UNITS: "1"
+  RECONCILIATION_LOOKBACK_DAYS: "2"
+  RECONCILIATION_CRON: "0 0 6 * * *"
+  SERVER_PORT: "8087"
+  SPRING_APPLICATION_NAME: "reconciliation-service"
+  MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: "health,prometheus,info"
+{{- end }}

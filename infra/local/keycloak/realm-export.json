@@ -1,0 +1,125 @@
+{
+  "realm": "aegispay",
+  "enabled": true,
+  "displayName": "AegisPay",
+  "accessTokenLifespan": 3600,
+  "ssoSessionMaxLifespan": 86400,
+  "clients": [
+    {
+      "clientId": "aegispay-web",
+      "name": "AegisPay Web App",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": [
+        "http://localhost:3000/*",
+        "http://localhost:3001/*"
+      ],
+      "webOrigins": [
+        "http://localhost:3000",
+        "http://localhost:3001"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      }
+    },
+    {
+      "clientId": "aegispay-mobile",
+      "name": "AegisPay Mobile App",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": [
+        "com.aegispay.app://callback",
+        "exp://localhost:8081"
+      ],
+      "webOrigins": ["*"]
+    },
+    {
+      "clientId": "aegispay-backend",
+      "name": "AegisPay Backend (service-to-service)",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "aegispay-backend-secret",
+      "serviceAccountsEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "standardFlowEnabled": false
+    }
+  ],
+  "roles": {
+    "realm": [
+      { "name": "CUSTOMER",      "description": "End user customer" },
+      { "name": "MERCHANT_OPS",  "description": "Merchant operations" },
+      { "name": "BACK_OFFICE",   "description": "Back-office agent" },
+      { "name": "ADMIN",         "description": "System administrator" },
+      { "name": "PARTNER",       "description": "External partner" }
+    ]
+  },
+  "users": [
+    {
+      "username": "customer@aegispay.local",
+      "email": "customer@aegispay.local",
+      "firstName": "Test",
+      "lastName": "Customer",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [{ "type": "password", "value": "Test@1234", "temporary": false }],
+      "realmRoles": ["CUSTOMER"],
+      "attributes": {
+        "aegispay_role": ["CUSTOMER"],
+        "aegispay_tenant_id": ["default"]
+      }
+    },
+    {
+      "username": "admin@aegispay.local",
+      "email": "admin@aegispay.local",
+      "firstName": "Test",
+      "lastName": "Admin",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [{ "type": "password", "value": "Admin@1234", "temporary": false }],
+      "realmRoles": ["ADMIN"],
+      "attributes": {
+        "aegispay_role": ["ADMIN"],
+        "aegispay_tenant_id": ["default"]
+      }
+    }
+  ],
+  "protocolMappers": [],
+  "clientScopes": [
+    {
+      "name": "aegispay-claims",
+      "protocol": "openid-connect",
+      "protocolMappers": [
+        {
+          "name": "aegispay_role",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "config": {
+            "user.attribute": "aegispay_role",
+            "claim.name": "aegispay_role",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "aegispay_tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "config": {
+            "user.attribute": "aegispay_tenant_id",
+            "claim.name": "aegispay_tenant_id",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ]
+}
