@@ -89,3 +89,9 @@ secrets:
     secretPath: aegispay/prod/ai-keys
   kafka:
     secretPath: aegispay/prod/kafka
+  stripe:
+    secretPath: aegispay/prod/stripe
+  smtp:
+    secretPath: aegispay/prod/smtp
+  slack:
+    secretPath: aegispay/prod/slack

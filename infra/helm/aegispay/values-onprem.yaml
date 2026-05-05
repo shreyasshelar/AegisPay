@@ -47,7 +47,13 @@ secrets:
   kafka:
     secretPath: "secret/data/aegispay/kafka"
   ai:
-    secretPath: "secret/data/aegispay/ai"
+    secretPath: "secret/data/aegispay/ai-keys"
+  stripe:
+    secretPath: "secret/data/aegispay/stripe"
+  smtp:
+    secretPath: "secret/data/aegispay/smtp"
+  slack:
+    secretPath: "secret/data/aegispay/slack"
   keycloak:
     secretPath: "secret/data/aegispay/keycloak"
 

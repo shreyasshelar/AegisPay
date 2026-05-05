@@ -172,23 +172,72 @@ alertmanager:
   config:
     global:
       resolve_timeout: 5m
+      smtp_smarthost: "smtp.gmail.com:587"
+      smtp_from: "aegispay.dev@gmail.com"
+      smtp_auth_username: "aegispay.dev@gmail.com"
+      smtp_auth_password_file: /etc/alertmanager/smtp-password
+      smtp_require_tls: true
     route:
       group_by: [alertname, service, severity]
       group_wait: 30s
       group_interval: 5m
       repeat_interval: 4h
-      receiver: "null"
+      receiver: slack-aegispay
       routes:
         - matchers:
             - severity = critical
-          receiver: critical-alerts
-          continue: true
+          receiver: critical-multi
+        - matchers:
+            - severity = warning
+          receiver: slack-aegispay
     receivers:
-      - name: "null"
-      # Add a real receiver here (email, Slack, PagerDuty) when needed
-      - name: critical-alerts
-        # Example: webhook to your own alerting endpoint
-        webhook_configs: []
+      - name: slack-aegispay
+        slack_configs:
+          - channel: "#aegispay-alerts"
+            api_url_file: /etc/alertmanager/slack-webhook
+            send_resolved: true
+            title: "[{{ .Status | toUpper }}] {{ .CommonLabels.alertname }}"
+            text: |-
+              {{ range .Alerts }}
+              *Service:* {{ .Labels.service | default "unknown" }} | *Severity:* {{ .Labels.severity }}
+              {{ .Annotations.summary }}
+              {{ end }}
+      - name: critical-multi
+        slack_configs:
+          - channel: "#aegispay-alerts"
+            api_url_file: /etc/alertmanager/slack-webhook
+            send_resolved: true
+            title: "🔴 CRITICAL: {{ .CommonLabels.alertname }}"
+            color: danger
+        email_configs:
+          - to: "aegispay.dev@gmail.com"
+            send_resolved: true
+            headers:
+              Subject: "🔴 [AegisPay CRITICAL] {{ .CommonLabels.alertname }}"
+
+  extraVolumes:
+    - name: slack-webhook
+      secret:
+        secretName: aegispay-slack-secret
+        items:
+          - key: webhook-url
+            path: slack-webhook
+    - name: smtp-password
+      secret:
+        secretName: aegispay-smtp-secret
+        items:
+          - key: password
+            path: smtp-password
+
+  extraVolumeMounts:
+    - name: slack-webhook
+      mountPath: /etc/alertmanager/slack-webhook
+      subPath: slack-webhook
+      readOnly: true
+    - name: smtp-password
+      mountPath: /etc/alertmanager/smtp-password
+      subPath: smtp-password
+      readOnly: true
 
 # ── Node Exporter — expose server hardware metrics ───────────────────────────
 nodeExporter:

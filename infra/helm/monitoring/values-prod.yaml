@@ -1,0 +1,268 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# kube-prometheus-stack — Production values
+#
+# Deploy via:
+#   helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+#   helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+#     -n monitoring --create-namespace \
+#     -f infra/helm/monitoring/values-prod.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+
+prometheus:
+  prometheusSpec:
+    retention: 30d
+    retentionSize: "80GB"
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: gp3
+          resources:
+            requests:
+              storage: 100Gi
+    additionalScrapeConfigs:
+      - job_name: aegispay-services
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names:
+                - aegispay-prod
+                - aegispay-staging
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: "true"
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+            action: replace
+            target_label: __metrics_path__
+            regex: (.+)
+          - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+            action: replace
+            regex: ([^:]+)(?::\d+)?;(\d+)
+            replacement: $1:$2
+            target_label: __address__
+          - action: labelmap
+            regex: __meta_kubernetes_pod_label_(.+)
+          - source_labels: [__meta_kubernetes_namespace]
+            action: replace
+            target_label: namespace
+          - source_labels: [__meta_kubernetes_pod_name]
+            action: replace
+            target_label: pod
+
+grafana:
+  enabled: true
+  adminUser: admin
+  adminPassword: ${GRAFANA_ADMIN_PASSWORD:-changeme}
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    hosts:
+      - grafana.aegispay.io
+    tls:
+      - secretName: grafana-tls
+        hosts:
+          - grafana.aegispay.io
+  persistence:
+    enabled: true
+    storageClassName: gp3
+    size: 20Gi
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+        - name: Prometheus
+          type: prometheus
+          url: http://kube-prometheus-stack-prometheus:9090
+          isDefault: true
+          editable: false
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: default
+          orgId: 1
+          folder: AegisPay
+          type: file
+          disableDeletion: false
+          options:
+            path: /var/lib/grafana/dashboards/default
+  dashboards:
+    default:
+      spring-boot-statistics:
+        gnetId: 17175
+        revision: 1
+        datasource: Prometheus
+      jvm-micrometer:
+        gnetId: 4701
+        revision: 11
+        datasource: Prometheus
+      kafka-overview:
+        gnetId: 7589
+        revision: 5
+        datasource: Prometheus
+      kubernetes-workloads:
+        gnetId: 15760
+        revision: 34
+        datasource: Prometheus
+
+alertmanager:
+  enabled: true
+  alertmanagerSpec:
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: gp3
+          resources:
+            requests:
+              storage: 5Gi
+  config:
+    global:
+      resolve_timeout: 5m
+      # Gmail SMTP for email alerts
+      smtp_smarthost: "smtp.gmail.com:587"
+      smtp_from: "aegispay.dev@gmail.com"
+      smtp_auth_username: "aegispay.dev@gmail.com"
+      # SMTP password injected via Kubernetes Secret (managed by ESO)
+      # Mount aegispay-smtp-secret as env var in alertmanager pod via extraEnv
+      smtp_auth_password_file: /etc/alertmanager/smtp-password
+      smtp_require_tls: true
+
+    route:
+      group_by: [alertname, service, severity]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+      receiver: slack-aegispay          # default: Slack for all alerts
+
+      routes:
+        # Critical alerts → both Slack AND email
+        - matchers:
+            - severity = critical
+          receiver: critical-multi
+          continue: false
+
+        # Warnings → Slack only
+        - matchers:
+            - severity = warning
+          receiver: slack-aegispay
+          continue: false
+
+        # Info / debugging → Slack only, longer repeat
+        - matchers:
+            - severity = info
+          receiver: slack-aegispay
+          repeat_interval: 12h
+
+    receivers:
+      # ── Slack (all alerts) ──────────────────────────────────────────────────
+      - name: slack-aegispay
+        slack_configs:
+          - channel: "#aegispay-alerts"
+            # api_url injected at runtime from K8s Secret aegispay-slack-secret
+            # mounted as /etc/alertmanager/slack-webhook via extraVolumes
+            api_url_file: /etc/alertmanager/slack-webhook
+            send_resolved: true
+            title: |-
+              [{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}] {{ .CommonLabels.alertname }}
+            text: |-
+              {{ range .Alerts }}
+              *Service:* {{ .Labels.service | default "unknown" }}
+              *Severity:* {{ .Labels.severity }}
+              *Summary:* {{ .Annotations.summary }}
+              *Description:* {{ .Annotations.description }}
+              {{ end }}
+            color: |-
+              {{ if eq .Status "firing" -}}
+                {{- if eq .CommonLabels.severity "critical" -}}danger{{- else -}}warning{{- end -}}
+              {{- else -}}good{{- end }}
+
+      # ── Critical: Slack + Email ─────────────────────────────────────────────
+      - name: critical-multi
+        slack_configs:
+          - channel: "#aegispay-alerts"
+            api_url_file: /etc/alertmanager/slack-webhook
+            send_resolved: true
+            title: "🔴 CRITICAL: {{ .CommonLabels.alertname }}"
+            text: |-
+              {{ range .Alerts }}
+              *Service:* {{ .Labels.service | default "unknown" }}
+              *Description:* {{ .Annotations.description }}
+              *Runbook:* {{ .Annotations.runbook_url | default "N/A" }}
+              {{ end }}
+            color: danger
+        email_configs:
+          - to: "aegispay.dev@gmail.com"
+            send_resolved: true
+            headers:
+              Subject: "🔴 [AegisPay CRITICAL] {{ .CommonLabels.alertname }}"
+            html: |-
+              <h2 style="color:red">Critical Alert: {{ .CommonLabels.alertname }}</h2>
+              {{ range .Alerts }}
+              <p><strong>Service:</strong> {{ .Labels.service | default "unknown" }}<br/>
+              <strong>Summary:</strong> {{ .Annotations.summary }}<br/>
+              <strong>Description:</strong> {{ .Annotations.description }}</p>
+              {{ end }}
+
+    inhibit_rules:
+      # Suppress warnings if there is a matching critical alert
+      - source_matchers:
+          - severity = critical
+        target_matchers:
+          - severity = warning
+        equal: [alertname, service]
+
+  # Mount secret files for API URLs (avoids embedding credentials in config)
+  extraVolumes:
+    - name: slack-webhook
+      secret:
+        secretName: aegispay-slack-secret
+        items:
+          - key: webhook-url
+            path: slack-webhook
+    - name: smtp-password
+      secret:
+        secretName: aegispay-smtp-secret
+        items:
+          - key: password
+            path: smtp-password
+
+  extraVolumeMounts:
+    - name: slack-webhook
+      mountPath: /etc/alertmanager/slack-webhook
+      subPath: slack-webhook
+      readOnly: true
+    - name: smtp-password
+      mountPath: /etc/alertmanager/smtp-password
+      subPath: smtp-password
+      readOnly: true
+
+# ─── Default alert rules (supplement kube-prometheus-stack defaults) ─────────
+# AegisPay-specific rules are in infra/helm/aegispay/templates/prometheusrules.yaml
+defaultRules:
+  create: true
+  rules:
+    alertmanager: true
+    etcd: false          # Not running etcd directly on EKS
+    configReloaders: true
+    general: true
+    k8s: true
+    kubeApiserver: true
+    kubeApiserverAvailability: true
+    kubeApiserverSlos: true
+    kubelet: true
+    kubeProxy: false     # kube-proxy not used in EKS Fargate
+    kubePrometheusGeneral: true
+    kubePrometheusNodeRecording: true
+    kubernetesAbsent: true
+    kubernetesApps: true
+    kubernetesResources: true
+    kubernetesStorage: true
+    kubernetesSystem: true
+    kubeScheduler: false # Managed by EKS
+    kubeStateMetrics: true
+    network: true
+    node: true
+    nodeExporterAlerting: true
+    nodeExporterRecording: true
+    prometheus: true
+    prometheusOperator: true

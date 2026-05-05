@@ -52,14 +52,16 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.ok(response));
     }
 
-    /** Submit a KYC document for analysis. The caller must be the document owner. */
+    /** Submit a KYC document for analysis. The caller must be the document owner or an ADMIN. */
     @PostMapping("/{userId}/kyc/documents")
     public ResponseEntity<ApiResponse<KycStatusResponse>> submitKycDocument(
             @PathVariable UUID userId,
             @Valid @RequestBody KycDocumentUploadRequest request,
             @AuthenticationPrincipal Jwt jwt) {
 
-        KycStatusResponse response = userService.submitKycDocument(userId, request, jwt.getSubject());
+        String role = jwt.getClaimAsString("aegispay_role");
+        boolean isAdmin = "ADMIN".equalsIgnoreCase(role) || "BACK_OFFICE".equalsIgnoreCase(role);
+        KycStatusResponse response = userService.submitKycDocument(userId, request, jwt.getSubject(), isAdmin);
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(ApiResponse.ok(response));
     }
 

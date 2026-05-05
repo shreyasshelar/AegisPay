@@ -109,9 +109,10 @@ public class UserService {
     @Transactional
     public KycStatusResponse submitKycDocument(UUID userId,
                                                KycDocumentUploadRequest request,
-                                               String callerExternalId) {
+                                               String callerExternalId,
+                                               boolean isAdmin) {
         User user = requireUser(userId);
-        assertCallerIsOwnerOrAdmin(user, callerExternalId);
+        assertCallerIsOwnerOrAdmin(user, callerExternalId, isAdmin);
 
         if (kycStateMachine.isTerminal(user.getKycStatus())) {
             throw new AegisPayException("KYC_ALREADY_COMPLETED",
@@ -266,9 +267,9 @@ public class UserService {
                         "USER_NOT_FOUND", "User not found: " + userId, HttpStatus.NOT_FOUND));
     }
 
-    private void assertCallerIsOwnerOrAdmin(User user, String callerExternalId) {
+    private void assertCallerIsOwnerOrAdmin(User user, String callerExternalId, boolean isAdmin) {
         boolean isOwner = user.getExternalId().equals(callerExternalId);
-        if (!isOwner) {
+        if (!isOwner && !isAdmin) {
             throw new AegisPayException("FORBIDDEN",
                     "You do not have permission to modify this user's KYC.",
                     HttpStatus.FORBIDDEN);

@@ -85,6 +85,12 @@
       <groupId>org.springframework.kafka</groupId>
       <artifactId>spring-kafka</artifactId>
     </dependency>
+    <!-- Stripe Java SDK -->
+    <dependency>
+      <groupId>com.stripe</groupId>
+      <artifactId>stripe-java</artifactId>
+      <version>25.3.0</version>
+    </dependency>
     <dependency>
       <groupId>org.testcontainers</groupId>
       <artifactId>postgresql</artifactId>

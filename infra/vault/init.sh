@@ -35,6 +35,11 @@ error()   { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
 : "${OPENROUTER_API_KEY:?Set OPENROUTER_API_KEY (get a free key at openrouter.ai)}"
 : "${KEYCLOAK_ADMIN_PASSWORD:?Set KEYCLOAK_ADMIN_PASSWORD}"
 : "${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD}"
+# Optional but recommended — warn if not set
+[ -z "${STRIPE_SECRET_KEY:-}"   ] && warn "STRIPE_SECRET_KEY not set — payment gateway will be stubbed"
+[ -z "${STRIPE_WEBHOOK_SECRET:-}" ] && warn "STRIPE_WEBHOOK_SECRET not set"
+[ -z "${SMTP_PASSWORD:-}"       ] && warn "SMTP_PASSWORD not set — email notifications disabled"
+[ -z "${SLACK_WEBHOOK_URL:-}"   ] && warn "SLACK_WEBHOOK_URL not set — Slack alerts disabled"
 
 # ── Port-forward Vault to localhost ───────────────────────────────────────────
 info "Port-forwarding Vault to localhost:8200..."
@@ -111,11 +116,24 @@ vault kv put secret/aegispay/grafana \
   admin_user="admin" \
   admin_password="$GRAFANA_ADMIN_PASSWORD"
 
-info "Writing payment gateway secrets (stubbed — add real keys when needed)..."
-vault kv put secret/aegispay/payment-gateway \
-  razorpay_key_id="" \
-  razorpay_key_secret="" \
-  stripe_secret_key=""
+info "Writing Stripe payment gateway secrets..."
+vault kv put secret/aegispay/stripe \
+  secret_key="${STRIPE_SECRET_KEY:-sk_test_placeholder}" \
+  webhook_secret="${STRIPE_WEBHOOK_SECRET:-whsec_placeholder}"
+
+info "Writing SMTP (email) secrets..."
+vault kv put secret/aegispay/smtp \
+  password="${SMTP_PASSWORD:-}"
+
+info "Writing Slack alerting secrets..."
+vault kv put secret/aegispay/slack \
+  webhook_url="${SLACK_WEBHOOK_URL:-}"
+
+info "Writing OpenRouter API key (AI — on-prem free tier)..."
+vault kv put secret/aegispay/ai-keys \
+  openrouter_api_key="$OPENROUTER_API_KEY" \
+  anthropic_api_key="" \
+  openai_api_key=""
 
 # ── Create policy ─────────────────────────────────────────────────────────────
 info "Writing AegisPay access policy..."

@@ -2,7 +2,7 @@ package com.aegispay.orchestrator.saga;
 
 import com.aegispay.common.domain.event.*;
 import com.aegispay.common.kafka.KafkaTopics;
-import com.aegispay.orchestrator.client.ExternalPaymentGatewayClient;
+import com.aegispay.orchestrator.client.StripePaymentGatewayClient;
 import com.aegispay.orchestrator.config.OrchestratorProperties;
 import com.aegispay.orchestrator.domain.entity.OutboxEntry;
 import com.aegispay.orchestrator.domain.entity.Saga;
@@ -32,7 +32,8 @@ public class PaymentSagaOrchestrator {
     private final SagaRepository sagaRepository;
     private final SagaStepRepository stepRepository;
     private final OutboxEntryRepository outboxRepository;
-    private final ExternalPaymentGatewayClient gatewayClient;
+    @SuppressWarnings("unused")   // injected for future direct-call use; primary path via Kafka consumer
+    private final StripePaymentGatewayClient gatewayClient;
     private final ObjectMapper objectMapper;
     private final OrchestratorProperties properties;
 
@@ -170,6 +171,57 @@ public class PaymentSagaOrchestrator {
             publishRollbackBalance(saga, "Saga timeout");
         }
         publishTransactionFailed(saga, "SAGA_TIMEOUT", saga.getFailureReason());
+    }
+
+    /**
+     * Called by {@link com.aegispay.orchestrator.controller.StripeWebhookController}
+     * when Stripe delivers a {@code payment_intent.succeeded} webhook asynchronously.
+     * This handles 3DS/redirect flows where the payment confirmation arrives after
+     * the initial API call.
+     */
+    @Transactional
+    public void onStripePaymentSucceeded(UUID transactionId, String paymentIntentId) {
+        Saga saga = sagaRepository.findByTransactionIdForUpdate(transactionId).orElse(null);
+        if (saga == null) {
+            log.warn("onStripePaymentSucceeded: no saga for txn={}", transactionId);
+            return;
+        }
+        if (!RUNNING.equals(saga.getStatus()) || !PROCESS_PAYMENT.equals(saga.getCurrentStep())) {
+            log.info("onStripePaymentSucceeded: saga already past PROCESS_PAYMENT for txn={} — skip", transactionId);
+            return;
+        }
+        log.info("Stripe async payment succeeded: pi={} txn={}", paymentIntentId, transactionId);
+        saga.setExternalReference(paymentIntentId);
+        completeStep(saga, PROCESS_PAYMENT);
+        saga.setCurrentStep(COMMIT_BALANCE);
+        createStep(saga, COMMIT_BALANCE, "IN_PROGRESS");
+        sagaRepository.save(saga);
+        publishCommitBalance(saga);
+    }
+
+    /**
+     * Called by {@link com.aegispay.orchestrator.controller.StripeWebhookController}
+     * when Stripe delivers a {@code payment_intent.payment_failed} or
+     * {@code payment_intent.canceled} webhook.
+     */
+    @Transactional
+    public void onStripePaymentFailed(UUID transactionId, String paymentIntentId,
+                                      String failureCode, String failureMessage) {
+        Saga saga = sagaRepository.findByTransactionIdForUpdate(transactionId).orElse(null);
+        if (saga == null) {
+            log.warn("onStripePaymentFailed: no saga for txn={}", transactionId);
+            return;
+        }
+        if (!RUNNING.equals(saga.getStatus()) || !PROCESS_PAYMENT.equals(saga.getCurrentStep())) {
+            log.info("onStripePaymentFailed: saga already past PROCESS_PAYMENT for txn={} — skip", transactionId);
+            return;
+        }
+        log.warn("Stripe async payment failed: pi={} txn={} code={}", paymentIntentId, transactionId, failureCode);
+        saga.setExternalReference(paymentIntentId);
+        failStep(saga, PROCESS_PAYMENT, failureMessage);
+        failSaga(saga, "Payment gateway failed: " + failureCode);
+        publishRollbackBalance(saga, saga.getFailureReason());
+        publishTransactionFailed(saga, failureCode, saga.getFailureReason());
     }
 
     // ---- helpers ----
