@@ -1,0 +1,196 @@
+name: CI — Build & Test
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  JAVA_VERSION: "21"
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/aegispay
+
+jobs:
+  # ─────────────────────────────────────────────────────────────
+  # Build shared libs first (all services depend on them)
+  # ─────────────────────────────────────────────────────────────
+  build-libs:
+    name: Build Shared Libs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+          cache: maven
+
+      - name: Build & install shared libs
+        run: |
+          mvn --batch-mode --no-transfer-progress clean install \
+            -pl libs/common-domain,libs/common-security,libs/common-kafka,libs/common-observability \
+            -DskipTests
+
+      - name: Cache libs to local repo
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.m2/repository/com/aegispay
+          key: aegispay-libs-${{ github.sha }}
+
+  # ─────────────────────────────────────────────────────────────
+  # Build + test each service in parallel after libs are ready
+  # ─────────────────────────────────────────────────────────────
+  build-service:
+    name: Build ${{ matrix.service }}
+    needs: build-libs
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - api-gateway
+          - user-service
+          - transaction-service
+          - ledger-service
+          - payment-orchestrator
+          - risk-engine
+          - notification-service
+          - ai-platform
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+          cache: maven
+
+      - name: Restore cached libs
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.m2/repository/com/aegispay
+          key: aegispay-libs-${{ github.sha }}
+
+      - name: Build & test ${{ matrix.service }}
+        run: |
+          mvn --batch-mode --no-transfer-progress verify \
+            -pl services/${{ matrix.service }} \
+            --also-make \
+            -Dspring.profiles.active=test
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY_TEST }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY_TEST }}
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.service }}
+          path: services/${{ matrix.service }}/target/surefire-reports/
+
+      - name: Upload JaCoCo coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.service }}
+          path: services/${{ matrix.service }}/target/site/jacoco/
+
+  # ─────────────────────────────────────────────────────────────
+  # Build & push Docker images (only on push to main)
+  # ─────────────────────────────────────────────────────────────
+  docker-build:
+    name: Docker Build & Push — ${{ matrix.service }}
+    needs: build-service
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - api-gateway
+          - user-service
+          - transaction-service
+          - ledger-service
+          - payment-orchestrator
+          - risk-engine
+          - notification-service
+          - ai-platform
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+          cache: maven
+
+      - name: Restore cached libs
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.m2/repository/com/aegispay
+          key: aegispay-libs-${{ github.sha }}
+
+      - name: Package JAR (skip tests — already run above)
+        run: |
+          mvn --batch-mode --no-transfer-progress package \
+            -pl services/${{ matrix.service }} \
+            --also-make \
+            -DskipTests
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_PREFIX }}/${{ matrix.service }}
+          tags: |
+            type=sha,prefix=,format=long
+            type=ref,event=branch
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: services/${{ matrix.service }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ─────────────────────────────────────────────────────────────
+  # Helm lint
+  # ─────────────────────────────────────────────────────────────
+  helm-lint:
+    name: Helm Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.15.0
+
+      - name: Lint Helm chart
+        run: helm lint infra/helm/aegispay

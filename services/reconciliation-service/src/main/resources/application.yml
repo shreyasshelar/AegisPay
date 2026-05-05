@@ -1,0 +1,80 @@
+spring:
+  application:
+    name: reconciliation-service
+
+  # PostgreSQL — reads ledger_entries and saga state
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:aegispay_ledger}
+    username: ${DB_USERNAME:aegispay}
+    password: ${DB_PASSWORD:aegispay}
+    hikari:
+      maximum-pool-size: 5
+      connection-timeout: 30000
+      # Read-only pool — reconciliation only reads from ledger
+      read-only: true
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  # Spring Batch metadata tables go into a separate schema
+  batch:
+    jdbc:
+      initialize-schema: always
+      schema: classpath:org/springframework/batch/core/schema-postgresql.sql
+    job:
+      enabled: false   # Don't auto-run jobs on startup — triggered by scheduler
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OAUTH2_ISSUER_URI:http://localhost:8080/realms/aegispay}
+
+server:
+  port: ${SERVER_PORT:8091}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics,batch
+  metrics:
+    tags:
+      service: ${spring.application.name}
+
+# ── ClickHouse (writes reconciliation results) ────────────────────────────────
+clickhouse:
+  url: ${CLICKHOUSE_URL:jdbc:clickhouse://localhost:8123/aegispay_analytics}
+  username: ${CLICKHOUSE_USER:default}
+  password: ${CLICKHOUSE_PASSWORD:}
+
+# ── Stripe ────────────────────────────────────────────────────────────────────
+stripe:
+  secret-key: ${STRIPE_SECRET_KEY}
+  # How many days back to fetch Stripe balance transactions per run
+  lookback-days: 2
+
+# ── Reconciliation job config ─────────────────────────────────────────────────
+aegispay:
+  reconciliation:
+    # Cron: daily at 2:00 AM UTC (after Stripe settles overnight)
+    cron: ${RECONCILIATION_CRON:0 0 2 * * *}
+    # Amount tolerance before flagging as a break (handle floating point rounding)
+    tolerance-minor-units: 1   # 1 paise / 1 cent difference is not a break
+    # Chunk size for Spring Batch reader
+    chunk-size: 500
+    # Email report recipient (uses notification-service internally)
+    report-email: ${RECONCILIATION_REPORT_EMAIL:aegispay.dev@gmail.com}
+
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} [job=%X{jobName}] - %msg%n"
+  level:
+    root: INFO
+    com.aegispay: DEBUG
+    org.springframework.batch: INFO

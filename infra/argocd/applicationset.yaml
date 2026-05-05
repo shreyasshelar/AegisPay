@@ -1,0 +1,80 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: aegispay
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: aegispay
+spec:
+  generators:
+    - list:
+        elements:
+          # ── On-prem / self-hosted k3s (dev branch) ─────────────────────────
+          # Separate Application (app-onprem.yaml) handles this environment.
+          # Listed here for documentation completeness only — the template below
+          # targets AWS (main branch); on-prem has its own app-onprem.yaml.
+          # -------------------------------------------------------------------
+
+          - env: dev
+            namespace: aegispay-dev
+            revision: main
+            syncPolicy: automated   # dev auto-syncs on every push to main
+            valueFile: values-dev.yaml
+
+          - env: staging
+            namespace: aegispay-staging
+            revision: main
+            syncPolicy: manual      # staging requires manual approval
+            valueFile: values-staging.yaml
+
+          - env: prod
+            namespace: aegispay-prod
+            revision: main
+            syncPolicy: manual      # prod requires manual approval
+            valueFile: values-prod.yaml
+
+  template:
+    metadata:
+      name: "aegispay-{{env}}"
+      namespace: argocd
+      labels:
+        environment: "{{env}}"
+        app.kubernetes.io/part-of: aegispay
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+    spec:
+      project: aegispay
+
+      source:
+        repoURL: https://github.com/aegispay-org/aegispay.git
+        targetRevision: "{{revision}}"
+        path: infra/helm/aegispay
+        helm:
+          valueFiles:
+            - values.yaml
+            - "{{valueFile}}"
+
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: "{{namespace}}"
+
+      syncPolicy:
+        syncOptions:
+          - CreateNamespace=true
+          - PrunePropagationPolicy=foreground
+          - PruneLast=true
+          - ServerSideApply=true
+        retry:
+          limit: 5
+          backoff:
+            duration: 10s
+            factor: 2
+            maxDuration: 3m
+
+      ignoreDifferences:
+        - group: apps
+          kind: Deployment
+          jsonPointers:
+            - /spec/replicas   # HPA manages replica count at runtime
+
+      revisionHistoryLimit: 10

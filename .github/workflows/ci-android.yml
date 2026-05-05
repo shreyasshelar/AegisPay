@@ -1,0 +1,160 @@
+name: CI — Android
+
+on:
+  push:
+    paths:
+      - 'apps/android/**'
+      - '.github/workflows/ci-android.yml'
+  pull_request:
+    paths:
+      - 'apps/android/**'
+      - '.github/workflows/ci-android.yml'
+
+defaults:
+  run:
+    working-directory: apps/android
+
+jobs:
+  # ── Lint & Detekt ─────────────────────────────────────────────────────────
+  lint:
+    name: Lint & Detekt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+
+      - name: Run Android Lint
+        run: ./gradlew lint
+        env:
+          API_BASE_URL: "http://localhost:8080/"
+          WS_BASE_URL: "ws://localhost:8080/"
+          KEYCLOAK_ISSUER: "http://localhost:8180/realms/aegispay"
+          OAUTH_CLIENT_ID: "aegispay-android"
+          OAUTH_REDIRECT_URI: "aegispay://oauth/callback"
+
+      - name: Upload lint report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-report
+          path: apps/android/app/build/reports/lint-results-debug.html
+
+  # ── Unit Tests ────────────────────────────────────────────────────────────
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+
+      - name: Run unit tests
+        run: ./gradlew testDebugUnitTest
+        env:
+          API_BASE_URL: "http://localhost:8080/"
+          WS_BASE_URL: "ws://localhost:8080/"
+          KEYCLOAK_ISSUER: "http://localhost:8180/realms/aegispay"
+          OAUTH_CLIENT_ID: "aegispay-android"
+          OAUTH_REDIRECT_URI: "aegispay://oauth/callback"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-results
+          path: apps/android/app/build/test-results/
+
+  # ── Debug APK Build ───────────────────────────────────────────────────────
+  build:
+    name: Build Debug APK
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+
+      - name: Build debug APK
+        run: ./gradlew assembleDebug
+        env:
+          API_BASE_URL: ${{ secrets.ANDROID_API_BASE_URL || 'http://localhost:8080/' }}
+          WS_BASE_URL: ${{ secrets.ANDROID_WS_BASE_URL || 'ws://localhost:8080/' }}
+          KEYCLOAK_ISSUER: ${{ secrets.KEYCLOAK_ISSUER || 'http://localhost:8180/realms/aegispay' }}
+          OAUTH_CLIENT_ID: ${{ secrets.ANDROID_OAUTH_CLIENT_ID || 'aegispay-android' }}
+          OAUTH_REDIRECT_URI: "aegispay://oauth/callback"
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-apk
+          path: apps/android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 7
+
+  # ── Release APK (on tag) ──────────────────────────────────────────────────
+  release-build:
+    name: Build Release APK
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/android-v')
+    needs: [lint, test]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Decode keystore
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > keystore.jks
+
+      - name: Build release APK
+        run: ./gradlew assembleRelease
+        env:
+          API_BASE_URL: ${{ secrets.ANDROID_API_BASE_URL }}
+          WS_BASE_URL: ${{ secrets.ANDROID_WS_BASE_URL }}
+          KEYCLOAK_ISSUER: ${{ secrets.KEYCLOAK_ISSUER }}
+          OAUTH_CLIENT_ID: ${{ secrets.ANDROID_OAUTH_CLIENT_ID }}
+          OAUTH_REDIRECT_URI: "aegispay://oauth/callback"
+          SIGNING_STORE_FILE: "../../keystore.jks"
+          SIGNING_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+      - name: Upload release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-apk
+          path: apps/android/app/build/outputs/apk/release/app-release.apk

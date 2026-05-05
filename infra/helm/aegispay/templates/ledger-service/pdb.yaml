@@ -1,0 +1,3 @@
+{{- if .Values.services.ledger_service.enabled }}
+{{ include "aegispay.servicePdb" (dict "name" "ledger-service" "context" .) }}
+{{- end }}
