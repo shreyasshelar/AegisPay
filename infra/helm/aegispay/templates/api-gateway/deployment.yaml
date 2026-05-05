@@ -1,0 +1,107 @@
+{{- if .Values.services.api_gateway.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "aegispay.labels" . | nindent 4 }}
+    app.kubernetes.io/name: api-gateway
+    app.kubernetes.io/component: api-gateway
+    app.kubernetes.io/version: {{ .Values.services.api_gateway.image.tag | quote }}
+spec:
+  replicas: {{ .Values.services.api_gateway.replicas | default 2 }}
+  selector:
+    matchLabels:
+      {{- include "aegispay.selectorLabels" (dict "name" "api-gateway" "context" .) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "aegispay.labels" . | nindent 8 }}
+        {{- include "aegispay.selectorLabels" (dict "name" "api-gateway" "context" .) | nindent 8 }}
+        app.kubernetes.io/component: api-gateway
+        app.kubernetes.io/version: {{ .Values.services.api_gateway.image.tag | quote }}
+      annotations:
+        {{- include "aegispay.podAnnotations" (dict "port" .Values.services.api_gateway.port) | nindent 8 }}
+        # Rolling restart on config change
+        checksum/config: {{ include (print $.Template.BasePath "/api-gateway/configmap.yaml") . | sha256sum }}
+    spec:
+      serviceAccountName: api-gateway
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: api-gateway
+          image: "{{ .Values.global.imageRepositoryPrefix }}/{{ .Values.services.api_gateway.image.repository }}:{{ .Values.services.api_gateway.image.tag }}"
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.services.api_gateway.port }}
+              protocol: TCP
+          env:
+            - name: SERVER_PORT
+              value: {{ .Values.services.api_gateway.port | quote }}
+            - name: REDIS_HOST
+              value: {{ .Values.global.redis.host | quote }}
+            - name: REDIS_PORT
+              value: {{ .Values.global.redis.port | quote }}
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: aegispay-redis-secret
+                  key: password
+                  optional: true
+            - name: OAUTH2_PRIMARY_ISSUER_URI
+              value: {{ .Values.global.oauth2.issuerUri | quote }}
+            - name: JAVA_OPTS
+              value: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError -Dspring.config.location=classpath:/application.yml,/config/application.yml"
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+          resources:
+            {{- toYaml .Values.services.api_gateway.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+      volumes:
+        - name: config
+          configMap:
+            name: api-gateway-config
+      terminationGracePeriodSeconds: 30
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: api-gateway
+{{- end }}

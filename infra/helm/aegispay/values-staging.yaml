@@ -1,0 +1,77 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Staging environment overrides
+# Closer to prod sizing; image tags updated by cd-staging.yml
+# ─────────────────────────────────────────────────────────────────────────────
+
+global:
+  namespace: aegispay-staging
+  imagePullPolicy: IfNotPresent
+
+services:
+  api_gateway:
+    replicas: 2
+    image:
+      tag: latest
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 4
+
+  user_service:
+    replicas: 2
+    image:
+      tag: latest
+
+  transaction_service:
+    replicas: 2
+    image:
+      tag: latest
+
+  ledger_service:
+    replicas: 2
+    image:
+      tag: latest
+
+  payment_orchestrator:
+    replicas: 2
+    image:
+      tag: latest
+
+  risk_engine:
+    replicas: 2
+    image:
+      tag: latest
+
+  notification_service:
+    replicas: 2
+    image:
+      tag: latest
+
+  ai_platform:
+    replicas: 1
+    image:
+      tag: latest
+
+ingress:
+  enabled: true
+  host: api.staging.aegispay.io
+  tls:
+    enabled: true
+    secretName: aegispay-staging-tls
+
+monitoring:
+  prometheusRules:
+    enabled: true
+
+secrets:
+  useVault: false
+  aws:
+    region: ap-south-1
+  db:
+    secretPath: aegispay/staging/db
+  redis:
+    secretPath: aegispay/staging/redis
+  ai:
+    secretPath: aegispay/staging/ai-keys
+  kafka:
+    secretPath: aegispay/staging/kafka

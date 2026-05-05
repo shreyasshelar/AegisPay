@@ -1,0 +1,125 @@
+spring:
+  application:
+    name: api-gateway
+
+  cloud:
+    gateway:
+      # Routes are configured programmatically in GatewayRoutingConfig
+      routes: []
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
+      httpclient:
+        connect-timeout: ${GATEWAY_CONNECT_TIMEOUT_MS:3000}
+        response-timeout: ${GATEWAY_RESPONSE_TIMEOUT_MS:30000}
+        pool:
+          type: elastic
+          max-idle-time: 30s
+
+    circuitbreaker:
+      resilience4j:
+        instances:
+          default:
+            slidingWindowSize: 10
+            failureRateThreshold: 50
+            waitDurationInOpenState: 10s
+            permittedNumberOfCallsInHalfOpenState: 5
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Multi-IdP: configured programmatically via JwtIssuerReactiveAuthenticationManagerResolver
+          # This single issuer-uri is kept as a reference; actual resolution is done in SecurityConfig
+          issuer-uri: ${OAUTH2_PRIMARY_ISSUER_URI:http://localhost:8080/realms/aegispay}
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      ssl:
+        enabled: ${REDIS_SSL_ENABLED:false}
+      lettuce:
+        pool:
+          max-active: 16
+          max-idle: 8
+          min-idle: 2
+          max-wait: 2s
+
+server:
+  port: ${SERVER_PORT:8080}
+  # Netty / WebFlux — no servlet config needed
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics,gateway
+  endpoint:
+    health:
+      show-details: when_authorized
+    gateway:
+      enabled: true
+  metrics:
+    tags:
+      service: ${spring.application.name}
+      env: ${APP_ENV:local}
+
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} [traceId=%X{traceId}] [corrId=%X{correlationId}] - %msg%n"
+  level:
+    root: INFO
+    com.aegispay: DEBUG
+    org.springframework.cloud.gateway: INFO
+    reactor.netty: WARN
+
+# ─── AegisPay Gateway Configuration ──────────────────────────────────────────
+aegispay:
+  gateway:
+    # Multi-IdP JWT issuers.  Add new IdPs here without code changes.
+    oauth2-trusted-issuers:
+      - ${OAUTH2_ISSUER_KEYCLOAK:http://localhost:8080/realms/aegispay}
+      - ${OAUTH2_ISSUER_ENTRA:https://login.microsoftonline.com/common/v2.0}
+      - ${OAUTH2_ISSUER_OKTA:https://dev-000000.okta.com/oauth2/default}
+
+    # Downstream service URIs (override via ConfigMap in Kubernetes)
+    services:
+      user-service: ${USER_SERVICE_URI:http://user-service:8081}
+      transaction-service: ${TRANSACTION_SERVICE_URI:http://transaction-service:8082}
+      ledger-service: ${LEDGER_SERVICE_URI:http://ledger-service:8083}
+      orchestrator-service: ${ORCHESTRATOR_SERVICE_URI:http://payment-orchestrator:8084}
+      risk-engine: ${RISK_ENGINE_URI:http://risk-engine:8085}
+      notification-service: ${NOTIFICATION_SERVICE_URI:http://notification-service:8086}
+      ai-platform: ${AI_PLATFORM_URI:http://ai-platform:8088}
+
+    # Fixed-window rate limiter
+    rate-limiter:
+      max-requests: ${RATE_LIMIT_MAX_REQUESTS:100}
+      window-seconds: ${RATE_LIMIT_WINDOW_SECONDS:60}
+      key-ttl-seconds: ${RATE_LIMIT_KEY_TTL_SECONDS:65}
+      limit-header: X-RateLimit-Limit
+      remaining-header: X-RateLimit-Remaining
+      reset-header: X-RateLimit-Reset
+
+    # CORS
+    cors:
+      allowed-origins:
+        - ${CORS_ALLOWED_ORIGIN_1:http://localhost:3000}
+        - ${CORS_ALLOWED_ORIGIN_2:https://app.aegispay.io}
+      allowed-methods:
+        - GET
+        - POST
+        - PUT
+        - PATCH
+        - DELETE
+        - OPTIONS
+      allowed-headers:
+        - Authorization
+        - Content-Type
+        - X-Correlation-ID
+        - X-Idempotency-Key
+        - traceparent
+        - tracestate
+      allow-credentials: true
+      max-age: 3600

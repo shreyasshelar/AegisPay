@@ -1,0 +1,123 @@
+name: CD — Promote to Production
+
+# Triggered manually via workflow_dispatch after staging validation.
+# Requires: a release tag (e.g. v1.2.3) already built and pushed to GHCR by cd-staging.yml.
+# What this does:
+#   1. Updates values-prod.yaml image tags to the promoted release tag
+#   2. Updates app-prod.yaml targetRevision to the release tag
+#   3. Commits and pushes — ArgoCD detects the change and shows "OutOfSync"
+#   4. A human operator then clicks Sync in the ArgoCD UI to apply to production
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Release tag to promote (e.g. v1.2.3) — must already exist in GHCR"
+        required: true
+        type: string
+      dry_run:
+        description: "Dry run (update files but do not push)"
+        required: false
+        type: boolean
+        default: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/aegispay
+  HELM_VALUES_FILE: infra/helm/aegispay/values-prod.yaml
+  ARGOCD_APP_FILE: infra/argocd/app-prod.yaml
+
+jobs:
+  validate-tag:
+    name: Validate release tag exists in GHCR
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check all service images exist for tag
+        run: |
+          SERVICES=(api-gateway user-service transaction-service ledger-service payment-orchestrator risk-engine notification-service ai-platform)
+          TAG="${{ inputs.release_tag }}"
+          FAILED=0
+          for svc in "${SERVICES[@]}"; do
+            IMAGE="${{ env.IMAGE_PREFIX }}/$svc:$TAG"
+            echo "Checking $IMAGE ..."
+            if ! docker manifest inspect "$IMAGE" > /dev/null 2>&1; then
+              echo "::error::Image NOT found: $IMAGE"
+              FAILED=1
+            else
+              echo "OK: $IMAGE"
+            fi
+          done
+          if [ "$FAILED" = "1" ]; then
+            echo "::error::One or more images missing for tag $TAG. Aborting promotion."
+            exit 1
+          fi
+
+  promote:
+    name: Update Helm values & ArgoCD app for production
+    needs: validate-tag
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    environment:
+      name: production
+      url: https://argocd.aegispay.io/applications/aegispay-prod
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GIT_DEPLOY_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name  "aegispay-ci[bot]"
+          git config user.email "aegispay-ci@users.noreply.github.com"
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Update image tags in values-prod.yaml
+        run: |
+          SERVICES=(api-gateway user-service transaction-service ledger-service payment-orchestrator risk-engine notification-service ai-platform)
+          TAG="${{ inputs.release_tag }}"
+          for svc in "${SERVICES[@]}"; do
+            KEY=$(echo "$svc" | tr '-' '_')
+            yq e ".services.${KEY}.image.tag = \"$TAG\"" -i ${{ env.HELM_VALUES_FILE }}
+          done
+
+      - name: Update targetRevision in app-prod.yaml
+        run: |
+          yq e '.spec.source.targetRevision = "${{ inputs.release_tag }}"' \
+            -i ${{ env.ARGOCD_APP_FILE }}
+
+      - name: Show diff
+        run: git diff
+
+      - name: Commit and push
+        if: ${{ !inputs.dry_run }}
+        run: |
+          git add ${{ env.HELM_VALUES_FILE }} ${{ env.ARGOCD_APP_FILE }}
+          git commit -m "chore(cd): promote ${{ inputs.release_tag }} to production"
+          git push origin main
+
+      - name: Dry run summary
+        if: ${{ inputs.dry_run }}
+        run: |
+          echo "::notice::Dry run — files updated but NOT committed."
+          echo "To promote for real, re-run with dry_run=false."
+
+      - name: Post-promote instructions
+        if: ${{ !inputs.dry_run }}
+        run: |
+          echo "::notice::Files pushed. ArgoCD will show aegispay-prod as OutOfSync."
+          echo "::notice::Log in to ArgoCD and click Sync to apply to production."
+          echo "::notice::ArgoCD URL: https://argocd.aegispay.io/applications/aegispay-prod"

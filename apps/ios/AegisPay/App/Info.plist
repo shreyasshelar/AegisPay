@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- App metadata -->
+    <key>CFBundleName</key>
+    <string>AegisPay</string>
+    <key>CFBundleDisplayName</key>
+    <string>AegisPay</string>
+    <key>CFBundleIdentifier</key>
+    <string>io.aegispay.app</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0.0</string>
+    <key>LSRequiresIPhoneOS</key>
+    <true/>
+    <key>UILaunchScreen</key>
+    <dict/>
+
+    <!-- OAuth redirect URL scheme — must match AppConfig.oauthRedirectURI -->
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeRole</key>
+            <string>Editor</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>aegispay</string>
+            </array>
+        </dict>
+    </array>
+
+    <!-- App Transport Security — allow localhost in DEBUG builds only -->
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsLocalNetworking</key>
+        <true/>
+    </dict>
+
+    <!-- Privacy descriptions — required for PhotosPicker -->
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>AegisPay uses your photo library to upload KYC identity documents.</string>
+    <key>NSCameraUsageDescription</key>
+    <string>AegisPay uses your camera to capture KYC identity documents.</string>
+
+    <!-- Backend endpoints (overridden by CI build settings) -->
+    <key>API_BASE_URL</key>
+    <string>$(API_BASE_URL)</string>
+    <key>WS_BASE_URL</key>
+    <string>$(WS_BASE_URL)</string>
+
+    <!-- OAuth config (overridden by CI build settings) -->
+    <key>KEYCLOAK_ISSUER</key>
+    <string>$(KEYCLOAK_ISSUER)</string>
+    <key>OAUTH_CLIENT_ID</key>
+    <string>$(OAUTH_CLIENT_ID)</string>
+
+    <!-- Face ID / Touch ID usage -->
+    <key>NSFaceIDUsageDescription</key>
+    <string>AegisPay uses biometric authentication to protect your account.</string>
+
+    <!-- Supported interface orientations -->
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+    </array>
+    <key>UISupportedInterfaceOrientations~ipad</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationPortraitUpsideDown</string>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
+</dict>
+</plist>
