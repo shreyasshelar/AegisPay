@@ -35,7 +35,7 @@ public final class ActorContext {
     }
 
     @Getter
-    @Builder
+    @Builder(toBuilder = true)
     public static class Actor {
         private final UUID userId;
         private final String externalId;
