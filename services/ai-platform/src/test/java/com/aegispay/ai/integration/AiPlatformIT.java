@@ -56,15 +56,15 @@ class AiPlatformIT {
 
     @Test
     void audit_log_is_written_after_rag_query() {
-        AiAuditService auditService = new AiAuditService(auditLogRepository, props);
+        AiAuditService auditService = new AiAuditService(auditLogRepository);
         RagPipelineService ragPipeline = new RagPipelineService(vectorStore, chatModel, auditService, props);
 
-        when(vectorStore.similaritySearch(any())).thenReturn(List.of(new Document("fraud context")));
+        when(vectorStore.similaritySearch(any(org.springframework.ai.vectorstore.SearchRequest.class))).thenReturn(List.of(new Document("fraud context")));
 
         ChatResponse mockResponse = mock(ChatResponse.class);
         Generation generation = new Generation(new AssistantMessage("Fraud explanation result."));
         when(mockResponse.getResult()).thenReturn(generation);
-        when(chatModel.call(any())).thenReturn(mockResponse);
+        when(chatModel.call(any(org.springframework.ai.chat.prompt.Prompt.class))).thenReturn(mockResponse);
 
         String result = ragPipeline.query("FRAUD_EXPLAIN", "why flagged?", "{context}\n{question}");
 

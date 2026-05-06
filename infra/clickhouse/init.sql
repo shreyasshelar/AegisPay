@@ -132,7 +132,7 @@ CREATE TABLE IF NOT EXISTS reconciliation_breaks
 )
 ENGINE = MergeTree()
 PARTITION BY toYYYYMM(report_date)
-ORDER BY (report_date, break_type, break_status, break_amount DESC)
+ORDER BY (report_date, break_type, break_status, break_amount)
 TTL report_date + INTERVAL 3 YEAR
 SETTINGS index_granularity = 8192;
 

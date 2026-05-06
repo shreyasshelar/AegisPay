@@ -10,8 +10,6 @@
 # pointing at the ports below, or run the full backend with:
 #   mvn -pl services/user-service spring-boot:run
 
-version: "3.9"
-
 services:
 
   # ── PostgreSQL 16 ────────────────────────────────────────────────────────────
@@ -159,11 +157,11 @@ services:
       - clickhouse_data:/var/lib/clickhouse
       - ./infra/clickhouse/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8123/ping | grep -q Ok"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8123/ping | grep -q Ok"]
       interval: 15s
       timeout: 5s
-      retries: 10
-      start_period: 30s
+      retries: 15
+      start_period: 520s
     ulimits:
       nofile:
         soft: 262144

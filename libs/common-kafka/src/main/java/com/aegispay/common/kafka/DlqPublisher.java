@@ -30,11 +30,14 @@ public class DlqPublisher {
 
     private final KafkaTemplate<String, String> kafkaTemplate;
 
-    public void publishToDlq(ConsumerRecord<String, String> failedRecord, Exception cause) {
+    public void publishToDlq(ConsumerRecord<?, ?> failedRecord, Exception cause) {
         String dlqTopic = KafkaTopics.dlq(failedRecord.topic());
 
+        String key   = failedRecord.key()   != null ? failedRecord.key().toString()   : null;
+        String value = failedRecord.value() != null ? failedRecord.value().toString() : null;
+
         ProducerRecord<String, String> dlqRecord =
-                new ProducerRecord<>(dlqTopic, failedRecord.key(), failedRecord.value());
+                new ProducerRecord<>(dlqTopic, key, value);
 
         for (Header h : failedRecord.headers()) {
             dlqRecord.headers().add(h);

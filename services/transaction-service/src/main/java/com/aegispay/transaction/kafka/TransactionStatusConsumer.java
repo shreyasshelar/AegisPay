@@ -48,7 +48,7 @@ public class TransactionStatusConsumer {
         groupId = "transaction-service-status-consumer"
     )
     @Transactional
-    public void handle(ConsumerRecord<String, String> record) {
+    public void handle(ConsumerRecord<String, String> record) throws Exception {
         String topic = record.topic();
         String payload = record.value();
 
