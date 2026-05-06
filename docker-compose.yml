@@ -23,7 +23,7 @@ services:
       POSTGRES_PASSWORD: aegispay_dev
       POSTGRES_DB: aegispay
     ports:
-      - "5433:5432"   # 5433 on host → avoids conflict with any local Postgres on 5432
+      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./infra/local/postgres/init:/docker-entrypoint-initdb.d:ro
