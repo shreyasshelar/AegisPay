@@ -15,15 +15,15 @@ name: CI — Android
 on:
   push:
     branches:
-      - feature/monorepo
-      - feature/cost-optimised
+      - main
+      - dev
     paths:
       - 'apps/android/**'
       - '.github/workflows/ci-android.yml'
   pull_request:
     branches:
-      - feature/monorepo
-      - feature/cost-optimised
+      - main
+      - dev
     paths:
       - 'apps/android/**'
       - '.github/workflows/ci-android.yml'
