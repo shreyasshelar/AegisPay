@@ -2,11 +2,11 @@
 # AegisPay — Smart Java CI
 #
 # Change-detection strategy:
-#   • Runs on every push / PR to feature/monorepo OR feature/cost-optimised
+#   • Runs on every push / PR to main OR dev
 #   • dorny/paths-filter detects WHICH services changed
 #   • Each service job only runs if its own files changed, OR if shared libs
 #     changed (because every service imports common-*)
-#   • Docker images are built & pushed to GHCR only on push to feature/monorepo
+#   • Docker images are built & pushed to GHCR only on push to main
 #     (prod branch); dev branch skips Docker push to save registry costs
 #   • data-pipeline and reconciliation-service included as Phase 11 services
 # ─────────────────────────────────────────────────────────────────────────────
@@ -15,8 +15,8 @@ name: CI — Java (Smart)
 on:
   push:
     branches:
-      - feature/monorepo
-      - feature/cost-optimised
+      - main
+      - dev
     paths:
       - 'libs/**'
       - 'services/**'
@@ -24,8 +24,8 @@ on:
       - '.github/workflows/ci-java.yml'
   pull_request:
     branches:
-      - feature/monorepo
-      - feature/cost-optimised
+      - main
+      - dev
     paths:
       - 'libs/**'
       - 'services/**'
@@ -357,7 +357,7 @@ jobs:
     needs: build-api-gateway
     if: |
       github.event_name == 'push' &&
-      github.ref == 'refs/heads/feature/monorepo' &&
+      github.ref == 'refs/heads/main' &&
       needs.build-api-gateway.result == 'success'
     permissions: { contents: read, packages: write }
     steps:
@@ -390,7 +390,7 @@ jobs:
     name: Docker — user-service
     runs-on: ubuntu-latest
     needs: build-user-service
-    if: github.event_name == 'push' && github.ref == 'refs/heads/feature/monorepo' && needs.build-user-service.result == 'success'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.build-user-service.result == 'success'
     permissions: { contents: read, packages: write }
     steps:
       - uses: actions/checkout@v4
@@ -416,7 +416,7 @@ jobs:
     name: Docker — transaction-service
     runs-on: ubuntu-latest
     needs: build-transaction-service
-    if: github.event_name == 'push' && github.ref == 'refs/heads/feature/monorepo' && needs.build-transaction-service.result == 'success'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.build-transaction-service.result == 'success'
     permissions: { contents: read, packages: write }
     steps:
       - uses: actions/checkout@v4
@@ -442,7 +442,7 @@ jobs:
     name: Docker — ledger-service
     runs-on: ubuntu-latest
     needs: build-ledger-service
-    if: github.event_name == 'push' && github.ref == 'refs/heads/feature/monorepo' && needs.build-ledger-service.result == 'success'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.build-ledger-service.result == 'success'
     permissions: { contents: read, packages: write }
     steps:
       - uses: actions/checkout@v4
@@ -468,7 +468,7 @@ jobs:
     name: Docker — payment-orchestrator
     runs-on: ubuntu-latest
     needs: build-payment-orchestrator
-    if: github.event_name == 'push' && github.ref == 'refs/heads/feature/monorepo' && needs.build-payment-orchestrator.result == 'success'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.build-payment-orchestrator.result == 'success'
     permissions: { contents: read, packages: write }
     steps:
       - uses: actions/checkout@v4
@@ -494,7 +494,7 @@ jobs:
     name: Docker — risk-engine
     runs-on: ubuntu-latest
     needs: build-risk-engine
-    if: github.event_name == 'push' && github.ref == 'refs/heads/feature/monorepo' && needs.build-risk-engine.result == 'success'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.build-risk-engine.result == 'success'
     permissions: { contents: read, packages: write }
     steps:
       - uses: actions/checkout@v4
@@ -520,7 +520,7 @@ jobs:
     name: Docker — notification-service
     runs-on: ubuntu-latest
     needs: build-notification-service
-    if: github.event_name == 'push' && github.ref == 'refs/heads/feature/monorepo' && needs.build-notification-service.result == 'success'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.build-notification-service.result == 'success'
     permissions: { contents: read, packages: write }
     steps:
       - uses: actions/checkout@v4
@@ -546,7 +546,7 @@ jobs:
     name: Docker — ai-platform
     runs-on: ubuntu-latest
     needs: build-ai-platform
-    if: github.event_name == 'push' && github.ref == 'refs/heads/feature/monorepo' && needs.build-ai-platform.result == 'success'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.build-ai-platform.result == 'success'
     permissions: { contents: read, packages: write }
     steps:
       - uses: actions/checkout@v4
@@ -572,7 +572,7 @@ jobs:
     name: Docker — reconciliation-service
     runs-on: ubuntu-latest
     needs: build-reconciliation-service
-    if: github.event_name == 'push' && github.ref == 'refs/heads/feature/monorepo' && needs.build-reconciliation-service.result == 'success'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.build-reconciliation-service.result == 'success'
     permissions: { contents: read, packages: write }
     steps:
       - uses: actions/checkout@v4
@@ -598,7 +598,7 @@ jobs:
     name: Docker — data-pipeline
     runs-on: ubuntu-latest
     needs: build-data-pipeline
-    if: github.event_name == 'push' && github.ref == 'refs/heads/feature/monorepo' && needs.build-data-pipeline.result == 'success'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.build-data-pipeline.result == 'success'
     permissions: { contents: read, packages: write }
     steps:
       - uses: actions/checkout@v4
@@ -624,7 +624,7 @@ jobs:
   update-helm-tags:
     name: Update Helm Image Tags
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/feature/monorepo'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs:
       - docker-api-gateway
       - docker-user-service
@@ -639,7 +639,7 @@ jobs:
     # Run even if some docker jobs were skipped (service didn't change)
     if: |
       github.event_name == 'push' &&
-      github.ref == 'refs/heads/feature/monorepo' &&
+      github.ref == 'refs/heads/main' &&
       (
         needs.docker-api-gateway.result == 'success' ||
         needs.docker-user-service.result == 'success' ||
