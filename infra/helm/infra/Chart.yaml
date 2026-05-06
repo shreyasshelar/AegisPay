@@ -27,11 +27,8 @@ dependencies:
     alias: redis
     condition: redis.enabled
 
-  - name: kafka
-    repository: https://charts.bitnami.com/bitnami
-    version: "29.x.x"
-    alias: kafka
-    condition: kafka.enabled
+  # kafka: removed Bitnami dependency — paywalled on Docker Hub.
+  # Replaced with custom templates in templates/kafka/ using apache/kafka:3.7.0 (free, ASF).
 
   - name: keycloak
     repository: https://charts.bitnami.com/bitnami

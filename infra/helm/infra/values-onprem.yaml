@@ -116,21 +116,27 @@ redis:
       enabled: true
 
 # ── Kafka ─────────────────────────────────────────────────────────────────────
+# Uses custom templates (templates/kafka/) with apache/kafka:3.7.0 (free, ASF).
+# Bitnami Kafka chart was removed — it pulls a commercial Docker Hub image.
 kafka:
   enabled: true
 
-  # KRaft mode — no ZooKeeper
-  kraft:
-    enabled: true
+  image:
+    tag: "3.7.0"    # apache/kafka tag — update here to upgrade
 
-  # Single node — replication factor 1 everywhere
-  # (data loss on pod crash is acceptable for dev branch)
-  replicaCount: 1
+  # Fixed cluster ID ensures PVC data survives pod restarts without re-formatting
+  clusterId: "MkU3OEVBNTcwNTJENDM2Qk"
+
+  # Topic defaults — single-node safe
+  numPartitions: 3
+  logRetentionHours: 168
 
   persistence:
-    enabled: true
     storageClass: local-path
     size: 15Gi
+
+  # JVM heap tuned down for k3s single-node
+  heapOpts: "-Xmx512m -Xms256m"
 
   resources:
     requests:
@@ -139,30 +145,6 @@ kafka:
     limits:
       cpu: 1000m
       memory: 1Gi
-
-  # JVM heap tuned down from default 1G for single-node on-prem
-  heapOpts: "-Xmx512m -Xms256m"
-
-  # Topic auto-creation with single-node safe defaults
-  extraConfig: |
-    default.replication.factor=1
-    min.insync.replicas=1
-    offsets.topic.replication.factor=1
-    transaction.state.log.replication.factor=1
-    transaction.state.log.min.isr=1
-    log.retention.hours=168
-
-  # Expose on cluster-internal port only
-  service:
-    type: ClusterIP
-
-  metrics:
-    kafka:
-      enabled: true
-      serviceMonitor:
-        enabled: true
-    jmx:
-      enabled: true
 
 # ── Keycloak ──────────────────────────────────────────────────────────────────
 keycloak:

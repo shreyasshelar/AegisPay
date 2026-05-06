@@ -1,0 +1,22 @@
+{{- if .Values.kafka.enabled }}
+# ClusterIP service — used by all AegisPay services to produce/consume messages.
+# Service DNS: kafka.<namespace>.svc.cluster.local:9092
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka
+  namespace: {{ .Values.global.namespace | default .Release.Namespace }}
+  labels:
+    app: kafka
+    app.kubernetes.io/name: kafka
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  type: ClusterIP
+  selector:
+    app: kafka
+  ports:
+    - name: client
+      port: 9092
+      targetPort: 9092
+      protocol: TCP
+{{- end }}
