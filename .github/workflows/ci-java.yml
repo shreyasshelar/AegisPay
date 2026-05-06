@@ -2,7 +2,7 @@
 # AegisPay — Smart Java CI
 #
 # Change-detection strategy:
-#   • Runs on every push / PR to main OR dev
+#   • Runs on direct push to main OR dev only (no PR triggers)
 #   • dorny/paths-filter detects WHICH services changed
 #   • Each service job only runs if its own files changed, OR if shared libs
 #     changed (because every service imports common-*)
@@ -22,14 +22,6 @@ on:
       - 'services/**'
       - 'pom.xml'
       - '.github/workflows/ci-java.yml'
-  pull_request:
-    branches:
-      - main
-      - dev
-    paths:
-      - 'libs/**'
-      - 'services/**'
-      - 'pom.xml'
 
 env:
   JAVA_VERSION: "21"
