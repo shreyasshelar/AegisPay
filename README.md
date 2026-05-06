@@ -841,14 +841,14 @@ AegisPay maintains three long-lived branches targeting different deployment envi
 
 | Branch | Purpose | Infra cost | CD target |
 |---|---|---|---|
-| `feat/monorepo-restructure` | **Production-grade** — AWS EKS, managed Kafka (MSK), RDS, ElastiCache, Vault Agent Injector, full resource limits, replicas ≥ 2 for all services | High | ArgoCD → prod EKS cluster |
-| `feat/cost-optimised-onprem` | **Dev / on-prem** — k3s single-node, Kafka in-cluster, Postgres + Redis in-cluster, OpenRouter API (free tier AI), replicas = 1, reduced resource requests | Low | ArgoCD → `app-onprem.yaml` watches `dev` branch |
+| `main` | **Production-grade** — AWS EKS, managed Kafka (MSK), RDS, ElastiCache, Vault Agent Injector, full resource limits, replicas ≥ 2 for all services | High | ArgoCD → prod EKS cluster |
+| `dev` | **Dev / on-prem** — k3s single-node, Kafka in-cluster, Postgres + Redis in-cluster, OpenRouter API (free tier AI), replicas = 1, reduced resource requests | Low | ArgoCD → `app-onprem.yaml` watches `dev` branch |
 | `feat/data-engineering` | Source branch for Phase 11 — merged into both above | — | (merged, no direct CD) |
 
 ### What differs between the two runnable branches
 
 <details>
-<summary><b>feat/monorepo-restructure (prod)</b></summary>
+<summary><b>main (prod)</b></summary>
 
 ```yaml
 # infra/helm/aegispay/values.yaml defaults
@@ -864,7 +864,7 @@ global:
 
 **Running on prod branch locally** — use `values-dev.yaml` overrides:
 ```bash
-git checkout feat/monorepo-restructure
+git checkout main
 docker compose up -d          # starts all infra including ClickHouse + Superset
 ./mvnw clean install -DskipTests -pl libs/common-domain,libs/common-security,libs/common-kafka,libs/common-observability
 # Then run individual services as described in Step 5 above
@@ -884,7 +884,7 @@ bash infra/vault/init.sh prod
 </details>
 
 <details>
-<summary><b>feat/cost-optimised-onprem (dev / k3s)</b></summary>
+<summary><b>dev (dev / k3s)</b></summary>
 
 ```yaml
 # infra/helm/aegispay/values-dev.yaml overrides
@@ -899,7 +899,7 @@ global:
 
 **Running on on-prem branch locally** — identical docker-compose, just different env vars:
 ```bash
-git checkout feat/cost-optimised-onprem
+git checkout dev
 docker compose up -d          # same stack, same ports
 # Set OPENROUTER_API_KEY instead of ANTHROPIC_API_KEY for AI Platform
 OPENROUTER_API_KEY=sk-or-... \
@@ -919,7 +919,7 @@ bash infra/vault/init.sh
 
 **ArgoCD on-prem deployment**:
 ```bash
-# Apply the ArgoCD application (watches feat/cost-optimised-onprem branch)
+# Apply the ArgoCD application (watches dev branch)
 kubectl apply -f infra/argocd/app-onprem.yaml
 # ArgoCD auto-syncs on every push to the branch
 ```
@@ -1016,7 +1016,7 @@ AegisPay/                              ← single GitHub repository
 │   │   ├── values-dev.yaml            On-prem Prometheus + Grafana config
 │   │   └── values-prod.yaml           Prod (30d retention, gp3, Slack + Gmail alerts)
 │   └── argocd/                        ArgoCD ApplicationSet (dev / staging / prod)
-│       └── app-onprem.yaml            Watches feat/cost-optimised-onprem branch
+│       └── app-onprem.yaml            Watches dev branch
 │
 ├── docs/adr/                          Architecture Decision Records
 │   ├── 001-saga-orchestration.md
@@ -1091,7 +1091,7 @@ AegisPay/                              ← single GitHub repository
 - [x] **Fraud velocity streaming** — Kafka Streams tumbling windows, ClickHouseSink batch flush, pipeline health endpoint
 - [x] **ClickHouse analytics schema** — 4 MergeTree tables + 3 Materialized Views, 2-3 year TTL
 - [x] **Apache Superset** — docker-compose integrated, pre-wired to ClickHouse, Superset config with Redis cache + SMTP alerts
-- [x] **Cost-optimised on-prem stack** — k3s `feat/cost-optimised-onprem` branch (1 replica, 256Mi, OpenRouter AI, no cloud costs)
+- [x] **Cost-optimised on-prem stack** — k3s `dev` branch (1 replica, 256Mi, OpenRouter AI, no cloud costs)
 
 **Planned 🔜**
 - [ ] **Multi-tenancy** — `tenantId` propagation through JWT claims → PostgreSQL row-level security per tenant
