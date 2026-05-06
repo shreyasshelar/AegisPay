@@ -15,13 +15,6 @@ on:
     paths:
       - 'apps/ios/**'
       - '.github/workflows/ci-ios.yml'
-  pull_request:
-    branches:
-      - main
-      - dev
-    paths:
-      - 'apps/ios/**'
-      - '.github/workflows/ci-ios.yml'
 
 jobs:
   # ── Build & Test ────────────────────────────────────────────────────────────
