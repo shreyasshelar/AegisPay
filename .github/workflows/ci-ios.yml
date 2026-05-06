@@ -2,7 +2,7 @@
 # AegisPay — iOS CI
 #
 # Triggered ONLY when iOS source files change (paths filter).
-# Runs on both feature/monorepo (prod) and feature/cost-optimised (dev).
+# Runs on both main (prod) and dev (dev).
 # Requires macOS runner (Xcode 15, Apple Silicon).
 # ─────────────────────────────────────────────────────────────────────────────
 name: CI — iOS App
@@ -10,15 +10,15 @@ name: CI — iOS App
 on:
   push:
     branches:
-      - feature/monorepo
-      - feature/cost-optimised
+      - main
+      - dev
     paths:
       - 'apps/ios/**'
       - '.github/workflows/ci-ios.yml'
   pull_request:
     branches:
-      - feature/monorepo
-      - feature/cost-optimised
+      - main
+      - dev
     paths:
       - 'apps/ios/**'
       - '.github/workflows/ci-ios.yml'
