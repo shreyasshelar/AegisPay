@@ -1,0 +1,37 @@
+apiVersion: v2
+name: aegispay-infra
+description: >
+  Umbrella Helm chart for all AegisPay backing services.
+  Used on on-prem k3s environments (dev branch).
+  AWS-managed equivalents (RDS, MSK, ElastiCache, DocumentDB) are used in prod.
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+
+dependencies:
+  - name: postgresql
+    repository: https://charts.bitnami.com/bitnami
+    version: "15.x.x"
+    alias: postgresql
+    condition: postgresql.enabled
+
+  - name: mongodb
+    repository: https://charts.bitnami.com/bitnami
+    version: "15.x.x"
+    alias: mongodb
+    condition: mongodb.enabled
+
+  - name: redis
+    repository: https://charts.bitnami.com/bitnami
+    version: "19.x.x"
+    alias: redis
+    condition: redis.enabled
+
+  # kafka: removed Bitnami dependency — paywalled on Docker Hub.
+  # Replaced with custom templates in templates/kafka/ using apache/kafka:3.7.0 (free, ASF).
+
+  - name: keycloak
+    repository: https://charts.bitnami.com/bitnami
+    version: "21.x.x"
+    alias: keycloak
+    condition: keycloak.enabled
