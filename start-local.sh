@@ -1,123 +1,128 @@
 #!/bin/bash
+# Compatible with macOS default Bash 3.2 (no associative arrays)
 set -e
 
-# ─── Colour helpers ───────────────────────────────────────────────────────────
 GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
-ok()   { echo -e "${GREEN}✅ $*${NC}"; }
-warn() { echo -e "${YELLOW}⚠️  $*${NC}"; }
-err()  { echo -e "${RED}❌ $*${NC}"; }
+ok()   { echo -e "${GREEN}✅  $*${NC}"; }
+warn() { echo -e "${YELLOW}⚠️   $*${NC}"; }
 step() { echo -e "\n${GREEN}▶ $*${NC}"; }
 
-# ─── Port conflict check ──────────────────────────────────────────────────────
+port_name() {
+  case $1 in
+    5432) echo "PostgreSQL" ;;
+    6379) echo "Redis" ;;
+    27017) echo "MongoDB" ;;
+    9094) echo "Kafka" ;;
+    8180) echo "Keycloak" ;;
+    8123) echo "ClickHouse" ;;
+    8088) echo "Superset / ai-platform" ;;
+    8090) echo "Kafka UI" ;;
+    8080) echo "API Gateway" ;;
+    8081) echo "User Service" ;;
+    8082) echo "Transaction Service" ;;
+    8083) echo "Ledger Service" ;;
+    8084) echo "Payment Orchestrator" ;;
+    8085) echo "Risk Engine" ;;
+    8086) echo "Notification Service" ;;
+    8087) echo "Reconciliation Service" ;;
+    8089) echo "Data Pipeline" ;;
+    3000) echo "Web App" ;;
+    *) echo "Unknown" ;;
+  esac
+}
+
+# ── Port conflict check ────────────────────────────────────────────────────────
 step "Checking for port conflicts..."
 CONFLICT=0
-declare -A PORT_NAMES=(
-  [5433]="PostgreSQL (Docker)"
-  [6379]="Redis"
-  [27017]="MongoDB"
-  [9094]="Kafka"
-  [8180]="Keycloak"
-  [8123]="ClickHouse"
-  [8088]="Superset"
-  [8090]="Kafka UI"
-  [8080]="API Gateway"
-  [8081]="User Service"
-  [8082]="Transaction Service"
-  [8083]="Ledger Service"
-  [8084]="Payment Orchestrator"
-  [8085]="Risk Engine"
-  [8086]="Notification Service"
-  [8087]="Reconciliation Service"
-  [8089]="Data Pipeline"
-  [3000]="Web App"
-)
-for port in "${!PORT_NAMES[@]}"; do
+INFRA_PORTS="5432 6379 27017 9094 8180 8123 8088 8090"
+SVC_PORTS="8080 8081 8082 8083 8084 8085 8086 8087 8089 3000"
+
+for port in $INFRA_PORTS $SVC_PORTS; do
   if lsof -ti:$port > /dev/null 2>&1; then
-    warn "Port $port already in use → ${PORT_NAMES[$port]}"
+    warn "Port $port in use → $(port_name $port)"
     CONFLICT=1
   fi
 done
+
 if [ "$CONFLICT" = "1" ]; then
   echo ""
-  warn "Fix port conflicts before continuing. Common causes:"
-  echo "  Local Postgres on 5432/5433: sudo launchctl stop com.edb.launchd.postgresql-16"
-  echo "  Leftover containers:        docker compose down"
-  echo "  Other services:             lsof -ti:<port> | xargs kill -9"
+  warn "Tip — stop local Postgres if that's the issue:"
+  echo "  sudo launchctl stop com.edb.launchd.postgresql-16"
+  echo "  (or: brew services stop postgresql@16)"
   echo ""
-  read -p "Continue anyway? [y/N] " -n 1 -r; echo
+  printf "Continue anyway? [y/N] "; read -r REPLY; echo
   [[ $REPLY =~ ^[Yy]$ ]] || exit 1
 fi
+ok "Port check done"
 
-# ─── Infrastructure ───────────────────────────────────────────────────────────
-step "Starting infrastructure (Postgres · Redis · Mongo · Kafka · Keycloak · ClickHouse · Superset)..."
+# ── Infrastructure ─────────────────────────────────────────────────────────────
+step "Starting infrastructure..."
 docker compose up -d
 
-step "Waiting for Keycloak realm to be ready (~60s)..."
+step "Waiting for Keycloak realm to be ready (polling /realms/aegispay)..."
 for i in $(seq 1 30); do
   if curl -sf http://localhost:8180/realms/aegispay > /dev/null 2>&1; then
-    ok "Keycloak ready"
+    ok "Keycloak ready (attempt $i)"
     break
   fi
-  printf "  attempt $i/30...\r"
-  sleep 2
+  printf "  waiting... %d/30\r" "$i"
+  sleep 3
 done
-curl -sf http://localhost:8180/realms/aegispay > /dev/null || warn "Keycloak not ready — services may fail auth on first request"
+curl -sf http://localhost:8180/realms/aegispay > /dev/null || warn "Keycloak not ready yet — auth may fail on first request"
 
-# ─── Java shared libs ─────────────────────────────────────────────────────────
+# ── Java shared libs ───────────────────────────────────────────────────────────
 step "Building shared Java libraries..."
 mvn clean install \
   -pl libs/common-domain,libs/common-security,libs/common-kafka,libs/common-observability \
   -DskipTests -q
 ok "Shared libs installed"
 
-# ─── Backend services ─────────────────────────────────────────────────────────
-step "Starting backend services (logs in /tmp/aegispay-<service>.log)..."
-SERVICES=(
-  api-gateway
-  user-service
-  transaction-service
-  ledger-service
-  payment-orchestrator
-  risk-engine
-  notification-service
-  ai-platform
-  data-pipeline
-  reconciliation-service
-)
-for svc in "${SERVICES[@]}"; do
+# ── Backend services ───────────────────────────────────────────────────────────
+step "Starting backend services..."
+SERVICES="api-gateway user-service transaction-service ledger-service \
+payment-orchestrator risk-engine notification-service \
+ai-platform data-pipeline reconciliation-service"
+
+for svc in $SERVICES; do
   mvn -pl services/$svc spring-boot:run > /tmp/aegispay-$svc.log 2>&1 &
-  echo "  ↳ $svc  (PID $!)"
+  echo "  ↳ $svc  (PID $!  |  log: /tmp/aegispay-$svc.log)"
 done
 
-step "Waiting 20s for services to start..."
-sleep 20
+step "Waiting 25s for services to start..."
+sleep 25
 
-step "Health check — all backend services:"
-declare -A SERVICE_PORTS=(
-  [api-gateway]=8080
-  [user-service]=8081
-  [transaction-service]=8082
-  [ledger-service]=8083
-  [payment-orchestrator]=8084
-  [risk-engine]=8085
-  [notification-service]=8086
-  [reconciliation-service]=8087
-  [ai-platform]=8088
-  [data-pipeline]=8089
-)
+step "Health check..."
+# port:service pairs as flat list — Bash 3.2 compatible
+CHECKS="8080:api-gateway 8081:user-service 8082:transaction-service \
+        8083:ledger-service 8084:payment-orchestrator 8085:risk-engine \
+        8086:notification-service 8087:reconciliation-service \
+        8089:data-pipeline"
+
 ALL_OK=1
-for svc in "${!SERVICE_PORTS[@]}"; do
-  port=${SERVICE_PORTS[$svc]}
-  status=$(curl -sf -o /dev/null -w "%{http_code}" http://localhost:$port/actuator/health 2>/dev/null || echo "DOWN")
+for pair in $CHECKS; do
+  port="${pair%%:*}"
+  svc="${pair##*:}"
+  status=$(curl -sf -o /dev/null -w "%{http_code}" \
+    "http://localhost:$port/actuator/health" 2>/dev/null || echo "DOWN")
   if [ "$status" = "200" ]; then
-    ok "$svc → http://localhost:$port (200)"
+    ok "$svc :$port"
   else
-    warn "$svc → http://localhost:$port ($status) — check /tmp/aegispay-$svc.log"
+    warn "$svc :$port → $status  (tail: /tmp/aegispay-$svc.log)"
     ALL_OK=0
   fi
 done
 
-# ─── Web app ─────────────────────────────────────────────────────────────────
+# ai-platform uses same port as Superset in Docker (8088) — check separately
+status=$(curl -sf -o /dev/null -w "%{http_code}" \
+  "http://localhost:8088/actuator/health" 2>/dev/null || echo "DOWN")
+if [ "$status" = "200" ]; then
+  ok "ai-platform :8088"
+else
+  warn "ai-platform :8088 → $status  (tail: /tmp/aegispay-ai-platform.log)"
+  ALL_OK=0
+fi
+
+# ── Web app ────────────────────────────────────────────────────────────────────
 step "Starting web app..."
 if [ ! -f apps/web/.env.local ]; then
   cp apps/web/.env.local.example apps/web/.env.local
@@ -127,26 +132,24 @@ if [ ! -f apps/web/.env.local ]; then
 fi
 npm install --silent --prefer-offline
 npm run dev --workspace=apps/web > /tmp/aegispay-web.log 2>&1 &
-echo "  ↳ Web app (PID $!) → /tmp/aegispay-web.log"
+echo "  ↳ Web app (PID $!  |  log: /tmp/aegispay-web.log)"
 
-# ─── Summary ─────────────────────────────────────────────────────────────────
+# ── Summary ────────────────────────────────────────────────────────────────────
 echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 if [ "$ALL_OK" = "1" ]; then
-  ok "Everything is up!"
+  ok "All services healthy!"
 else
-  warn "Some services are still starting — check logs above"
+  warn "Some services still starting — check logs above"
 fi
 echo ""
-echo "  🌐 Web app       → http://localhost:3000"
-echo "  🔌 API Gateway   → http://localhost:8080/actuator/health"
-echo "  🔑 Keycloak      → http://localhost:8180  (admin/admin)"
-echo "  📨 Kafka UI      → http://localhost:8090"
-echo "  📊 Superset      → http://localhost:8088  (admin/admin)"
-echo "  🐘 PostgreSQL    → localhost:5433         (aegispay/aegispay_dev)"
+echo "  🌐  Web app      → http://localhost:3000"
+echo "  🔌  API Gateway  → http://localhost:8080/actuator/health"
+echo "  🔑  Keycloak     → http://localhost:8180  (admin / admin)"
+echo "  📨  Kafka UI     → http://localhost:8090"
+echo "  📊  Superset     → http://localhost:8088  (admin / admin)"
+echo "  🐘  PostgreSQL   → localhost:5432         (aegispay / aegispay_dev)"
 echo ""
-echo "  📋 Service logs  → /tmp/aegispay-<service>.log"
-echo "  📋 Web log       → /tmp/aegispay-web.log"
-echo ""
-echo "  To stop: docker compose down && pkill -f 'spring-boot:run'"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "  Stop everything:"
+echo "    docker compose down && pkill -f 'spring-boot:run'"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
