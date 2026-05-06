@@ -1,9 +1,8 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # AegisPay — Android CI
 #
-# Triggered ONLY when Android source files change (paths filter).
-# Works on both feature branches — no branch restriction needed since
-# the paths filter already limits scope.
+# Triggered ONLY on direct push to main or dev when Android files change.
+# No pull_request trigger — CI runs only after code lands on main/dev.
 #
 # Gradle wrapper fix:
 #   The gradlew script is not committed. We install Gradle via
@@ -14,13 +13,6 @@ name: CI — Android
 
 on:
   push:
-    branches:
-      - main
-      - dev
-    paths:
-      - 'apps/android/**'
-      - '.github/workflows/ci-android.yml'
-  pull_request:
     branches:
       - main
       - dev
@@ -55,7 +47,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: ${{ env.GRADLE_VERSION }}
-          cache-read-only: ${{ github.event_name == 'pull_request' }}
+          cache-read-only: false
 
       - name: Generate Gradle wrapper
         run: gradle wrapper --gradle-version ${{ env.GRADLE_VERSION }}
@@ -94,7 +86,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: ${{ env.GRADLE_VERSION }}
-          cache-read-only: ${{ github.event_name == 'pull_request' }}
+          cache-read-only: false
 
       - name: Generate Gradle wrapper
         run: gradle wrapper --gradle-version ${{ env.GRADLE_VERSION }}
