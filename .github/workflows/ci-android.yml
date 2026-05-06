@@ -20,13 +20,6 @@ on:
     paths:
       - 'apps/android/**'
       - '.github/workflows/ci-android.yml'
-  pull_request:
-    branches:
-      - main
-      - dev
-    paths:
-      - 'apps/android/**'
-      - '.github/workflows/ci-android.yml'
 
 env:
   GRADLE_VERSION: "8.7"
@@ -55,7 +48,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: ${{ env.GRADLE_VERSION }}
-          cache-read-only: ${{ github.event_name == 'pull_request' }}
+          cache-read-only: false
 
       - name: Generate Gradle wrapper
         run: gradle wrapper --gradle-version ${{ env.GRADLE_VERSION }}
@@ -94,7 +87,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: ${{ env.GRADLE_VERSION }}
-          cache-read-only: ${{ github.event_name == 'pull_request' }}
+          cache-read-only: false
 
       - name: Generate Gradle wrapper
         run: gradle wrapper --gradle-version ${{ env.GRADLE_VERSION }}

@@ -22,14 +22,6 @@ on:
       - 'services/**'
       - 'pom.xml'
       - '.github/workflows/ci-java.yml'
-  pull_request:
-    branches:
-      - main
-      - dev
-    paths:
-      - 'libs/**'
-      - 'services/**'
-      - 'pom.xml'
 
 env:
   JAVA_VERSION: "21"
