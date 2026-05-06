@@ -591,7 +591,9 @@ cd AegisPay
 
 ### Step 2 — Start local infrastructure
 
-All infrastructure (Postgres, Redis, MongoDB, Kafka, Keycloak) runs via Docker Compose.
+> **Local development only.** Docker Compose is used here solely to spin up backing services (databases, Kafka, Keycloak) on your laptop. The actual application is deployed to **Kubernetes via Helm + ArgoCD** — see the [Branch Guide](#-branch-guide) for cluster deployment.
+
+All backing services (Postgres, Redis, MongoDB, Kafka, Keycloak, ClickHouse, Superset) run locally via Docker Compose:
 
 ```bash
 docker compose up -d
@@ -826,12 +828,19 @@ npm run test
 
 ---
 
-### Stopping everything
+### Stopping local dev infrastructure
 
 ```bash
 docker compose down          # stop containers, keep volumes
 docker compose down -v       # stop containers AND delete all data (full reset)
 ```
+
+> **Kubernetes teardown** (cluster deployments use Helm, not Docker Compose):
+> ```bash
+> helm uninstall aegispay -n aegispay          # remove all services
+> helm uninstall aegispay-infra -n aegispay-infra  # remove Kafka/PG/Redis
+> kubectl delete namespace aegispay aegispay-infra  # delete namespaces
+> ```
 
 ---
 
@@ -862,10 +871,17 @@ global:
 # ANTHROPIC_API_KEY = production Claude API key
 ```
 
-**Running on prod branch locally** — use `values-dev.yaml` overrides:
+**Deploying to Kubernetes (primary method):**
 ```bash
 git checkout main
-docker compose up -d          # starts all infra including ClickHouse + Superset
+# ArgoCD auto-deploys on push — or force-sync manually:
+argocd app sync aegispay-prod --server $ARGOCD_SERVER
+```
+
+**Running locally for development** (backs services with Docker Compose; services via Maven):
+```bash
+git checkout main
+docker compose up -d          # local infra only (Postgres, Kafka, Redis, etc.)
 ./mvnw clean install -DskipTests -pl libs/common-domain,libs/common-security,libs/common-kafka,libs/common-observability
 # Then run individual services as described in Step 5 above
 ```
@@ -897,11 +913,18 @@ global:
 # STRIPE_SECRET_KEY = sk_test_... (test mode only)
 ```
 
-**Running on on-prem branch locally** — identical docker-compose, just different env vars:
+**Deploying to k3s (primary method):**
 ```bash
 git checkout dev
-docker compose up -d          # same stack, same ports
-# Set OPENROUTER_API_KEY instead of ANTHROPIC_API_KEY for AI Platform
+# ArgoCD on k3s auto-deploys on push — or force-sync:
+argocd app sync aegispay-onprem --server $ARGOCD_ONPREM_SERVER
+```
+
+**Running locally for development** (same Docker Compose infra, different env vars):
+```bash
+git checkout dev
+docker compose up -d          # local infra only — same stack, same ports
+# Use OpenRouter instead of Anthropic for cost-free local AI dev
 OPENROUTER_API_KEY=sk-or-... \
 ./mvnw -pl services/ai-platform spring-boot:run
 ```
@@ -1029,12 +1052,12 @@ AegisPay/                              ← single GitHub repository
 │   ├── ci-ios.yml                     Xcode build + unit tests
 │   ├── ci-android.yml                 Gradle build + instrumented tests
 │   ├── ci-java.yml                    Maven build matrix (libs first → 8 services in parallel)
-│   ├── cd-dev.yml                     Push to main → Docker image → yq patch → ArgoCD sync
+│   ├── cd-dev.yml                     Push to dev → build dev image → yq patch values-dev.yaml → ArgoCD k3s sync
 │   ├── cd-staging.yml                 On tag → staging deploy
 │   ├── cd-prod.yml                    Manual approval gate → prod deploy
 │   └── security-scan.yml              OWASP dep-check + Trivy image scan
 │
-├── docker-compose.yml                 ← Local dev stack (Postgres + Redis + Mongo + Kafka + Keycloak + ClickHouse + Superset)
+├── docker-compose.yml                 ← Local dev infra only — NOT used in Kubernetes deployment (Helm + ArgoCD handles that)
 ├── pom.xml                            Maven root (manages all Java modules)
 ├── package.json                       npm workspaces root
 ├── turbo.json                         Turborepo pipeline config
@@ -1090,7 +1113,7 @@ AegisPay/                              ← single GitHub repository
 - [x] **Settlement Reconciliation** — Spring Batch daily job, Stripe API pagination, 4 break types, REST API, ClickHouse write
 - [x] **Fraud velocity streaming** — Kafka Streams tumbling windows, ClickHouseSink batch flush, pipeline health endpoint
 - [x] **ClickHouse analytics schema** — 4 MergeTree tables + 3 Materialized Views, 2-3 year TTL
-- [x] **Apache Superset** — docker-compose integrated, pre-wired to ClickHouse, Superset config with Redis cache + SMTP alerts
+- [x] **Apache Superset** — Helm-deployed to Kubernetes; local dev via Docker Compose; pre-wired to ClickHouse, Superset config with Redis cache + SMTP alerts
 - [x] **Cost-optimised on-prem stack** — k3s `dev` branch (1 replica, 256Mi, OpenRouter AI, no cloud costs)
 
 **Planned 🔜**
