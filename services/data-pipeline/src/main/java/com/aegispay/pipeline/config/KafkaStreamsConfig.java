@@ -78,10 +78,12 @@ public class KafkaStreamsConfig {
      */
     @Bean
     public StreamsBuilderFactoryBeanConfigurer streamsBuilderFactoryBeanConfigurer() {
-        return factoryBean -> factoryBean.setUncaughtExceptionHandler(exception -> {
-            log.error("Uncaught exception in Kafka Streams thread — replacing thread. Cause: {}",
-                    exception.getMessage(), exception);
-            return StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.REPLACE_THREAD;
-        });
+        return factoryBean -> factoryBean.setKafkaStreamsCustomizer(kafkaStreams ->
+                kafkaStreams.setUncaughtExceptionHandler(exception -> {
+                    log.error("Uncaught exception in Kafka Streams thread — replacing thread. Cause: {}",
+                            exception.getMessage(), exception);
+                    return StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.REPLACE_THREAD;
+                })
+        );
     }
 }

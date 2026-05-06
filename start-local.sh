@@ -2,6 +2,15 @@
 # Compatible with macOS default Bash 3.2 (no associative arrays)
 set -e
 
+# ── Java 21 required — point Maven at the right JDK ───────────────────────────
+JAVA21_HOME=$(/usr/libexec/java_home -v 21 2>/dev/null || true)
+if [ -n "$JAVA21_HOME" ]; then
+  export JAVA_HOME="$JAVA21_HOME"
+else
+  echo "⚠️  Java 21 not found via /usr/libexec/java_home. Install from https://www.oracle.com/java/technologies/downloads/#java21"
+  echo "   Current java: $(java -version 2>&1 | head -1)"
+fi
+
 GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
 ok()   { echo -e "${GREEN}✅  $*${NC}"; }
 warn() { echo -e "${YELLOW}⚠️   $*${NC}"; }

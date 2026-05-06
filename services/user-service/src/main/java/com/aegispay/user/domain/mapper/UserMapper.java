@@ -11,7 +11,7 @@ public interface UserMapper {
 
     @Mapping(target = "email",  source = "email",  qualifiedByName = "maskEmail")
     @Mapping(target = "phone",  source = "phone",  qualifiedByName = "maskPhone")
-    @Mapping(target = "name",   expression = "java(buildName(user))")
+    @Mapping(target = "name",   expression = "java(UserMapper.buildName(user))")
     UserResponse toResponse(User user);
 
     @Named("buildName")

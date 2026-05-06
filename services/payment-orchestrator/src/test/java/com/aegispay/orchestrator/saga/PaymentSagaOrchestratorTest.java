@@ -2,7 +2,7 @@ package com.aegispay.orchestrator.saga;
 
 import com.aegispay.common.domain.enums.RiskDecision;
 import com.aegispay.common.domain.event.*;
-import com.aegispay.orchestrator.client.ExternalPaymentGatewayClient;
+import com.aegispay.orchestrator.client.StripePaymentGatewayClient;
 import com.aegispay.orchestrator.config.OrchestratorProperties;
 import com.aegispay.orchestrator.domain.entity.OutboxEntry;
 import com.aegispay.orchestrator.domain.entity.Saga;
@@ -35,7 +35,7 @@ class PaymentSagaOrchestratorTest {
     @Mock SagaRepository sagaRepository;
     @Mock SagaStepRepository stepRepository;
     @Mock OutboxEntryRepository outboxRepository;
-    @Mock ExternalPaymentGatewayClient gatewayClient;
+    @Mock StripePaymentGatewayClient gatewayClient;
 
     PaymentSagaOrchestrator orchestrator;
 

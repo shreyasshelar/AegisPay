@@ -7,7 +7,9 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.content.Media;
 import org.springframework.stereotype.Service;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.util.MimeType;
+import java.util.List;
 
 import java.util.Base64;
 
@@ -42,9 +44,9 @@ public class TamperingDetectionService {
 
         try {
             byte[] imageBytes = Base64.getDecoder().decode(base64ImageData);
-            Media imageMedia = new Media(MimeType.valueOf(mimeType), imageBytes);
+            Media imageMedia = new Media(MimeType.valueOf(mimeType), new ByteArrayResource(imageBytes));
 
-            UserMessage userMessage = new UserMessage(SYSTEM_PROMPT, imageMedia);
+            UserMessage userMessage = UserMessage.builder().text(SYSTEM_PROMPT).media(List.of(imageMedia)).build();
 
             output = chatClientBuilder.build()
                     .prompt()
