@@ -1,8 +1,8 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# AegisPay — CD: Dev / Cost-Optimised (feature/cost-optimised)
+# AegisPay — CD: Dev / Cost-Optimised (dev)
 #
 # Triggered automatically after the Java CI completes successfully on
-# feature/cost-optimised.
+# dev.
 #
 # Key differences from prod CD:
 #   • Builds Docker images HERE (ci-java.yml on cost-optimised does NOT push)
@@ -12,13 +12,13 @@
 #   • Lighter resource requests (values-dev.yaml) — suitable for k3s
 #   • Uses OpenRouter AI instead of Anthropic direct API (cost saving)
 # ─────────────────────────────────────────────────────────────────────────────
-name: CD — Dev / Cost-Optimised (feature/cost-optimised)
+name: CD — Dev / Cost-Optimised (dev)
 
 on:
   workflow_run:
     workflows: ["CI — Java (Smart)"]
     types: [completed]
-    branches: [feature/cost-optimised]
+    branches: [dev]
 
   # Manual trigger for re-deploy or debugging
   workflow_dispatch:
@@ -78,7 +78,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: feature/cost-optimised
+          ref: dev
           fetch-depth: 0
 
       # If manual trigger with explicit service list, use that
@@ -152,7 +152,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: feature/cost-optimised
+          ref: dev
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
@@ -208,7 +208,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: feature/cost-optimised
+          ref: dev
           token: ${{ secrets.GIT_DEPLOY_TOKEN }}
           fetch-depth: 0
 
@@ -241,7 +241,7 @@ jobs:
           git add ${{ env.HELM_VALUES_FILE }}
           git diff --staged --quiet && echo "Nothing changed" && exit 0
           git commit -m "chore(cd/dev): deploy ${DEV_TAG} to k3s dev [skip ci]"
-          git push origin feature/cost-optimised
+          git push origin dev
 
   # ── Trigger ArgoCD sync on on-prem k3s cluster ─────────────────────────────
   argocd-sync:
@@ -296,6 +296,6 @@ jobs:
         run: |
           echo "## Dev Deployment Summary" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Tag**: \`${DEV_TAG}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Branch**: \`feature/cost-optimised\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Branch**: \`dev\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Services rebuilt**: \`${SERVICES}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Values file updated**: \`${{ env.HELM_VALUES_FILE }}\`" >> "$GITHUB_STEP_SUMMARY"
