@@ -136,7 +136,8 @@ class UserServiceTest {
         KycStatusResponse response = userService.submitKycDocument(
                 userId,
                 new KycDocumentUploadRequest("AADHAAR", "s3://bucket/doc.jpg"),
-                "ext-user-123");
+                "ext-user-123",
+                false);
 
         assertThat(response.kycStatus()).isEqualTo(KycStatus.DOCUMENT_SUBMITTED);
         verify(aiPlatformClient).submitKycDocument(any(), eq(userId.toString()));

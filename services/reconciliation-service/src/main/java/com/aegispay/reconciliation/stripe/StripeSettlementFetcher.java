@@ -60,7 +60,7 @@ public class StripeSettlementFetcher {
         List<StripeSettlementEntry> entries = new ArrayList<>();
         try {
             BalanceTransactionListParams params = BalanceTransactionListParams.builder()
-                    .setCreatedRange(BalanceTransactionListParams.Created.builder()
+                    .setCreated(BalanceTransactionListParams.Created.builder()
                             .setGte(createdAfter)
                             .setLt(createdBefore)
                             .build())
