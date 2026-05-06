@@ -1,8 +1,8 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# AegisPay — CD: Production (feature/monorepo)
+# AegisPay — CD: Production (main)
 #
 # Triggered automatically after the Java CI completes successfully on
-# feature/monorepo (images already pushed to GHCR by ci-java.yml).
+# main (images already pushed to GHCR by ci-java.yml).
 #
 # Also supports manual promotion via workflow_dispatch for a specific release tag.
 #
@@ -13,14 +13,14 @@
 #      OR manual sync gate (prod-style) depending on environment approval
 #   4. Post-deployment smoke test via ArgoCD health endpoint
 # ─────────────────────────────────────────────────────────────────────────────
-name: CD — Production (feature/monorepo)
+name: CD — Production (main)
 
 on:
   # Auto-trigger: Java CI green on prod branch
   workflow_run:
     workflows: ["CI — Java (Smart)"]
     types: [completed]
-    branches: [feature/monorepo]
+    branches: [main]
 
   # Manual: promote a specific git tag to production
   workflow_dispatch:
@@ -122,7 +122,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: feature/monorepo
+          ref: main
           token: ${{ secrets.GIT_DEPLOY_TOKEN }}
           fetch-depth: 0
 
@@ -165,7 +165,7 @@ jobs:
           git add ${{ env.HELM_VALUES_FILE }} ${{ env.ARGOCD_APP_FILE }}
           git diff --staged --quiet && echo "Nothing changed — already deployed" && exit 0
           git commit -m "chore(cd/prod): deploy ${SHA:0:12} to production [skip ci]"
-          git push origin feature/monorepo
+          git push origin main
 
       - name: Dry-run summary
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}

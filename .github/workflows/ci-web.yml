@@ -2,15 +2,15 @@
 # AegisPay — Web App CI
 #
 # Triggered ONLY when web app files change (paths filter).
-# Runs on both feature/monorepo (prod) and feature/cost-optimised (dev).
+# Runs on both main (prod) and dev (dev).
 # ─────────────────────────────────────────────────────────────────────────────
 name: CI — Web App
 
 on:
   push:
     branches:
-      - feature/monorepo
-      - feature/cost-optimised
+      - main
+      - dev
     paths:
       - 'apps/web/**'
       - 'packages/**'
@@ -19,8 +19,8 @@ on:
       - '.github/workflows/ci-web.yml'
   pull_request:
     branches:
-      - feature/monorepo
-      - feature/cost-optimised
+      - main
+      - dev
     paths:
       - 'apps/web/**'
       - 'packages/**'
@@ -155,12 +155,12 @@ jobs:
           path: apps/web/playwright-report
           retention-days: 7
 
-  # ── Docker Build (feature/monorepo push only) ───────────────────────────────
+  # ── Docker Build (main push only) ───────────────────────────────
   docker:
     name: Build & Push Web Docker Image
     runs-on: ubuntu-latest
     needs: [build, e2e]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/feature/monorepo'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       contents: read
       packages: write
