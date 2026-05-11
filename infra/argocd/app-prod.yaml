@@ -15,7 +15,7 @@ spec:
   project: aegispay
 
   source:
-    repoURL: https://github.com/aegispay-org/aegispay.git
+    repoURL: https://github.com/shreyasshelar/AegisPay.git
     # Prod tracks release tags only — never auto-deploys from main.
     # Update this value manually via cd-prod.yml when promoting a release.
     targetRevision: v0.0.0   # placeholder — overwritten by cd-prod.yml on every release

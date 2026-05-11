@@ -1,6 +1,6 @@
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
-CREATE TABLE accounts (
+CREATE TABLE IF NOT EXISTS accounts (
     id               UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id          UUID         NOT NULL,
     currency         VARCHAR(3)   NOT NULL,
@@ -13,10 +13,10 @@ CREATE TABLE accounts (
     CONSTRAINT chk_reserved_balance_non_negative  CHECK (reserved_balance  >= 0)
 );
 
-CREATE UNIQUE INDEX idx_accounts_user_currency ON accounts (user_id, currency);
-CREATE INDEX idx_accounts_user_id ON accounts (user_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_user_currency ON accounts (user_id, currency);
+CREATE INDEX        IF NOT EXISTS idx_accounts_user_id        ON accounts (user_id);
 
-CREATE TABLE ledger_entries (
+CREATE TABLE IF NOT EXISTS ledger_entries (
     id               UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
     account_id       UUID         NOT NULL REFERENCES accounts(id),
     transaction_id   UUID         NOT NULL,
@@ -28,11 +28,11 @@ CREATE TABLE ledger_entries (
     created_at       TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_ledger_entries_account_id     ON ledger_entries (account_id);
-CREATE INDEX idx_ledger_entries_transaction_id ON ledger_entries (transaction_id);
-CREATE INDEX idx_ledger_entries_created_at     ON ledger_entries (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_ledger_entries_account_id     ON ledger_entries (account_id);
+CREATE INDEX IF NOT EXISTS idx_ledger_entries_transaction_id ON ledger_entries (transaction_id);
+CREATE INDEX IF NOT EXISTS idx_ledger_entries_created_at     ON ledger_entries (created_at DESC);
 
-CREATE TABLE balance_locks (
+CREATE TABLE IF NOT EXISTS balance_locks (
     id               UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
     transaction_id   UUID         NOT NULL UNIQUE,
     account_id       UUID         NOT NULL REFERENCES accounts(id),
@@ -41,5 +41,5 @@ CREATE TABLE balance_locks (
     expires_at       TIMESTAMPTZ  NOT NULL
 );
 
-CREATE INDEX idx_balance_locks_account_id    ON balance_locks (account_id);
-CREATE INDEX idx_balance_locks_expires_at    ON balance_locks (expires_at) WHERE expires_at IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_balance_locks_account_id  ON balance_locks (account_id);
+CREATE INDEX IF NOT EXISTS idx_balance_locks_expires_at  ON balance_locks (expires_at) WHERE expires_at IS NOT NULL;

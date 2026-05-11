@@ -11,6 +11,7 @@ SELECT 'CREATE DATABASE aegispay_ledger'   WHERE NOT EXISTS (SELECT FROM pg_data
 SELECT 'CREATE DATABASE aegispay_sagas'    WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'aegispay_sagas')    \gexec
 SELECT 'CREATE DATABASE aegispay_risk'     WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'aegispay_risk')     \gexec
 SELECT 'CREATE DATABASE aegispay_ai'       WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'aegispay_ai')       \gexec
+SELECT 'CREATE DATABASE aegispay_keycloak' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'aegispay_keycloak') \gexec
 
 -- Grant the aegispay user access to all databases
 GRANT ALL PRIVILEGES ON DATABASE aegispay_users        TO aegispay;
@@ -19,3 +20,4 @@ GRANT ALL PRIVILEGES ON DATABASE aegispay_ledger        TO aegispay;
 GRANT ALL PRIVILEGES ON DATABASE aegispay_sagas         TO aegispay;
 GRANT ALL PRIVILEGES ON DATABASE aegispay_risk          TO aegispay;
 GRANT ALL PRIVILEGES ON DATABASE aegispay_ai            TO aegispay;
+GRANT ALL PRIVILEGES ON DATABASE aegispay_keycloak      TO aegispay;

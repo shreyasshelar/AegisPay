@@ -10,8 +10,7 @@ import java.util.UUID;
 @Builder
 public record TransactionRequest(
 
-    @NotNull(message = "payerId is required")
-    UUID payerId,
+    // payerId is NOT accepted from the client — derived from the authenticated JWT in the service layer
 
     @NotNull(message = "payeeId is required")
     UUID payeeId,
@@ -22,6 +21,9 @@ public record TransactionRequest(
 
     @NotBlank @Pattern(regexp = "[A-Z]{3}", message = "Currency must be a 3-letter ISO 4217 code")
     String currency,
+
+    @Size(max = 200)
+    String note,
 
     /** Arbitrary client metadata (e.g. order ID, description). Stored as JSONB. */
     Map<String, Object> metadata

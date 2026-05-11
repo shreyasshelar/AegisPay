@@ -5,9 +5,9 @@ spring:
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:aegispay_transactions}
     username: ${DB_USERNAME:aegispay}
-    password: ${DB_PASSWORD:aegispay}
+    password: ${DB_PASSWORD:aegispay_dev}
     hikari:
-      maximum-pool-size: ${DB_POOL_SIZE:15}
+      maximum-pool-size: ${DB_POOL_SIZE:5}
       connection-timeout: 30000
 
   jpa:
@@ -25,14 +25,16 @@ spring:
 
   data:
     mongodb:
-      uri: ${MONGODB_URI:mongodb://localhost:27017/aegispay_txn_views}
+      uri: ${MONGODB_URI:mongodb://aegispay:aegispay_dev@localhost:27017/aegispay_txn_views?authSource=admin}
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
-      password: ${REDIS_PASSWORD:}
+      password: ${REDIS_PASSWORD:aegispay_dev}
+      repositories:
+        enabled: false
 
   kafka:
-    bootstrap-servers: ${KAFKA_BROKERS:localhost:9092}
+    bootstrap-servers: ${KAFKA_BROKERS:localhost:9094}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
@@ -50,7 +52,7 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: ${OAUTH2_ISSUER_URI:http://localhost:8080/realms/aegispay}
+          issuer-uri: ${OAUTH2_ISSUER_URI:http://localhost:8180/realms/aegispay}
 
 server:
   port: ${SERVER_PORT:8082}

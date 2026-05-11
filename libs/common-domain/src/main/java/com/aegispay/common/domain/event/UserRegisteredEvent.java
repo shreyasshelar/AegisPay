@@ -11,6 +11,7 @@ public class UserRegisteredEvent extends BaseEvent {
 
     private final UUID userId;
     private final String maskedEmail;
+    private final String phoneNumber;
     private final String role;
     private final String tenantId;
 }

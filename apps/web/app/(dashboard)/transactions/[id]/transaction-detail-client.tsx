@@ -42,7 +42,7 @@ export function TransactionDetailClient({
   const resolveError = useResolveError()
 
   // WebSocket live updates
-  const wsBaseUrl = process.env.NEXT_PUBLIC_WS_BASE_URL ?? 'ws://localhost:8090'
+  const wsBaseUrl = process.env.NEXT_PUBLIC_WS_BASE_URL ?? 'ws://localhost:8086'
   useTransactionSocket({
     userId:      session?.user?.id ?? '',
     accessToken: session?.accessToken ?? null,

@@ -1,0 +1,114 @@
+{{- if .Values.keycloak.enabled }}
+---
+# ConfigMap holding the idempotent scope-configuration script.
+# Uses kcadm.sh (built into the Keycloak image) — no curl, no python required.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: keycloak-configure-script
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/part-of: aegispay-infra
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "-5"
+    helm.sh/hook-delete-policy: before-hook-creation
+data:
+  configure.sh: |
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    KC_URL="http://{{ include "aegispay-infra.keycloakServiceName" . }}:80"
+    REALM="aegispay"
+    CLIENT_ID_NAME="aegispay-web"
+
+    echo "[keycloak-config] Configuring Keycloak at $KC_URL"
+
+    # Authenticate with kcadm
+    /opt/keycloak/bin/kcadm.sh config credentials \
+      --server "$KC_URL" \
+      --realm master \
+      --user "$KEYCLOAK_ADMIN" \
+      --password "$KEYCLOAK_ADMIN_PASSWORD"
+
+    echo "[keycloak-config] Authenticated as $KEYCLOAK_ADMIN"
+
+    # Resolve aegispay-web client ID
+    CLIENT_ID=$(/opt/keycloak/bin/kcadm.sh get clients \
+      --target-realm "$REALM" \
+      --fields id,clientId \
+      --query "clientId=$CLIENT_ID_NAME" \
+      | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0]['id'] if d else '')")
+
+    [ -z "$CLIENT_ID" ] && echo "[keycloak-config][ERROR] Client $CLIENT_ID_NAME not found" && exit 1
+    echo "[keycloak-config] Client ID: $CLIENT_ID"
+
+    assign_scope() {
+      local NAME=$1 TYPE=$2
+      SCOPE_ID=$(/opt/keycloak/bin/kcadm.sh get client-scopes \
+        --target-realm "$REALM" --fields id,name \
+        | python3 -c "import sys,json; d=json.load(sys.stdin); r=[x['id'] for x in d if x['name']=='$NAME']; print(r[0] if r else '')")
+      if [ -z "$SCOPE_ID" ]; then
+        echo "[keycloak-config] [skip] scope '$NAME' not found"
+        return
+      fi
+      /opt/keycloak/bin/kcadm.sh update \
+        "clients/$CLIENT_ID/${TYPE}-client-scopes/$SCOPE_ID" \
+        --target-realm "$REALM" 2>/dev/null || true
+      echo "[keycloak-config] [$TYPE] $NAME"
+    }
+
+    assign_scope "openid"          "default"
+    assign_scope "profile"         "default"
+    assign_scope "email"           "default"
+    assign_scope "roles"           "default"
+    assign_scope "offline_access"  "optional"
+    assign_scope "aegispay-claims" "optional"
+
+    echo "[keycloak-config] Done — client '$CLIENT_ID_NAME' fully configured"
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: keycloak-configure
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/part-of: aegispay-infra
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "0"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 5
+  activeDeadlineSeconds: 300
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: keycloak-configure
+          image: quay.io/keycloak/keycloak:24.0
+          command: ["/bin/bash", "/scripts/configure.sh"]
+          env:
+            - name: KEYCLOAK_ADMIN
+              value: {{ .Values.keycloak.auth.adminUser | default "admin" | quote }}
+            - name: KEYCLOAK_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.keycloak.auth.existingSecret }}
+                  key: admin-password
+          volumeMounts:
+            - name: script
+              mountPath: /scripts
+              readOnly: true
+      volumes:
+        - name: script
+          configMap:
+            name: keycloak-configure-script
+            defaultMode: 0755
+{{- end }}
+
+{{- define "aegispay-infra.keycloakServiceName" -}}
+{{- printf "%s-keycloak" .Release.Name }}
+{{- end }}

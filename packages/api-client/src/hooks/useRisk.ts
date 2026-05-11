@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { useApiClient } from './context.js'
+import { useApiClient } from './context'
 import type { RiskCase } from '@aegispay/shared-types'
 
 // ── Query keys ────────────────────────────────────────────────────────────────

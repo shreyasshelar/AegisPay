@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, type ReactNode } from 'react'
+import { createContext, useContext, useMemo, type ReactNode } from 'react'
 import {
   AegisApiClient,
   TransactionsClient,
@@ -9,7 +9,7 @@ import {
   AiClient,
   NotificationsClient,
   RiskClient,
-} from '../client/index.js'
+} from '../client/index'
 
 interface ApiContextValue {
   transactions:  TransactionsClient
@@ -23,23 +23,27 @@ interface ApiContextValue {
 const ApiContext = createContext<ApiContextValue | null>(null)
 
 interface ApiProviderProps {
-  children:       ReactNode
-  baseURL:        string
-  getAccessToken: () => Promise<string | null>
+  children:        ReactNode
+  baseURL:         string
+  getAccessToken:  () => Promise<string | null>
   onUnauthorized?: () => void
 }
 
 export function ApiProvider({ children, baseURL, getAccessToken, onUnauthorized }: ApiProviderProps) {
-  const client = new AegisApiClient({ baseURL, getAccessToken, onUnauthorized })
-
-  const value: ApiContextValue = {
-    transactions:  new TransactionsClient(client),
-    users:         new UsersClient(client),
-    ledger:        new LedgerClient(client),
-    ai:            new AiClient(client),
-    notifications: new NotificationsClient(client),
-    risk:          new RiskClient(client),
-  }
+  // Memoize on the callback identities. When the parent uses useCallback([])
+  // these are stable for the lifetime of the component, so the axios client
+  // and all service clients are created exactly once.
+  const value = useMemo<ApiContextValue>(() => {
+    const client = new AegisApiClient({ baseURL, getAccessToken, onUnauthorized })
+    return {
+      transactions:  new TransactionsClient(client),
+      users:         new UsersClient(client),
+      ledger:        new LedgerClient(client),
+      ai:            new AiClient(client),
+      notifications: new NotificationsClient(client),
+      risk:          new RiskClient(client),
+    }
+  }, [baseURL, getAccessToken, onUnauthorized])
 
   return <ApiContext.Provider value={value}>{children}</ApiContext.Provider>
 }

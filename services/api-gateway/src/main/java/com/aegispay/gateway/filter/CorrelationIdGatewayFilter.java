@@ -4,9 +4,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.cloud.gateway.filter.GatewayFilter;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.core.Ordered;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.server.reactive.ServerHttpRequest;
+import org.springframework.http.server.reactive.ServerHttpRequestDecorator;
 import org.springframework.http.server.reactive.ServerHttpResponse;
+import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
+import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
@@ -14,14 +18,12 @@ import java.util.UUID;
 
 /**
  * Ensures every request through the gateway carries an X-Correlation-ID.
- * If the inbound request already has one (from a client or upstream proxy) it is
- * preserved; otherwise a new UUID is generated.
+ * If the inbound request already has one it is preserved; otherwise a new UUID is generated.
+ * The ID is echoed back in the response header.
  *
- * The ID is echoed back in the response header so callers can correlate logs
- * across service boundaries without parsing the response body.
- *
- * Runs at ORDER = -200 (before JWT relay and tracing) so every subsequent filter
- * in the chain already sees the header in the MDC-equivalent exchange attributes.
+ * Uses ServerHttpRequestDecorator to add headers because Spring WebFlux's
+ * DefaultServerHttpRequestBuilder.header() retains a reference to the original
+ * ReadOnlyHttpHeaders rather than making a mutable copy, causing UnsupportedOperationException.
  */
 @Slf4j
 @Component
@@ -38,23 +40,37 @@ public class CorrelationIdGatewayFilter implements GatewayFilter, Ordered {
         }
 
         final String finalCorrelationId = correlationId;
-
-        // Attach to exchange attributes so other filters can read it
         exchange.getAttributes().put(EXCHANGE_ATTR_KEY, finalCorrelationId);
 
-        // Mutate the downstream request to carry the header
-        ServerHttpRequest mutatedRequest = exchange.getRequest().mutate()
-                .header(CORRELATION_ID_HEADER, finalCorrelationId)
-                .build();
+        // Build a mutable copy of the headers and inject the correlation ID
+        LinkedMultiValueMap<String, String> mutableHeaders =
+                new LinkedMultiValueMap<>(exchange.getRequest().getHeaders());
+        mutableHeaders.set(CORRELATION_ID_HEADER, finalCorrelationId);
+        HttpHeaders newHeaders = new HttpHeaders(mutableHeaders);
 
-        // Mutate the response to echo it back to the caller
-        ServerHttpResponse mutatedResponse = exchange.getResponse();
-        mutatedResponse.getHeaders().set(CORRELATION_ID_HEADER, finalCorrelationId);
+        ServerHttpRequest decoratedRequest = new ServerHttpRequestDecorator(exchange.getRequest()) {
+            @Override
+            @NonNull
+            public HttpHeaders getHeaders() {
+                return newHeaders;
+            }
+        };
+
+        // Echo the ID back to the caller via the response header
+        ServerHttpResponse response = exchange.getResponse();
+        response.beforeCommit(() -> {
+            try {
+                response.getHeaders().set(CORRELATION_ID_HEADER, finalCorrelationId);
+            } catch (UnsupportedOperationException ignored) {
+                // Headers already committed (e.g. circuit-breaker fallback) — skip
+            }
+            return Mono.empty();
+        });
 
         log.debug("correlationId={} path={}", finalCorrelationId,
                   exchange.getRequest().getPath().value());
 
-        return chain.filter(exchange.mutate().request(mutatedRequest).build());
+        return chain.filter(exchange.mutate().request(decoratedRequest).build());
     }
 
     @Override

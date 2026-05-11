@@ -23,8 +23,8 @@ section() { echo -e "\n${CYAN}════════════════�
 # Patch YOUR_DOMAIN placeholder in values files
 patch_domain() {
   local file="$1"
-  sed -i "s/YOUR_DOMAIN.com/$DOMAIN/g" "$file"
-  info "Patched domain in $file"
+  sed -i.bak "s/YOUR_DOMAIN\.com/$DOMAIN/g" "$file" && rm -f "${file}.bak"
+  info "Patched domain in $file → $DOMAIN"
 }
 
 # ── 1. Create namespaces ───────────────────────────────────────────────────────
@@ -103,7 +103,32 @@ helm upgrade --install aegispay-infra infra/helm/infra/ \
   --wait \
   --timeout 10m
 
-# ── 9. Bootstrap ArgoCD Applications ──────────────────────────────────────────
+# ── 9. Verify Keycloak realm import succeeded ─────────────────────────────────
+# Keycloak client scope configuration is handled automatically by the
+# Helm post-install/post-upgrade Job in infra/helm/infra/templates/keycloak-configure-job.yaml
+section "Verifying Keycloak realm import"
+KEYCLOAK_SVC="aegispay-infra-keycloak.aegispay-infra.svc.cluster.local"
+KEYCLOAK_PORT="80"
+MAX_WAIT=120
+ELAPSED=0
+info "Polling Keycloak for realm 'aegispay' (timeout: ${MAX_WAIT}s)..."
+until kubectl run -n aegispay-infra keycloak-realm-check --rm -i --restart=Never \
+    --image=curlimages/curl:8.6.0 --quiet -- \
+    curl -sf "http://${KEYCLOAK_SVC}:${KEYCLOAK_PORT}/realms/aegispay" > /dev/null 2>&1; do
+  if [ "$ELAPSED" -ge "$MAX_WAIT" ]; then
+    warn "Keycloak realm 'aegispay' not ready after ${MAX_WAIT}s."
+    warn "Check Keycloak logs: kubectl logs -n aegispay-infra -l app.kubernetes.io/name=keycloak"
+    warn "If realm was not imported, re-apply the ConfigMap and restart Keycloak:"
+    warn "  kubectl rollout restart -n aegispay-infra deploy/aegispay-infra-keycloak"
+    break
+  fi
+  info "Waiting for Keycloak realm... (${ELAPSED}s elapsed)"
+  sleep 10
+  ELAPSED=$((ELAPSED + 10))
+done
+[ "$ELAPSED" -lt "$MAX_WAIT" ] && info "✅ Keycloak realm 'aegispay' confirmed."
+
+# ── 10. Bootstrap ArgoCD Applications ─────────────────────────────────────────
 section "Bootstrapping ArgoCD Applications"
 kubectl apply -f infra/argocd/project.yaml
 kubectl apply -f infra/argocd/app-onprem.yaml

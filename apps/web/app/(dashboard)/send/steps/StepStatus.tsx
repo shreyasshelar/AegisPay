@@ -44,7 +44,7 @@ export function StepStatus() {
   const resolveError = useResolveError()
 
   // WebSocket for live updates
-  const wsBaseUrl = process.env.NEXT_PUBLIC_WS_BASE_URL ?? 'ws://localhost:8090'
+  const wsBaseUrl = process.env.NEXT_PUBLIC_WS_BASE_URL ?? 'ws://localhost:8086'
   useTransactionSocket({
     userId:      session?.user?.id ?? '',
     accessToken: session?.accessToken ?? null,
@@ -184,7 +184,7 @@ export function StepStatus() {
       <div className="space-y-3">
         <AegisButton
           onClick={() =>
-            router.push(`/dashboard/transactions/${tx.transactionId}`)
+            router.push(`/transactions/${tx.transactionId}`)
           }
           className="w-full"
         >

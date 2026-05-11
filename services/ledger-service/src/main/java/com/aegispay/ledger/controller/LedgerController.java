@@ -7,6 +7,8 @@ import com.aegispay.ledger.service.LedgerService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -19,7 +21,16 @@ public class LedgerController {
 
     private final LedgerService ledgerService;
 
-    /** Get all accounts for a user (balance summary). */
+    /** Customer: get own account balances from JWT sub claim. */
+    @GetMapping("/accounts/me")
+    @PreAuthorize("hasRole('CUSTOMER')")
+    public ResponseEntity<ApiResponse<List<AccountResponse>>> getMyAccounts(
+            @AuthenticationPrincipal Jwt jwt) {
+        UUID userId = UUID.fromString(jwt.getSubject());
+        return ResponseEntity.ok(ApiResponse.ok(ledgerService.getAccountsForUser(userId)));
+    }
+
+    /** Back-office: get any user's accounts by userId. */
     @GetMapping("/accounts/{userId}")
     @PreAuthorize("hasAnyRole('BACK_OFFICE', 'ADMIN', 'MERCHANT_OPS')")
     public ResponseEntity<ApiResponse<List<AccountResponse>>> getAccountsForUser(

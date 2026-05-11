@@ -1,4 +1,4 @@
-import type { AegisApiClient } from './base.js'
+import type { AegisApiClient } from './base'
 import { PagedNotificationsSchema, type PagedNotifications } from '@aegispay/shared-types'
 
 export class NotificationsClient {

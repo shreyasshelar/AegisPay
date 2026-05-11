@@ -1,2 +1,2 @@
-export * from './components/index.js'
-export * from './tokens/index.js'
+export * from './components/index'
+export * from './tokens/index'

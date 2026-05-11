@@ -6,7 +6,7 @@ spring:
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:aegispay_ledger}
     username: ${DB_USERNAME:aegispay}
-    password: ${DB_PASSWORD:aegispay}
+    password: ${DB_PASSWORD:aegispay_dev}
     hikari:
       maximum-pool-size: 5
       connection-timeout: 30000
@@ -21,11 +21,17 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
 
-  # Spring Batch metadata tables go into a separate schema
+  # Spring Batch metadata tables — use own history table so it doesn't clash with ledger-service's flyway_schema_history
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    baseline-version: 0
+    table: flyway_schema_history_batch
+
   batch:
     jdbc:
-      initialize-schema: always
-      schema: classpath:org/springframework/batch/core/schema-postgresql.sql
+      initialize-schema: never   # Flyway owns the schema — never let Batch auto-create
     job:
       enabled: false   # Don't auto-run jobs on startup — triggered by scheduler
 
@@ -33,10 +39,10 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: ${OAUTH2_ISSUER_URI:http://localhost:8080/realms/aegispay}
+          issuer-uri: ${OAUTH2_ISSUER_URI:http://localhost:8180/realms/aegispay}
 
 server:
-  port: ${SERVER_PORT:8091}
+  port: ${SERVER_PORT:8087}
 
 management:
   endpoints:
@@ -55,7 +61,7 @@ clickhouse:
 
 # ── Stripe ────────────────────────────────────────────────────────────────────
 stripe:
-  secret-key: ${STRIPE_SECRET_KEY}
+  secret-key: ${STRIPE_SECRET_KEY:sk_test_placeholder_local_dev}
   # How many days back to fetch Stripe balance transactions per run
   lookback-days: 2
 

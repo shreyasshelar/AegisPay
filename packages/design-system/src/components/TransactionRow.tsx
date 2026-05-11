@@ -1,7 +1,7 @@
 import { clsx } from 'clsx'
 import { ArrowUpRight, ArrowDownLeft } from 'lucide-react'
 import type { TransactionSummary } from '@aegispay/shared-types'
-import { AegisBadge } from './Badge.js'
+import { AegisBadge } from './Badge'
 
 interface TransactionRowProps {
   transaction: TransactionSummary

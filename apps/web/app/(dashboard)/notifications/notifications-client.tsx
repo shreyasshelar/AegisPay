@@ -27,7 +27,7 @@ export function NotificationsClient() {
   const { data: session }     = useSession()
   const { notifications: nc } = useApiClient()
   const queryClient            = useQueryClient()
-  const wsBaseUrl              = process.env.NEXT_PUBLIC_WS_BASE_URL ?? 'ws://localhost:8090'
+  const wsBaseUrl              = process.env.NEXT_PUBLIC_WS_BASE_URL ?? 'ws://localhost:8086'
   const { reset: resetUnread, increment } = useNotificationStore()
 
   // Clear badge when this page is mounted
