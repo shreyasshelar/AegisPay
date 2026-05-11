@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { useApiClient } from './context.js'
+import { useApiClient } from './context'
 import type {
   FraudExplainRequest,
   ErrorResolutionRequest,

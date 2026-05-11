@@ -143,6 +143,7 @@ public class ReconciliationJobConfig {
     // ── Processor: Ledger entry → break detection ─────────────────────────────
 
     @Bean
+    @StepScope
     public ItemProcessor<LedgerEntry, Optional<ReconciliationBreak>> ledgerEntryProcessor(
             StripeSettlementFetcher fetcher,
             @Value("#{jobParameters['reportDate']}") String reportDateStr) {
@@ -213,6 +214,7 @@ public class ReconciliationJobConfig {
     // ── Processor: Stripe-only entry → MISSING_IN_LEDGER break ───────────────
 
     @Bean
+    @StepScope
     public ItemProcessor<StripeSettlementEntry, Optional<ReconciliationBreak>> stripeEntryProcessor(
             @Value("#{jobParameters['reportDate']}") String reportDateStr) {
         LocalDate date = reportDateStr != null

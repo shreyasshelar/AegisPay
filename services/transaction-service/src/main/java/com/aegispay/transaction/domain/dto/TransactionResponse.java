@@ -1,6 +1,7 @@
 package com.aegispay.transaction.domain.dto;
 
 import com.aegispay.common.domain.enums.TransactionStatus;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Builder;
 
@@ -15,7 +16,7 @@ public record TransactionResponse(
     UUID userId,
     UUID payerId,
     UUID payeeId,
-    BigDecimal amount,
+    @JsonFormat(shape = JsonFormat.Shape.STRING) BigDecimal amount,
     String currency,
     TransactionStatus status,
     String idempotencyKey,

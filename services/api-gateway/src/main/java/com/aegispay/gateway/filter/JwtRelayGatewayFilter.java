@@ -4,28 +4,30 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.cloud.gateway.filter.GatewayFilter;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.core.Ordered;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.server.reactive.ServerHttpRequest;
+import org.springframework.http.server.reactive.ServerHttpRequestDecorator;
+import org.springframework.lang.NonNull;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Component;
+import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
+import java.util.List;
+
 /**
- * Extracts JWT claims from the authenticated principal (already validated by Spring Security)
- * and injects them as trusted downstream headers.
- *
- * Downstream services read these headers directly instead of re-parsing the JWT,
- * but MUST still validate the Bearer token for zero-trust compliance.
+ * Extracts JWT claims from the authenticated principal and injects them as trusted
+ * downstream headers so services don't need to re-parse the JWT.
  *
  * Headers added:
- *   X-User-Id        — internal UUID from claim `aegispay_user_id`
- *   X-User-Role      — role name from claim `aegispay_role`
- *   X-Tenant-Id      — tenant from claim `aegispay_tenant_id`
- *   X-Auth-Subject   — raw JWT `sub` (IdP-level identity)
+ *   X-User-Id      — aegispay_user_id claim (or falls back to sub)
+ *   X-User-Role    — primary role from aegispay_role (first non-offline_access role, else first)
+ *   X-Tenant-Id    — aegispay_tenant_id claim
+ *   X-Auth-Subject — raw JWT sub
  *
- * The original Authorization header is preserved and forwarded unchanged by
- * Spring Cloud Gateway's default behaviour.
- *
- * Runs at ORDER = -180 (after trace headers are set).
+ * Uses ServerHttpRequestDecorator to avoid UnsupportedOperationException on
+ * ReadOnlyHttpHeaders that occurs with ServerHttpRequest.mutate().header().
  */
 @Slf4j
 @Component
@@ -48,25 +50,43 @@ public class JwtRelayGatewayFilter implements GatewayFilter, Ordered {
                 .flatMap(jwtAuth -> {
                     var jwt = jwtAuth.getToken();
 
-                    var requestBuilder = exchange.getRequest().mutate();
+                    LinkedMultiValueMap<String, String> mutableHeaders =
+                            new LinkedMultiValueMap<>(exchange.getRequest().getHeaders());
 
                     String userId = jwt.getClaimAsString(CLAIM_USER_ID);
-                    if (userId != null) requestBuilder.header(HEADER_USER_ID, userId);
+                    if (userId != null) mutableHeaders.set(HEADER_USER_ID, userId);
 
-                    String role = jwt.getClaimAsString(CLAIM_ROLE);
-                    if (role != null) requestBuilder.header(HEADER_USER_ROLE, role);
+                    // aegispay_role is multivalued — pick primary (first non-offline role)
+                    List<String> roles = jwt.getClaimAsStringList(CLAIM_ROLE);
+                    if (roles != null && !roles.isEmpty()) {
+                        String primaryRole = roles.stream()
+                                .filter(r -> !r.equals("offline_access"))
+                                .findFirst()
+                                .orElse(roles.get(0));
+                        mutableHeaders.set(HEADER_USER_ROLE, primaryRole);
+                    }
 
                     String tenantId = jwt.getClaimAsString(CLAIM_TENANT_ID);
-                    if (tenantId != null) requestBuilder.header(HEADER_TENANT_ID, tenantId);
+                    if (tenantId != null) mutableHeaders.set(HEADER_TENANT_ID, tenantId);
 
                     String sub = jwt.getSubject();
-                    if (sub != null) requestBuilder.header(HEADER_AUTH_SUB, sub);
+                    if (sub != null) mutableHeaders.set(HEADER_AUTH_SUB, sub);
 
-                    log.debug("JWT relay: userId={} role={} tenantId={}", userId, role, tenantId);
+                    log.debug("JWT relay: userId={} role={} tenantId={}", userId,
+                              mutableHeaders.getFirst(HEADER_USER_ROLE), tenantId);
 
-                    return chain.filter(exchange.mutate().request(requestBuilder.build()).build());
+                    HttpHeaders newHeaders = new HttpHeaders(mutableHeaders);
+                    ServerHttpRequest decoratedRequest =
+                            new ServerHttpRequestDecorator(exchange.getRequest()) {
+                                @Override
+                                @NonNull
+                                public HttpHeaders getHeaders() {
+                                    return newHeaders;
+                                }
+                            };
+
+                    return chain.filter(exchange.mutate().request(decoratedRequest).build());
                 })
-                // Unauthenticated exchanges (public paths) pass through without headers
                 .switchIfEmpty(chain.filter(exchange));
     }
 

@@ -43,10 +43,16 @@ export class AegisApiClient {
     // Unwrap ApiResponse<T> envelope + handle 401
     this.axios.interceptors.response.use(
       (res) => {
-        // The backend always returns { success, data, ... }
-        // Unwrap so callers receive T directly instead of the envelope.
         const envelope = res.data as ApiEnvelope<unknown>
         if (envelope && typeof envelope === 'object' && 'success' in envelope) {
+          // Backend returned success:false with HTTP 2xx — treat as application-level error
+          if (!envelope.success) {
+            return Promise.reject(new ApiError(
+              envelope.error?.message ?? 'Request failed',
+              res.status,
+              envelope.error?.code,
+            ))
+          }
           res.data = envelope.data
         }
         return res

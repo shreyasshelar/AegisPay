@@ -34,6 +34,7 @@ public class UserEventProducer {
                 .schemaVersion(1)
                 .userId(user.getId())
                 .maskedEmail(maskEmail(user.getEmail()))
+                .phoneNumber(user.getPhone())
                 .role(user.getRole())
                 .tenantId(user.getTenantId())
                 .build();

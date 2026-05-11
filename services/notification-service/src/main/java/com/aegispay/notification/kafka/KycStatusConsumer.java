@@ -4,6 +4,7 @@ import com.aegispay.common.domain.enums.NotificationType;
 import com.aegispay.common.domain.event.KycStatusChangedEvent;
 import com.aegispay.common.kafka.KafkaTopics;
 import com.aegispay.notification.dispatcher.NotificationDispatcher;
+import com.aegispay.notification.repository.UserContactRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,19 +20,40 @@ import java.util.Map;
 public class KycStatusConsumer {
 
     private final NotificationDispatcher dispatcher;
+    private final UserContactRepository userContactRepository;
     private final ObjectMapper objectMapper;
 
     @KafkaListener(topics = KafkaTopics.KYC_STATUS_CHANGED, groupId = "notification-service-kyc")
     public void handle(ConsumerRecord<String, String> record) {
         try {
             KycStatusChangedEvent event = objectMapper.readValue(record.value(), KycStatusChangedEvent.class);
-            dispatcher.dispatch(event.getUserId().toString(), NotificationType.KYC_STATUS_CHANGED,
-                    "WEBSOCKET", null,
-                    Map.of("newStatus", event.getNewStatus().name(),
-                           "previousStatus", event.getPreviousStatus() != null ? event.getPreviousStatus().name() : ""));
+            String userId = event.getUserId().toString();
+            Map<String, String> vars = Map.of(
+                "newStatus",      event.getNewStatus().name(),
+                "previousStatus", event.getPreviousStatus() != null ? event.getPreviousStatus().name() : "");
+
+            dispatcher.dispatch(userId, NotificationType.KYC_STATUS_CHANGED, "WEBSOCKET", null, vars);
+
+            // SMS for KYC decisions — user needs to know immediately
+            String phone = resolvePhone(userId);
+            if (phone != null) {
+                dispatcher.dispatch(userId, NotificationType.KYC_STATUS_CHANGED, "SMS", phone, vars);
+            }
         } catch (Exception e) {
             log.error("Error processing KYC status notification: {}", e.getMessage(), e);
             throw new RuntimeException(e);
+        }
+    }
+
+    private String resolvePhone(String userId) {
+        try {
+            var contact = userContactRepository.findById(userId);
+            if (contact.isEmpty()) return null;
+            String phone = contact.get().getPhoneNumber();
+            return (phone != null && !phone.isBlank()) ? phone : null;
+        } catch (Exception ex) {
+            log.warn("Phone lookup failed for userId={}: {}", userId, ex.getMessage());
+            return null;
         }
     }
 }
