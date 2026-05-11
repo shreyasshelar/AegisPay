@@ -30,13 +30,13 @@ spring:
         jwt:
           # Multi-IdP: configured programmatically via JwtIssuerReactiveAuthenticationManagerResolver
           # This single issuer-uri is kept as a reference; actual resolution is done in SecurityConfig
-          issuer-uri: ${OAUTH2_PRIMARY_ISSUER_URI:http://localhost:8080/realms/aegispay}
+          issuer-uri: ${OAUTH2_PRIMARY_ISSUER_URI:http://localhost:8180/realms/aegispay}
 
   data:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
-      password: ${REDIS_PASSWORD:}
+      password: ${REDIS_PASSWORD:aegispay_dev}
       ssl:
         enabled: ${REDIS_SSL_ENABLED:false}
       lettuce:
@@ -79,7 +79,7 @@ aegispay:
   gateway:
     # Multi-IdP JWT issuers.  Add new IdPs here without code changes.
     oauth2-trusted-issuers:
-      - ${OAUTH2_ISSUER_KEYCLOAK:http://localhost:8080/realms/aegispay}
+      - ${OAUTH2_ISSUER_KEYCLOAK:http://localhost:8180/realms/aegispay}
       - ${OAUTH2_ISSUER_ENTRA:https://login.microsoftonline.com/common/v2.0}
       - ${OAUTH2_ISSUER_OKTA:https://dev-000000.okta.com/oauth2/default}
 
@@ -106,7 +106,7 @@ aegispay:
     cors:
       allowed-origins:
         - ${CORS_ALLOWED_ORIGIN_1:http://localhost:3000}
-        - ${CORS_ALLOWED_ORIGIN_2:https://app.aegispay.io}
+        - ${CORS_ALLOWED_ORIGIN_2:https://aegispay.shreyasshelar.uk}
       allowed-methods:
         - GET
         - POST

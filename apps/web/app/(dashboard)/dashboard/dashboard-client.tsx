@@ -145,14 +145,14 @@ export function DashboardClient({ userId }: DashboardClientProps) {
         {/* ── Quick actions ── */}
         <div className="flex flex-wrap gap-3">
           <Link
-            href="/dashboard/send"
+            href="/send"
             className="flex items-center gap-2 rounded-xl bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-primary-700 active:scale-95"
           >
             <Send className="h-4 w-4" />
             Send Money
           </Link>
           <Link
-            href="/dashboard/transactions"
+            href="/transactions"
             className="flex items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200 transition-all hover:bg-slate-50"
           >
             <TrendingUp className="h-4 w-4" />
@@ -167,7 +167,7 @@ export function DashboardClient({ userId }: DashboardClientProps) {
               Recent Transactions
             </h2>
             <Link
-              href="/dashboard/transactions"
+              href="/transactions"
               className="flex items-center gap-1 text-xs font-medium text-primary-600 hover:text-primary-700"
             >
               View all
@@ -195,7 +195,7 @@ export function DashboardClient({ userId }: DashboardClientProps) {
                   transaction={tx}
                   currentUserId={userId}
                   onClick={() => {
-                    window.location.href = `/dashboard/transactions/${tx.transactionId}`
+                    window.location.href = `/transactions/${tx.transactionId}`
                   }}
                 />
               ))}

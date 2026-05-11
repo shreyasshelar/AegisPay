@@ -10,7 +10,7 @@ spec:
 
   # Only deploy from this repo
   sourceRepos:
-    - https://github.com/aegispay-org/aegispay.git
+    - https://github.com/shreyasshelar/AegisPay.git
 
   destinations:
     - namespace: aegispay-dev
@@ -48,6 +48,10 @@ spec:
       kind: NetworkPolicy
     - group: "external-secrets.io"
       kind: ExternalSecret
+    - group: "external-secrets.io"
+      kind: SecretStore
+    - group: "monitoring.coreos.com"
+      kind: ServiceMonitor
 
   # Role: CI/CD can sync any app in this project
   roles:

@@ -1,6 +1,6 @@
 import { clsx } from 'clsx'
 import type { TransactionStatus } from '@aegispay/shared-types'
-import { statusColors } from '../tokens/index.js'
+import { statusColors } from '../tokens/index'
 
 interface BadgeProps {
   status: TransactionStatus

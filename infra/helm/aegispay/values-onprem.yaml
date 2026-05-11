@@ -87,14 +87,14 @@ services:
         traefik.ingress.kubernetes.io/router.tls: "true"
         cert-manager.io/cluster-issuer: letsencrypt-prod
       hosts:
-        - host: api.aegispay.YOUR_DOMAIN.com
+        - host: api.aegispay.shreyasshelar.uk
           paths:
             - path: /
               pathType: Prefix
       tls:
         - secretName: aegispay-api-tls
           hosts:
-            - api.aegispay.YOUR_DOMAIN.com
+            - api.aegispay.shreyasshelar.uk
     jvmOpts: "-XX:MaxRAMPercentage=50.0 -XX:+UseG1GC -XX:+UseContainerSupport"
 
   user_service:
@@ -222,14 +222,14 @@ services:
         # WebSocket upgrade support
         traefik.ingress.kubernetes.io/service.serversscheme: http
       hosts:
-        - host: ws.aegispay.YOUR_DOMAIN.com
+        - host: ws.aegispay.shreyasshelar.uk
           paths:
             - path: /ws
               pathType: Prefix
       tls:
         - secretName: aegispay-ws-tls
           hosts:
-            - ws.aegispay.YOUR_DOMAIN.com
+            - ws.aegispay.shreyasshelar.uk
     jvmOpts: "-XX:MaxRAMPercentage=50.0 -XX:+UseG1GC -XX:+UseContainerSupport"
 
   ai_platform:
@@ -278,14 +278,14 @@ services:
         traefik.ingress.kubernetes.io/router.tls: "true"
         cert-manager.io/cluster-issuer: letsencrypt-prod
       hosts:
-        - host: aegispay.YOUR_DOMAIN.com
+        - host: aegispay.shreyasshelar.uk
           paths:
             - path: /
               pathType: Prefix
       tls:
         - secretName: aegispay-web-tls
           hosts:
-            - aegispay.YOUR_DOMAIN.com
+            - aegispay.shreyasshelar.uk
 
 # ─── Monitoring ───────────────────────────────────────────────────────────────
 monitoring:

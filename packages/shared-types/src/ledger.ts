@@ -4,9 +4,9 @@ export const AccountSchema = z.object({
   id: z.string().uuid(),
   userId: z.string().uuid(),
   currency: z.string().length(3),
-  availableBalance: z.string(),
-  reservedBalance: z.string(),
-  totalBalance: z.string(),
+  availableBalance: z.coerce.number(),
+  reservedBalance: z.coerce.number(),
+  totalBalance: z.coerce.number(),
 })
 export type Account = z.infer<typeof AccountSchema>
 

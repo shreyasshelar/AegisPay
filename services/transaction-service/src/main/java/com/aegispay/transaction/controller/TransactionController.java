@@ -52,7 +52,7 @@ public class TransactionController {
 
     /** Paginated transaction history for the authenticated user (from MongoDB). */
     @GetMapping
-    public ResponseEntity<ApiResponse<PagedResponse<TransactionStatusResponse>>> list(
+    public ResponseEntity<ApiResponse<PagedResponse<TransactionResponse>>> list(
             @AuthenticationPrincipal Jwt jwt,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
@@ -61,7 +61,7 @@ public class TransactionController {
                 ? jwt.getClaimAsString("aegispay_user_id")
                 : jwt.getSubject());
 
-        PagedResponse<TransactionStatusResponse> response =
+        PagedResponse<TransactionResponse> response =
                 transactionService.listForUser(userId, page, size);
         return ResponseEntity.ok(ApiResponse.ok(response));
     }

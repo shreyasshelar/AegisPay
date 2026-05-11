@@ -87,6 +87,10 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- if $svc.initContainers }}
+      initContainers:
+        {{- toYaml $svc.initContainers | nindent 8 }}
+      {{- end }}
       containers:
         - name: {{ $name }}
           image: "{{ $ctx.Values.global.imageRepositoryPrefix }}/{{ $svc.image.repository }}:{{ $svc.image.tag }}"

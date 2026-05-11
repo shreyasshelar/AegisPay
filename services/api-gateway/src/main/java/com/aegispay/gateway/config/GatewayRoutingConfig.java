@@ -46,7 +46,6 @@ public class GatewayRoutingConfig {
                     .filter(correlationIdFilter)
                     .filter(traceParentFilter)
                     .filter(jwtRelayFilter)
-                    .rewritePath("/api/v1/(?<segment>.*)", "/${segment}")
                     .circuitBreaker(cb -> cb
                         .setName("user-service")
                         .setFallbackUri("forward:/fallback/service-unavailable"))
@@ -64,7 +63,6 @@ public class GatewayRoutingConfig {
                     .filter(correlationIdFilter)
                     .filter(traceParentFilter)
                     .filter(jwtRelayFilter)
-                    .rewritePath("/api/v1/(?<segment>.*)", "/${segment}")
                     .circuitBreaker(cb -> cb
                         .setName("transaction-service")
                         .setFallbackUri("forward:/fallback/service-unavailable"))
@@ -78,7 +76,6 @@ public class GatewayRoutingConfig {
                     .filter(correlationIdFilter)
                     .filter(traceParentFilter)
                     .filter(jwtRelayFilter)
-                    .rewritePath("/api/v1/(?<segment>.*)", "/${segment}")
                     .circuitBreaker(cb -> cb
                         .setName("ledger-service")
                         .setFallbackUri("forward:/fallback/service-unavailable"))
@@ -92,7 +89,6 @@ public class GatewayRoutingConfig {
                     .filter(correlationIdFilter)
                     .filter(traceParentFilter)
                     .filter(jwtRelayFilter)
-                    .rewritePath("/api/v1/(?<segment>.*)", "/${segment}")
                     .circuitBreaker(cb -> cb
                         .setName("payment-orchestrator")
                         .setFallbackUri("forward:/fallback/service-unavailable"))
@@ -106,7 +102,6 @@ public class GatewayRoutingConfig {
                     .filter(correlationIdFilter)
                     .filter(traceParentFilter)
                     .filter(jwtRelayFilter)
-                    .rewritePath("/api/v1/(?<segment>.*)", "/${segment}")
                     .circuitBreaker(cb -> cb
                         .setName("risk-engine")
                         .setFallbackUri("forward:/fallback/service-unavailable"))
@@ -120,7 +115,6 @@ public class GatewayRoutingConfig {
                     .filter(correlationIdFilter)
                     .filter(traceParentFilter)
                     .filter(jwtRelayFilter)
-                    .rewritePath("/api/v1/(?<segment>.*)", "/${segment}")
                 )
                 .uri(svc.getNotificationService()))
 
@@ -141,7 +135,6 @@ public class GatewayRoutingConfig {
                     .filter(correlationIdFilter)
                     .filter(traceParentFilter)
                     .filter(jwtRelayFilter)
-                    .rewritePath("/api/v1/(?<segment>.*)", "/${segment}")
                     .circuitBreaker(cb -> cb
                         .setName("ai-platform")
                         .setFallbackUri("forward:/fallback/service-unavailable"))

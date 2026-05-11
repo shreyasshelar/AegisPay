@@ -1,68 +1,67 @@
+import http from 'http'
 import type { NextAuthOptions, Session } from 'next-auth'
 import type { JWT } from 'next-auth/jwt'
+import KeycloakProvider from 'next-auth/providers/keycloak'
 
-/**
- * NextAuth configuration.
- *
- * Supports Keycloak as the primary IdP.  Azure Entra and Okta providers can
- * be added here in the same pattern — NextAuth merges accounts by email.
- *
- * Env vars (see .env.local.example):
- *   KEYCLOAK_ID          — client_id registered in Keycloak
- *   KEYCLOAK_SECRET      — client_secret
- *   KEYCLOAK_ISSUER      — https://auth.example.com/realms/<realm>
- *   NEXTAUTH_URL         — http://localhost:3000
- *   NEXTAUTH_SECRET      — random 32-byte string (openssl rand -base64 32)
- */
+// Force IPv4 for openid-client — Next.js 14 native fetch (undici) resolves
+// localhost → ::1 on macOS; Keycloak only listens on 127.0.0.1 → 3.5s timeout.
+const ipv4Agent = new http.Agent({ family: 4 })
 
 async function refreshAccessToken(token: JWT): Promise<JWT> {
   try {
-    const issuer = process.env.KEYCLOAK_ISSUER!
-    const url = `${issuer}/protocol/openid-connect/token`
+    const url = `${process.env.KEYCLOAK_ISSUER}/protocol/openid-connect/token`
+
+    // Public PKCE clients have no secret — sending client_secret="" causes
+    // Keycloak to return 401 "client not found or invalid client credentials".
+    const params: Record<string, string> = {
+      grant_type:    'refresh_token',
+      client_id:     process.env.KEYCLOAK_ID!,
+      refresh_token: token.refreshToken,
+    }
+    if (process.env.KEYCLOAK_SECRET) {
+      params.client_secret = process.env.KEYCLOAK_SECRET
+    }
 
     const response = await fetch(url, {
-      method: 'POST',
+      method:  'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        grant_type:    'refresh_token',
-        client_id:     process.env.KEYCLOAK_ID!,
-        client_secret: process.env.KEYCLOAK_SECRET!,
-        refresh_token: token.refreshToken as string,
-      }),
+      body:    new URLSearchParams(params),
     })
 
     const refreshed = await response.json() as {
-      access_token: string
-      expires_in:   number
-      refresh_token: string
-      error?: string
+      access_token:       string
+      expires_in:         number
+      refresh_token?:     string
+      error?:             string
+      error_description?: string
     }
 
-    if (!response.ok || refreshed.error) throw refreshed
+    if (!response.ok || refreshed.error) {
+      console.error('[auth] Refresh failed:', refreshed.error, refreshed.error_description)
+      return { ...token, error: 'RefreshAccessTokenError' as const }
+    }
 
     return {
       ...token,
+      error:                undefined,
       accessToken:          refreshed.access_token,
       accessTokenExpiresAt: Date.now() + refreshed.expires_in * 1000,
       refreshToken:         refreshed.refresh_token ?? token.refreshToken,
     }
-  } catch {
-    return { ...token, error: 'RefreshAccessTokenError' }
+  } catch (err) {
+    console.error('[auth] refreshAccessToken threw:', err)
+    return { ...token, error: 'RefreshAccessTokenError' as const }
   }
 }
 
 export const authOptions: NextAuthOptions = {
   providers: [
-    {
-      id:   'keycloak',
-      name: 'Keycloak',
-      type: 'oauth',
-      wellKnown: `${process.env.KEYCLOAK_ISSUER}/.well-known/openid-configuration`,
+    KeycloakProvider({
+      clientId:     process.env.KEYCLOAK_ID!,
+      clientSecret: process.env.KEYCLOAK_SECRET ?? '',
+      issuer:       process.env.KEYCLOAK_ISSUER!,
       authorization: { params: { scope: 'openid email profile offline_access' } },
-      clientId:     process.env.KEYCLOAK_ID,
-      clientSecret: process.env.KEYCLOAK_SECRET,
-      idToken:      true,
-      checks:       ['pkce', 'state'],
+      httpOptions: { agent: ipv4Agent, timeout: 10000 },
       profile(profile) {
         return {
           id:    profile.sub,
@@ -76,31 +75,46 @@ export const authOptions: NextAuthOptions = {
                      : 'CUSTOMER',
         }
       },
-    },
+    }),
   ],
 
-  session: { strategy: 'jwt', maxAge: 24 * 60 * 60 }, // 24 h
+  session: { strategy: 'jwt', maxAge: 24 * 60 * 60 },
+
+  debug: process.env.NODE_ENV === 'development',
 
   callbacks: {
     async jwt({ token, account, user }) {
-      // Initial sign-in
+      // ── Initial sign-in: Keycloak just issued fresh tokens ──────────────────
       if (account && user) {
         return {
           ...token,
-          accessToken:          account.access_token,
+          error:                undefined,          // clear any previous error
+          accessToken:          account.access_token!,
           accessTokenExpiresAt: account.expires_at! * 1000,
-          refreshToken:         account.refresh_token,
+          refreshToken:         account.refresh_token ?? '',
           userId:               user.id,
           role:                 (user as { role?: string }).role ?? 'CUSTOMER',
         }
       }
 
-      // Return token if it hasn't expired yet (5-min buffer)
-      if (Date.now() < (token.accessTokenExpiresAt as number) - 5 * 60 * 1000) {
+      // ── Propagate existing error — no retry, user must re-login ─────────────
+      if (token.error === 'RefreshAccessTokenError') {
         return token
       }
 
-      // Refresh expired token
+      // ── Token still valid (60-second proactive buffer) ──────────────────────
+      // Buffer must be much smaller than the token lifetime.
+      // Keycloak default access token = 5 min → 60s buffer leaves 4 min headroom.
+      if (Date.now() < token.accessTokenExpiresAt - 60 * 1000) {
+        return token
+      }
+
+      // ── No refresh token — can't refresh, force re-login ────────────────────
+      if (!token.refreshToken) {
+        return { ...token, error: 'RefreshAccessTokenError' as const }
+      }
+
+      // ── Token expiring — attempt proactive refresh ───────────────────────────
       return refreshAccessToken(token)
     },
 
@@ -109,11 +123,12 @@ export const authOptions: NextAuthOptions = {
         ...session,
         user: {
           ...session.user,
-          id:    token.userId as string,
-          role:  token.role as string,
+          id:   token.userId,
+          role: token.role,
         },
-        accessToken: token.accessToken as string,
-        error:       token.error as string | undefined,
+        accessToken: token.accessToken,
+        // Only propagate the error field when it is actually set
+        ...(token.error ? { error: token.error } : {}),
       }
     },
   },
@@ -124,23 +139,21 @@ export const authOptions: NextAuthOptions = {
   },
 }
 
-// ── Type augmentations ──────────────────────────────────────────────────────
+// ── Type augmentations ────────────────────────────────────────────────────────
 
 declare module 'next-auth' {
   interface Session {
     accessToken: string
     error?: string
     user: {
-      id:    string
-      name?: string | null
+      id:     string
+      name?:  string | null
       email?: string | null
       image?: string | null
-      role:  string
+      role:   string
     }
   }
-  interface User {
-    role: string
-  }
+  interface User { role: string }
 }
 
 declare module 'next-auth/jwt' {

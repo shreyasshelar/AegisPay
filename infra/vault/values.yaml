@@ -58,12 +58,12 @@ server:
       traefik.ingress.kubernetes.io/router.tls: "true"
       cert-manager.io/cluster-issuer: letsencrypt-prod
     hosts:
-      - host: vault.aegispay.YOUR_DOMAIN.com
+      - host: vault.aegispay.shreyasshelar.uk
         paths: [/]
     tls:
       - secretName: vault-tls
         hosts:
-          - vault.aegispay.YOUR_DOMAIN.com
+          - vault.aegispay.shreyasshelar.uk
 
   # Auto-unseal via Transit (not available on standalone — use manual unseal or
   # store unseal keys securely after first init)

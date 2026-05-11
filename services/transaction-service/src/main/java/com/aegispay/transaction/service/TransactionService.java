@@ -57,15 +57,20 @@ public class TransactionService {
     private TransactionResponse createNew(TransactionRequest request,
                                           String idempotencyKey,
                                           UUID userId) {
+        // Merge note into metadata so it is persisted and returned via the mapper
+        java.util.Map<String, Object> meta = new java.util.HashMap<>();
+        if (request.metadata() != null) meta.putAll(request.metadata());
+        if (request.note() != null && !request.note().isBlank()) meta.put("note", request.note());
+
         Transaction txn = Transaction.builder()
                 .userId(userId)
-                .payerId(request.payerId())
+                .payerId(userId)           // the authenticated user is always the payer
                 .payeeId(request.payeeId())
                 .amount(request.amount())
                 .currency(request.currency())
                 .idempotencyKey(idempotencyKey)
                 .status(TransactionStatus.INITIATED)
-                .metadata(request.metadata())
+                .metadata(meta.isEmpty() ? null : meta)
                 .build();
 
         transactionRepository.save(txn);
@@ -78,7 +83,7 @@ public class TransactionService {
         viewRepository.save(TransactionView.builder()
                 .id(txn.getId().toString())
                 .userId(userId.toString())
-                .payerId(request.payerId().toString())
+                .payerId(userId.toString())
                 .payeeId(request.payeeId().toString())
                 .amount(request.amount())
                 .currency(request.currency())
@@ -113,13 +118,13 @@ public class TransactionService {
                         HttpStatus.NOT_FOUND));
     }
 
-    public PagedResponse<TransactionStatusResponse> listForUser(UUID userId, int page, int size) {
+    public PagedResponse<TransactionResponse> listForUser(UUID userId, int page, int size) {
         Pageable pageable = PageRequest.of(page, Math.min(size, 100));
         Page<TransactionView> views = viewRepository
                 .findByUserIdOrderByInitiatedAtDesc(userId.toString(), pageable);
 
-        return PagedResponse.<TransactionStatusResponse>builder()
-                .content(views.map(transactionMapper::toStatusResponse).getContent())
+        return PagedResponse.<TransactionResponse>builder()
+                .content(views.map(transactionMapper::toListItemResponse).getContent())
                 .page(views.getNumber())
                 .size(views.getSize())
                 .totalElements(views.getTotalElements())

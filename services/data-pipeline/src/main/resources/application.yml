@@ -10,7 +10,7 @@ spring:
       - org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
 
   kafka:
-    bootstrap-servers: ${KAFKA_BROKERS:localhost:9092}
+    bootstrap-servers: ${KAFKA_BROKERS:localhost:9094}
     streams:
       application-id: aegispay-data-pipeline
       default-key-serde: org.apache.kafka.common.serialization.Serdes$StringSerde
@@ -20,7 +20,7 @@ spring:
         commit.interval.ms: 1000
 
 server:
-  port: ${SERVER_PORT:8090}
+  port: ${SERVER_PORT:8089}
 
 management:
   endpoints:

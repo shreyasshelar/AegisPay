@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS transactions (
     payer_id            UUID          NOT NULL,
     payee_id            UUID          NOT NULL,
     amount              NUMERIC(19,4) NOT NULL,
-    currency            CHAR(3)       NOT NULL,
+    currency            VARCHAR(3)    NOT NULL,
     status              VARCHAR(30)   NOT NULL DEFAULT 'INITIATED',
     idempotency_key     VARCHAR(255)  NOT NULL,
     saga_id             UUID,                              -- set by payment-orchestrator

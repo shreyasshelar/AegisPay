@@ -33,6 +33,8 @@ jobs:
           - risk-engine
           - notification-service
           - ai-platform
+          - data-pipeline
+          - reconciliation-service
 
     permissions:
       contents: read
@@ -145,9 +147,11 @@ jobs:
           SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
           SERVICES=(api_gateway user_service transaction_service ledger_service \
-                    payment_orchestrator risk_engine notification_service ai_platform web)
+                    payment_orchestrator risk_engine notification_service ai_platform \
+                    data_pipeline reconciliation_service web)
           IMAGES=(api-gateway user-service transaction-service ledger-service \
-                  payment-orchestrator risk-engine notification-service ai-platform web)
+                  payment-orchestrator risk-engine notification-service ai-platform \
+                  data-pipeline reconciliation-service web)
 
           for i in "${!SERVICES[@]}"; do
             svc="${SERVICES[$i]}"

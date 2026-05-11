@@ -8,7 +8,8 @@ import com.aegispay.ledger.domain.entity.Account;
 import com.aegispay.ledger.domain.entity.BalanceLock;
 import com.aegispay.ledger.domain.entity.LedgerEntry;
 import com.aegispay.ledger.domain.entity.OutboxEntry;
-import com.aegispay.ledger.domain.mapper.LedgerMapperImpl;
+import com.aegispay.ledger.domain.mapper.LedgerMapper;
+import org.mapstruct.factory.Mappers;
 import com.aegispay.ledger.exception.AccountNotFoundException;
 import com.aegispay.ledger.repository.AccountRepository;
 import com.aegispay.ledger.repository.BalanceLockRepository;
@@ -59,7 +60,7 @@ class LedgerServiceTest {
 
         ledgerService = new LedgerService(
                 accountRepository, ledgerEntryRepository, balanceLockRepository,
-                outboxEntryRepository, new LedgerMapperImpl(), objectMapper, props);
+                outboxEntryRepository, Mappers.getMapper(LedgerMapper.class), objectMapper, props);
     }
 
     @Test

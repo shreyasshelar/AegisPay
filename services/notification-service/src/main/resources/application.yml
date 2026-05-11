@@ -4,10 +4,10 @@ spring:
 
   data:
     mongodb:
-      uri: ${MONGODB_URI:mongodb://localhost:27017/aegispay_notifications}
+      uri: ${MONGODB_URI:mongodb://aegispay:aegispay_dev@localhost:27017/aegispay_notifications?authSource=admin}
 
   kafka:
-    bootstrap-servers: ${KAFKA_BROKERS:localhost:9092}
+    bootstrap-servers: ${KAFKA_BROKERS:localhost:9094}
     consumer:
       group-id: notification-service
       auto-offset-reset: earliest
@@ -19,7 +19,7 @@ spring:
     port: ${SMTP_PORT:587}
     username: ${SMTP_USERNAME:aegispay.dev@gmail.com}
     # SMTP_PASSWORD injected from Vault via ESO → K8s secret aegispay-smtp-secret
-    password: ${SMTP_PASSWORD}
+    password: ${SMTP_PASSWORD:}
     from: ${SMTP_FROM_ADDRESS:aegispay.dev@gmail.com}
     properties:
       mail:
@@ -35,7 +35,7 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: ${OAUTH2_ISSUER_URI:http://localhost:8080/realms/aegispay}
+          issuer-uri: ${OAUTH2_ISSUER_URI:http://localhost:8180/realms/aegispay}
 
 server:
   port: ${SERVER_PORT:8086}
@@ -45,6 +45,9 @@ management:
     web:
       exposure:
         include: health,info,prometheus,metrics
+  health:
+    mail:
+      enabled: false
   metrics:
     tags:
       service: ${spring.application.name}
@@ -55,10 +58,8 @@ aegispay:
       endpoint: /ws
       allowed-origins: ${ALLOWED_ORIGINS:*}
     sms:
-      provider: ${SMS_PROVIDER:twilio}
-      account-sid: ${TWILIO_ACCOUNT_SID:}
-      auth-token: ${TWILIO_AUTH_TOKEN:}
-      from-number: ${TWILIO_FROM_NUMBER:}
+      fast2sms:
+        api-key: ${FAST2SMS_API_KEY:}
 
 logging:
   pattern:
