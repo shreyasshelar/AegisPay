@@ -5,9 +5,9 @@ import {
   useQueryClient,
   type UseQueryOptions,
 } from '@tanstack/react-query'
-import { useApiClient } from './context.js'
+import { useApiClient } from './context'
 import type { CreateTransactionRequest } from '@aegispay/shared-types'
-import type { ListTransactionsParams } from '../client/transactions.js'
+import type { ListTransactionsParams } from '../client/transactions'
 
 export const transactionKeys = {
   all: ['transactions'] as const,
@@ -49,7 +49,7 @@ export function useInfiniteTransactions(params: Omit<ListTransactionsParams, 'pa
     queryFn: ({ pageParam = 0 }) => transactions.list({ ...params, page: pageParam as number, size: 20 }),
     initialPageParam: 0,
     getNextPageParam: (lastPage) =>
-      lastPage.last ? undefined : lastPage.number + 1,
+      lastPage.last ? undefined : lastPage.page + 1,
     staleTime: 30_000,
   })
 }

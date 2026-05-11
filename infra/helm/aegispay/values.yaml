@@ -6,7 +6,7 @@
 global:
   namespace: aegispay
   imageRegistry: ghcr.io
-  imageRepositoryPrefix: ghcr.io/aegispay-org/aegispay
+  imageRepositoryPrefix: ghcr.io/shreyasshelar/aegispay
   imagePullPolicy: IfNotPresent
   imagePullSecrets: []
 
@@ -205,7 +205,7 @@ services:
       repository: ai-platform
       tag: latest
     replicas: 2
-    port: 8088
+    port: 8091
     resources:
       requests:
         cpu: 500m
@@ -267,12 +267,22 @@ services:
         memory: 1Gi
     autoscaling:
       enabled: false     # reconciliation is scheduled, not latency-sensitive
+    initContainers:
+      - name: wait-for-ledger
+        image: busybox:1.36
+        command:
+          - sh
+          - -c
+          - |
+            until wget -qO- http://ledger-service:8083/actuator/health 2>/dev/null | grep -q '"status":"UP"'; do
+              echo "waiting for ledger-service..."; sleep 5
+            done
     extraEnv:
       - name: STRIPE_SECRET_KEY
         valueFrom:
           secretKeyRef:
             name: aegispay-stripe-secret
-            key: secret_key
+            key: secret-key
       - name: CLICKHOUSE_PASSWORD
         valueFrom:
           secretKeyRef:
@@ -317,6 +327,15 @@ secrets:
     secretPath: "aegispay/slack"
   clickhouse:
     secretPath: "aegispay/clickhouse"
+
+# ─── ClickHouse ──────────────────────────────────────────────────────────────
+clickhouse:
+  host: "clickhouse.aegispay-infra.svc.cluster.local"
+  port: 9000
+  user: default
+  initJob:
+    enabled: true
+    clientVersion: "24.4"
 
 # ─── Monitoring & Alerting ───────────────────────────────────────────────────
 monitoring:

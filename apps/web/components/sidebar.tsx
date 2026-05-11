@@ -30,10 +30,10 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { label: 'Dashboard',     href: '/dashboard',              icon: LayoutDashboard },
-  { label: 'Send Money',    href: '/dashboard/send',         icon: ArrowUpRight    },
-  { label: 'Transactions',  href: '/dashboard/transactions', icon: ScrollText      },
-  { label: 'Notifications', href: '/dashboard/notifications',icon: Bell            },
-  { label: 'Profile / KYC', href: '/dashboard/profile',     icon: UserCircle      },
+  { label: 'Send Money',    href: '/send',         icon: ArrowUpRight    },
+  { label: 'Transactions',  href: '/transactions', icon: ScrollText      },
+  { label: 'Notifications', href: '/notifications',icon: Bell            },
+  { label: 'Profile / KYC', href: '/profile',     icon: UserCircle      },
 ]
 
 const BACKOFFICE_ITEMS: NavItem[] = [
@@ -47,7 +47,7 @@ export function Sidebar() {
   const { data: session } = useSession()
   const queryClient        = useQueryClient()
   const role              = session?.user?.role ?? 'CUSTOMER'
-  const wsBaseUrl         = process.env.NEXT_PUBLIC_WS_BASE_URL ?? 'ws://localhost:8090'
+  const wsBaseUrl         = process.env.NEXT_PUBLIC_WS_BASE_URL ?? 'ws://localhost:8086'
 
   const { unreadCount, increment } = useNotificationStore()
 
@@ -58,7 +58,7 @@ export function Sidebar() {
     wsBaseUrl,
     onNotification(notification: TransactionNotification) {
       queryClient.invalidateQueries({ queryKey: ['notifications', 'list'] })
-      if (!pathname.startsWith('/dashboard/notifications')) {
+      if (!pathname.startsWith('/notifications')) {
         increment()
       }
     },
@@ -69,7 +69,7 @@ export function Sidebar() {
 
   function NavLink({ item }: { item: NavItem }) {
     const active       = isActive(item.href)
-    const showBadge    = item.href === '/dashboard/notifications' && unreadCount > 0
+    const showBadge    = item.href === '/notifications' && unreadCount > 0
 
     return (
       <Link
@@ -151,7 +151,10 @@ export function Sidebar() {
           </div>
         </div>
         <button
-          onClick={() => signOut({ callbackUrl: '/login' })}
+          onClick={() => {
+            queryClient.clear()
+            void signOut({ callbackUrl: '/login' })
+          }}
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition-all hover:bg-red-50 hover:text-red-600"
         >
           <LogOut className="h-4 w-4" />

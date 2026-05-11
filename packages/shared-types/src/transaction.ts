@@ -52,7 +52,7 @@ export const PagedTransactionsSchema = z.object({
   content: z.array(TransactionSummarySchema),
   totalElements: z.number(),
   totalPages: z.number(),
-  number: z.number(),
+  page: z.number(),    // matches PagedResponse.page on the Java side
   size: z.number(),
   last: z.boolean(),
 })

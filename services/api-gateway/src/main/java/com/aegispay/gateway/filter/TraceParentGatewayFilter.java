@@ -4,8 +4,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.cloud.gateway.filter.GatewayFilter;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.core.Ordered;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.server.reactive.ServerHttpRequest;
+import org.springframework.http.server.reactive.ServerHttpRequestDecorator;
+import org.springframework.lang.NonNull;
+import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.stereotype.Component;
+import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
@@ -15,16 +20,11 @@ import java.util.HexFormat;
 /**
  * Implements W3C Trace Context propagation (https://www.w3.org/TR/trace-context/).
  *
- * If the inbound request already contains a valid traceparent header, it is
- * forwarded unchanged — the gateway is a transparent hop in an existing trace.
+ * If the inbound request already contains a valid traceparent it is forwarded unchanged.
+ * Otherwise a new traceparent is generated: 00-{32-hex traceId}-{16-hex spanId}-01
  *
- * If no traceparent is present (e.g. a raw client call), a new one is generated:
- *   traceparent: 00-{32-hex traceId}-{16-hex spanId}-01
- *
- * The header is echoed back in the response so browser DevTools and API clients
- * can correlate the request without access to internal logs.
- *
- * Runs at ORDER = -190 (after CorrelationIdFilter, before JwtRelayFilter).
+ * Uses ServerHttpRequestDecorator to avoid UnsupportedOperationException on ReadOnlyHttpHeaders
+ * that occurs when using ServerHttpRequest.mutate().header() in Spring WebFlux.
  */
 @Slf4j
 @Component
@@ -33,7 +33,7 @@ public class TraceParentGatewayFilter implements GatewayFilter, Ordered {
     private static final String HEADER_TRACE_PARENT = "traceparent";
     private static final String HEADER_TRACE_STATE  = "tracestate";
     private static final String TRACE_VERSION       = "00";
-    private static final String TRACE_FLAGS         = "01";    // sampled
+    private static final String TRACE_FLAGS         = "01";
 
     private static final SecureRandom RANDOM = new SecureRandom();
 
@@ -51,18 +51,37 @@ public class TraceParentGatewayFilter implements GatewayFilter, Ordered {
 
         exchange.getAttributes().put(HEADER_TRACE_PARENT, traceParent);
 
-        ServerHttpRequest.Builder requestBuilder = exchange.getRequest().mutate()
-                .header(HEADER_TRACE_PARENT, traceParent);
+        LinkedMultiValueMap<String, String> mutableHeaders =
+                new LinkedMultiValueMap<>(exchange.getRequest().getHeaders());
+        mutableHeaders.set(HEADER_TRACE_PARENT, traceParent);
 
-        // Preserve tracestate if present
         String traceState = exchange.getRequest().getHeaders().getFirst(HEADER_TRACE_STATE);
         if (traceState != null) {
-            requestBuilder.header(HEADER_TRACE_STATE, traceState);
+            mutableHeaders.set(HEADER_TRACE_STATE, traceState);
         }
 
-        exchange.getResponse().getHeaders().set(HEADER_TRACE_PARENT, traceParent);
+        HttpHeaders newHeaders = new HttpHeaders(mutableHeaders);
 
-        return chain.filter(exchange.mutate().request(requestBuilder.build()).build());
+        ServerHttpRequest decoratedRequest = new ServerHttpRequestDecorator(exchange.getRequest()) {
+            @Override
+            @NonNull
+            public HttpHeaders getHeaders() {
+                return newHeaders;
+            }
+        };
+
+        ServerHttpResponse response = exchange.getResponse();
+        final String finalTraceParent = traceParent;
+        response.beforeCommit(() -> {
+            try {
+                response.getHeaders().set(HEADER_TRACE_PARENT, finalTraceParent);
+            } catch (UnsupportedOperationException ignored) {
+                // Headers already committed (e.g. circuit-breaker fallback) — skip
+            }
+            return Mono.empty();
+        });
+
+        return chain.filter(exchange.mutate().request(decoratedRequest).build());
     }
 
     @Override
@@ -82,10 +101,6 @@ public class TraceParentGatewayFilter implements GatewayFilter, Ordered {
         return String.join("-", TRACE_VERSION, traceId, spanId, TRACE_FLAGS);
     }
 
-    /**
-     * A valid traceparent matches: version(2)-traceId(32)-spanId(16)-flags(2).
-     * We only check structural validity, not semantic validity of the hex values.
-     */
     private boolean isValidTraceParent(String value) {
         if (value == null || value.isBlank()) return false;
         String[] parts = value.split("-");

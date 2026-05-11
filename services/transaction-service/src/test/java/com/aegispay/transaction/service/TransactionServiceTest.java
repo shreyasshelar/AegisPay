@@ -95,7 +95,7 @@ class TransactionServiceTest {
     }
 
     private TransactionRequest buildRequest() {
-        return new TransactionRequest(PAYER_ID, PAYEE_ID, new BigDecimal("500.00"), "INR", null);
+        return new TransactionRequest(PAYEE_ID, new BigDecimal("500.00"), "INR", null, null);
     }
 
     private Transaction buildTransaction() {

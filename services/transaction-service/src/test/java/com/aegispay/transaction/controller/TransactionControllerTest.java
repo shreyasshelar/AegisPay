@@ -40,7 +40,7 @@ class TransactionControllerTest {
     @Test
     void createReturns201() throws Exception {
         TransactionRequest request = new TransactionRequest(
-                PAYER_ID, PAYEE_ID, new BigDecimal("1000.00"), "INR", null);
+                PAYEE_ID, new BigDecimal("1000.00"), "INR", null, null);
 
         when(transactionService.create(any(), eq("idem-001"), any(UUID.class)))
                 .thenReturn(buildResponse());
@@ -60,7 +60,7 @@ class TransactionControllerTest {
     @Test
     void createReturns401WhenUnauthenticated() throws Exception {
         TransactionRequest request = new TransactionRequest(
-                PAYER_ID, PAYEE_ID, new BigDecimal("1000.00"), "INR", null);
+                PAYEE_ID, new BigDecimal("1000.00"), "INR", null, null);
 
         mockMvc.perform(post("/api/v1/transactions")
                         .header("X-Idempotency-Key", "idem-002")

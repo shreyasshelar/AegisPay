@@ -21,16 +21,42 @@ services:
       POSTGRES_PASSWORD: aegispay_dev
       POSTGRES_DB: aegispay
     ports:
-      - "5432:5432"
+      - "5433:5432"   # 5433 on host avoids conflict with local PostgreSQL
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./infra/local/postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U aegispay"]
       interval: 10s
-      timeout: 5s
       retries: 5
     restart: unless-stopped
+
+  # ── DB init (runs every start, idempotent — ensures all databases exist) ─────
+  db-init:
+    image: pgvector/pgvector:pg16
+    container_name: aegispay-db-init
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: aegispay_dev
+    command: >
+      psql -h postgres -U aegispay -d aegispay
+        -c "SELECT 'CREATE DATABASE aegispay_users'::text        WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname='aegispay_users')        \gexec"
+        -c "SELECT 'CREATE DATABASE aegispay_transactions'::text WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname='aegispay_transactions') \gexec"
+        -c "SELECT 'CREATE DATABASE aegispay_ledger'::text       WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname='aegispay_ledger')       \gexec"
+        -c "SELECT 'CREATE DATABASE aegispay_sagas'::text        WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname='aegispay_sagas')        \gexec"
+        -c "SELECT 'CREATE DATABASE aegispay_risk'::text         WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname='aegispay_risk')         \gexec"
+        -c "SELECT 'CREATE DATABASE aegispay_ai'::text           WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname='aegispay_ai')           \gexec"
+        -c "SELECT 'CREATE DATABASE aegispay_keycloak'::text     WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname='aegispay_keycloak')     \gexec"
+        -c "GRANT ALL PRIVILEGES ON DATABASE aegispay_users        TO aegispay"
+        -c "GRANT ALL PRIVILEGES ON DATABASE aegispay_transactions  TO aegispay"
+        -c "GRANT ALL PRIVILEGES ON DATABASE aegispay_ledger        TO aegispay"
+        -c "GRANT ALL PRIVILEGES ON DATABASE aegispay_sagas         TO aegispay"
+        -c "GRANT ALL PRIVILEGES ON DATABASE aegispay_risk          TO aegispay"
+        -c "GRANT ALL PRIVILEGES ON DATABASE aegispay_ai            TO aegispay"
+        -c "GRANT ALL PRIVILEGES ON DATABASE aegispay_keycloak      TO aegispay"
+    restart: "no"
 
   # ── Redis 7 ─────────────────────────────────────────────────────────────────
   redis:
@@ -44,7 +70,6 @@ services:
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "aegispay_dev", "ping"]
       interval: 10s
-      timeout: 5s
       retries: 5
     restart: unless-stopped
 
@@ -61,10 +86,10 @@ services:
     volumes:
       - mongodb_data:/data/db
     healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')", "--quiet"]
+      test: ["CMD-SHELL", "mongosh --eval \"db.adminCommand('ping').ok\" --quiet 2>/dev/null | grep -q 1"]
       interval: 15s
-      timeout: 10s
-      retries: 5
+      retries: 10
+      start_period: 60s
     restart: unless-stopped
 
   # ── Kafka (KRaft, single-node) ───────────────────────────────────────────────
@@ -98,10 +123,9 @@ services:
     volumes:
       - kafka_data:/var/lib/kafka/data
     healthcheck:
-      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list || exit 1"]
-      interval: 20s
-      timeout: 10s
-      retries: 10
+      test: ["CMD-SHELL", "nc -z localhost 9092 || exit 1"]
+      interval: 10s
+      retries: 15
       start_period: 30s
     restart: unless-stopped
 
@@ -125,20 +149,25 @@ services:
     container_name: aegispay-keycloak
     command: start-dev --import-realm
     environment:
-      KC_DB: dev-mem
-      KC_BOOTSTRAP_ADMIN_USERNAME: admin
-      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/aegispay_keycloak
+      KC_DB_USERNAME: aegispay
+      KC_DB_PASSWORD: aegispay_dev
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
       KC_HTTP_PORT: 8180
     ports:
       - "8180:8180"
     volumes:
       - ./infra/local/keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
     healthcheck:
-      test: ["CMD-SHELL", "curl -fs http://localhost:8180/realms/aegispay || exit 1"]
-      interval: 20s
-      timeout: 10s
-      retries: 15
-      start_period: 60s
+      test: ["CMD-SHELL", "grep -q ':1FF4 ' /proc/net/tcp6"]
+      interval: 15s
+      retries: 30
+      start_period: 300s
     restart: unless-stopped
 
   # ── ClickHouse (OLAP analytics store) ────────────────────────────────────────
@@ -159,7 +188,6 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8123/ping | grep -q Ok"]
       interval: 15s
-      timeout: 5s
       retries: 15
       start_period: 520s
     ulimits:
@@ -181,7 +209,6 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U superset"]
       interval: 10s
-      timeout: 5s
       retries: 5
     restart: unless-stopped
 
@@ -215,11 +242,10 @@ services:
         gunicorn --bind 0.0.0.0:8088 --workers 4 --timeout 120 --limit-request-line 0 --limit-request-field_size 0 'superset.app:create_app()'
       "
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8088/health || exit 1"]
+      test: ["CMD-SHELL", "curl -fs http://localhost:8088/health || exit 1"]
       interval: 30s
-      timeout: 10s
-      retries: 10
-      start_period: 120s
+      retries: 20
+      start_period: 360s
     restart: unless-stopped
 
 volumes:

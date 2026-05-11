@@ -1,2 +1,2 @@
-export * from './client/index.js'
-export * from './hooks/index.js'
+export * from './client/index'
+export * from './hooks/index'

@@ -165,7 +165,7 @@ export function TransactionsClient({ userId }: TransactionsClientProps) {
                     transaction={tx}
                     currentUserId={userId}
                     onClick={() =>
-                      router.push(`/dashboard/transactions/${tx.transactionId}`)
+                      router.push(`/transactions/${tx.transactionId}`)
                     }
                   />
                 ))}

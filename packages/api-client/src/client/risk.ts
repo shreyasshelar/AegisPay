@@ -1,4 +1,4 @@
-import type { AegisApiClient } from './base.js'
+import type { AegisApiClient } from './base'
 import { RiskCaseSchema, type RiskCase } from '@aegispay/shared-types'
 import { z } from 'zod'
 

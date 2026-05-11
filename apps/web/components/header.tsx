@@ -48,7 +48,7 @@ export function Header({ title, subtitle }: HeaderProps) {
 
         {/* Notifications bell */}
         <Link
-          href="/dashboard/notifications"
+          href="/notifications"
           className="relative rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
           title="Notifications"
         >

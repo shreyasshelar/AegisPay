@@ -123,10 +123,19 @@ public class RateLimitingGlobalFilter implements GlobalFilter, Ordered {
     private void setRateLimitHeaders(ServerWebExchange exchange,
                                      long limit, long remaining, long resetAt,
                                      GatewayProperties.RateLimiter cfg) {
-        var headers = exchange.getResponse().getHeaders();
-        headers.set(cfg.getLimitHeader(),     String.valueOf(limit));
-        headers.set(cfg.getRemainingHeader(), String.valueOf(remaining));
-        headers.set(cfg.getResetHeader(),     String.valueOf(resetAt));
+        exchange.getResponse().beforeCommit(() -> {
+            try {
+                var headers = exchange.getResponse().getHeaders();
+                headers.set(cfg.getLimitHeader(),     String.valueOf(limit));
+                headers.set(cfg.getRemainingHeader(), String.valueOf(remaining));
+                headers.set(cfg.getResetHeader(),     String.valueOf(resetAt));
+            } catch (UnsupportedOperationException ignored) {
+                // Response already committed (e.g. circuit-breaker fallback wrote
+                // the response before this beforeCommit hook ran).  Skip silently
+                // so the exception does not propagate and trip the circuit breaker.
+            }
+            return Mono.empty();
+        });
     }
 
     private Mono<Void> rejectWithTooManyRequests(ServerWebExchange exchange, long resetAt) {

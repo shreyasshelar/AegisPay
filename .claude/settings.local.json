@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8180/realms/aegispay/.well-known/openid-configuration)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8180/realms/aegispay)",
+      "Bash(xargs cat)",
+      "Bash(docker exec *)",
+      "Bash(curl -s http://localhost:8180/realms/aegispay)",
+      "Bash(python3 -c \"import sys,json; [print\\(x['name']\\) for x in json.load\\(sys.stdin\\)]\")",
+      "Bash(curl -sv http://localhost:8180/realms/master/protocol/openid-connect/token -d 'client_id=admin-cli&username=admin&password=admin&grant_type=password')",
+      "Bash(python3 -c \"import sys,json; env=[e for e in json.load\\(sys.stdin\\)[0]['Config']['Env'] if 'ADMIN' in e or 'KC_BOOT' in e]; [print\\(e\\) for e in env]\")",
+      "Bash(chmod +x /Users/shreyasshelar/Downloads/Shreyas/projects/AegisPay/infra/local/keycloak/configure-keycloak.sh)",
+      "Bash(curl -s http://localhost:8180/realms/master/protocol/openid-connect/token -d 'client_id=admin-cli&username=admin&password=admin&grant_type=password')",
+      "Bash(curl -s \"http://localhost:8080/actuator/health\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d['status']\\)\")",
+      "Bash(psql \"postgresql://aegispay:aegispay_dev@localhost:5433/aegispay_ledger\" -c \"SELECT id, user_id, currency, available_balance, reserved_balance, total_balance FROM accounts;\")",
+      "Bash(lsof -ti:8080,8081,8083,3000)",
+      "Bash(xargs ps -p)",
+      "Bash(ps eww *)"
+    ]
+  }
+}
