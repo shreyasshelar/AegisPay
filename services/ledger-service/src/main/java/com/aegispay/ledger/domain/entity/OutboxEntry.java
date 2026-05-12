@@ -2,6 +2,7 @@ package com.aegispay.ledger.domain.entity;
 
 import com.aegispay.common.kafka.OutboxRecord;
 import jakarta.persistence.*;
+import org.hibernate.annotations.ColumnTransformer;
 
 import java.time.Instant;
 import java.util.UUID;

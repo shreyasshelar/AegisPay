@@ -2,6 +2,7 @@ package com.aegispay.orchestrator.domain.entity;
 
 import com.aegispay.common.kafka.OutboxRecord;
 import jakarta.persistence.*;
+import org.hibernate.annotations.ColumnTransformer;
 import lombok.*;
 
 import java.time.Instant;
