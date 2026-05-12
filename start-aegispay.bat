@@ -116,31 +116,6 @@ reconciliation-service
 echo All service JARs built
 
 REM =========================================================
-REM START DOCKER
-REM =========================================================
-
-echo.
-echo Starting infrastructure...
-
-docker info >nul 2>&1
-
-IF %ERRORLEVEL% NEQ 0 (
-    echo Docker Desktop not running
-    start "" "C:\Program Files\Docker\Docker\Docker Desktop.exe"
-
-    :wait_docker
-    docker info >nul 2>&1
-
-    IF !ERRORLEVEL! NEQ 0 (
-        echo Waiting for Docker...
-        timeout /t 3 >nul
-        goto wait_docker
-    )
-)
-
-echo Docker ready
-
-REM =========================================================
 REM CLEAN INFRA
 REM =========================================================
 
