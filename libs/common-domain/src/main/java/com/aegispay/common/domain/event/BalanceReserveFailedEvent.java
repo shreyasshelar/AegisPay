@@ -1,19 +1,21 @@
 package com.aegispay.common.domain.event;
 
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 
 import java.math.BigDecimal;
 import java.util.UUID;
 
 @Getter
+@NoArgsConstructor
 @SuperBuilder
 public class BalanceReserveFailedEvent extends BaseEvent {
 
-    private final UUID transactionId;
-    private final UUID sagaId;
-    private final UUID accountId;
-    private final BigDecimal requestedAmount;
-    private final BigDecimal availableBalance;
-    private final String failureReason;
+    private UUID transactionId;
+    private UUID sagaId;
+    private UUID accountId;
+    private BigDecimal requestedAmount;
+    private BigDecimal availableBalance;
+    private String failureReason;
 }

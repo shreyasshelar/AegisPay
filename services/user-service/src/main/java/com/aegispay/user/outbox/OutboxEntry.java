@@ -2,6 +2,7 @@ package com.aegispay.user.outbox;
 
 import com.aegispay.common.kafka.OutboxRecord;
 import jakarta.persistence.*;
+import org.hibernate.annotations.ColumnTransformer;
 import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
@@ -38,7 +39,7 @@ public class OutboxEntry implements OutboxRecord {
     private String messageKey;
 
     @Column(nullable = false, columnDefinition = "jsonb")
-    @JdbcTypeCode(SqlTypes.JSON)
+    @ColumnTransformer(write = "?::jsonb")
     private String payload;
 
     /** PENDING | PUBLISHED | FAILED */
