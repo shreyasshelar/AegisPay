@@ -1,5 +1,6 @@
 package com.aegispay.common.domain.event;
 
+import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Getter;
 import lombok.experimental.SuperBuilder;
@@ -13,16 +14,17 @@ import java.util.UUID;
  */
 @Getter
 @SuperBuilder
+@JsonAutoDetect(fieldVisibility = JsonAutoDetect.Visibility.ANY)
 public abstract class BaseEvent {
 
-    private final UUID eventId;
-    private final String correlationId;
-    private final String traceParent;
+    private UUID eventId;
+    private String correlationId;
+    private String traceParent;
 
     @JsonFormat(shape = JsonFormat.Shape.STRING)
-    private final Instant occurredAt;
+    private Instant occurredAt;
 
-    private final int schemaVersion;
+    private int schemaVersion;
 
     protected BaseEvent() {
         this.eventId = UUID.randomUUID();

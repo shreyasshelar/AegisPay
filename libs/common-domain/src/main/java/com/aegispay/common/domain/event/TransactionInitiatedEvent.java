@@ -1,21 +1,23 @@
 package com.aegispay.common.domain.event;
 
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 
 import java.math.BigDecimal;
 import java.util.UUID;
 
 @Getter
+@NoArgsConstructor
 @SuperBuilder
 public class TransactionInitiatedEvent extends BaseEvent {
 
-    private final UUID transactionId;
-    private final UUID userId;
-    private final UUID payerId;
-    private final UUID payeeId;
-    private final BigDecimal amount;
-    private final String currency;
-    private final String idempotencyKey;
-    private final String metadata;
+    private UUID transactionId;
+    private UUID userId;
+    private UUID payerId;
+    private UUID payeeId;
+    private BigDecimal amount;
+    private String currency;
+    private String idempotencyKey;
+    private String metadata;
 }
