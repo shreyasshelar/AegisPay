@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "NODE_OPTIONS='--dns-result-order=ipv4first' next dev",
+    "dev": "cross-env NODE_OPTIONS=--dns-result-order=ipv4first next dev",
     "build": "NODE_OPTIONS='--dns-result-order=ipv4first' next build",
     "start": "NODE_OPTIONS='--dns-result-order=ipv4first' next start",
     "lint": "next lint",
