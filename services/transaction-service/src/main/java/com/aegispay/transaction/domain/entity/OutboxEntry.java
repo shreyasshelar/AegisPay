@@ -3,6 +3,8 @@ package com.aegispay.transaction.domain.entity;
 import com.aegispay.common.kafka.OutboxRecord;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -36,6 +38,7 @@ public class OutboxEntry implements OutboxRecord {
     private String messageKey;
 
     @Column(nullable = false, columnDefinition = "jsonb")
+    @JdbcTypeCode(SqlTypes.JSON)
     private String payload;
 
     @Column(nullable = false, length = 20)
