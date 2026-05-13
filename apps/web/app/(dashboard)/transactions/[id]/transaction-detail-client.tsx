@@ -14,7 +14,7 @@ import {
 import { toast } from 'sonner'
 import {
   useTransaction,
-  useTransactionSocket,
+  useTransactionStatusSocket,
   useResolveError,
   transactionKeys,
 } from '@aegispay/api-client'
@@ -22,7 +22,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { AegisBadge, AegisStatusTimeline } from '@aegispay/design-system'
 import { Header } from '@/components/header'
 import { formatAmount, formatDate, copyToClipboard } from '@/lib/utils'
-import type { TransactionNotification } from '@aegispay/shared-types'
+import type { TransactionStatusUpdate } from '@aegispay/shared-types'
 
 const TERMINAL = new Set(['COMPLETED', 'FAILED', 'ROLLED_BACK'])
 const FAILED   = new Set(['FAILED', 'ROLLED_BACK'])
@@ -41,16 +41,25 @@ export function TransactionDetailClient({
   const { data: tx, isLoading, isError } = useTransaction(transactionId)
   const resolveError = useResolveError()
 
-  // WebSocket live updates
-  const wsBaseUrl = process.env.NEXT_PUBLIC_WS_BASE_URL ?? 'ws://localhost:8086'
-  useTransactionSocket({
-    userId:      session?.user?.id ?? '',
+  // WebSocket: subscribe to transaction-service per-transaction status topic
+  const txWsBaseUrl = process.env.NEXT_PUBLIC_TX_WS_BASE_URL ?? 'ws://localhost:8082'
+  useTransactionStatusSocket({
+    transactionId,
     accessToken: session?.accessToken ?? null,
-    wsBaseUrl,
-    onNotification(notification: TransactionNotification) {
-      if (notification.transactionId !== transactionId) return
-      queryClient.invalidateQueries({ queryKey: transactionKeys.detail(transactionId) })
-      toast.success(notification.title, { description: notification.body, duration: 6_000 })
+    wsBaseUrl:   txWsBaseUrl,
+    onStatusUpdate(update: TransactionStatusUpdate) {
+      // Patch cache immediately — no extra fetch
+      queryClient.setQueryData(
+        transactionKeys.detail(transactionId),
+        (prev: Record<string, unknown> | undefined) =>
+          prev ? { ...prev, status: update.status } : prev,
+      )
+      // Toast on terminal transitions
+      if (update.status === 'COMPLETED') {
+        toast.success('Payment completed!', { duration: 6_000 })
+      } else if (update.status === 'FAILED' || update.status === 'ROLLED_BACK') {
+        toast.error('Payment failed', { description: 'Check the details below.', duration: 6_000 })
+      }
     },
   })
 
@@ -134,7 +143,7 @@ export function TransactionDetailClient({
             <AegisBadge status={tx.status} />
           </div>
 
-          <AegisStatusTimeline status={tx.status} />
+          <AegisStatusTimeline currentStatus={tx.status} />
 
           {!isTerminal && (
             <div className="mt-4 flex items-center gap-2 rounded-lg bg-primary-50 px-3 py-2 text-xs text-primary-700">
