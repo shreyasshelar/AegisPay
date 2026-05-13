@@ -274,7 +274,7 @@ public class PaymentSagaOrchestrator {
         BalanceReserveRequestedEvent event = BalanceReserveRequestedEvent.builder()
                 .eventId(UUID.randomUUID()).occurredAt(Instant.now()).schemaVersion(1)
                 .transactionId(saga.getTransactionId()).sagaId(saga.getId())
-                .accountId(saga.getPayerId())
+                .userId(saga.getPayerId())
                 .amount(saga.getAmount()).currency(saga.getCurrency())
                 .build();
         writeOutbox(saga, "BalanceReserveRequestedEvent", KafkaTopics.BALANCE_RESERVE_REQUESTED, event);
