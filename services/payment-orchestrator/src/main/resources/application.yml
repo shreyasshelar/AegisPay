@@ -60,6 +60,10 @@ stripe:
   # Injected from K8s Secret aegispay-stripe-secret (via ESO → Vault)
   secret-key: ${STRIPE_SECRET_KEY:sk_test_placeholder_local_dev}
   webhook-secret: ${STRIPE_WEBHOOK_SECRET:whsec_placeholder_local_dev}
+  # Default payment method used for server-side confirmation.
+  # Dev/test: pm_card_visa (Stripe built-in test card).
+  # Production: override with a real stored PaymentMethod ID or use per-user PMs.
+  default-payment-method: ${STRIPE_DEFAULT_PM:pm_card_visa}
 
 aegispay:
   saga:

@@ -1,13 +1,27 @@
 'use client'
 
 import { useEffect, useRef, useCallback } from 'react'
-import type { TransactionNotification } from '@aegispay/shared-types'
+import type { TransactionNotification, TransactionStatusUpdate } from '@aegispay/shared-types'
+import { TransactionStatusUpdateSchema } from '@aegispay/shared-types'
 
 interface UseTransactionSocketOptions {
   userId: string
   accessToken: string | null
   wsBaseUrl: string
   onNotification: (notification: TransactionNotification) => void
+}
+
+// ── Per-transaction status socket ────────────────────────────────────────────
+// Connects to transaction-service WS and subscribes to the topic for a single
+// transaction.  Delivers typed status updates so the UI can patch the cache
+// immediately without waiting for a polling round-trip.
+
+interface UseTransactionStatusSocketOptions {
+  transactionId: string | null
+  accessToken:   string | null
+  wsBaseUrl:     string   // should point at transaction-service (default: ws://localhost:8082)
+  onStatusUpdate: (update: TransactionStatusUpdate) => void
+  enabled?: boolean
 }
 
 interface StompFrame {
@@ -92,6 +106,85 @@ export function useTransactionSocket({
       ws.close()
     }
   }, [accessToken, userId, wsBaseUrl])
+
+  useEffect(() => {
+    connect()
+    return () => {
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current)
+      wsRef.current?.close()
+    }
+  }, [connect])
+}
+
+// ── useTransactionStatusSocket ────────────────────────────────────────────────
+
+export function useTransactionStatusSocket({
+  transactionId,
+  accessToken,
+  wsBaseUrl,
+  onStatusUpdate,
+  enabled = true,
+}: UseTransactionStatusSocketOptions) {
+  const wsRef              = useRef<WebSocket | null>(null)
+  const reconnectTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const onStatusUpdateRef  = useRef(onStatusUpdate)
+  onStatusUpdateRef.current = onStatusUpdate
+
+  const connect = useCallback(() => {
+    if (!enabled || !accessToken || !transactionId) return
+    if (wsRef.current?.readyState === WebSocket.OPEN) return
+
+    const ws = new WebSocket(`${wsBaseUrl}/ws/websocket`)
+    wsRef.current = ws
+
+    ws.onopen = () => {
+      ws.send(buildStompFrame({
+        command: 'CONNECT',
+        headers: {
+          'accept-version': '1.2',
+          'heart-beat':     '10000,10000',
+          Authorization:    `Bearer ${accessToken}`,
+        },
+        body: '',
+      }))
+    }
+
+    ws.onmessage = (event: MessageEvent<string>) => {
+      const raw = event.data
+      if (raw.startsWith('CONNECTED')) {
+        ws.send(buildStompFrame({
+          command: 'SUBSCRIBE',
+          headers: {
+            id:          'sub-txstatus',
+            destination: `/topic/transactions/${transactionId}/status`,
+          },
+          body: '',
+        }))
+        return
+      }
+
+      if (raw.startsWith('MESSAGE')) {
+        const bodyStart = raw.indexOf('\n\n')
+        if (bodyStart === -1) return
+        const body = raw.slice(bodyStart + 2).replace(/\0$/, '')
+        try {
+          const parsed = JSON.parse(body)
+          const result = TransactionStatusUpdateSchema.safeParse(parsed)
+          if (result.success) {
+            onStatusUpdateRef.current(result.data)
+          }
+        } catch {
+          // non-JSON frame, ignore
+        }
+      }
+    }
+
+    ws.onclose = () => {
+      reconnectTimerRef.current = setTimeout(connect, 5_000)
+    }
+
+    ws.onerror = () => { ws.close() }
+  }, [enabled, accessToken, transactionId, wsBaseUrl])
 
   useEffect(() => {
     connect()

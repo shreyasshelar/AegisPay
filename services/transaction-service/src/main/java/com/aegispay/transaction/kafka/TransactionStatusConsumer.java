@@ -1,9 +1,13 @@
 package com.aegispay.transaction.kafka;
 
 import com.aegispay.common.domain.enums.TransactionStatus;
+import com.aegispay.common.domain.event.BalanceReservedEvent;
+import com.aegispay.common.domain.event.PaymentProcessRequestedEvent;
+import com.aegispay.common.domain.event.RiskAssessedEvent;
 import com.aegispay.common.domain.event.TransactionCompletedEvent;
 import com.aegispay.common.domain.event.TransactionFailedEvent;
 import com.aegispay.common.domain.event.TransactionRolledBackEvent;
+import com.aegispay.common.domain.enums.RiskDecision;
 import com.aegispay.common.kafka.KafkaTopics;
 import com.aegispay.transaction.domain.dto.TransactionStatusResponse;
 import com.aegispay.transaction.domain.entity.Transaction;
@@ -20,7 +24,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -41,6 +44,11 @@ public class TransactionStatusConsumer {
 
     @KafkaListener(
         topics = {
+            // Intermediate saga events — keep UI in sync while saga runs
+            KafkaTopics.BALANCE_RESERVED,
+            KafkaTopics.RISK_ASSESSED,
+            KafkaTopics.PAYMENT_PROCESS_REQUESTED,
+            // Terminal events
             KafkaTopics.TRANSACTION_COMPLETED,
             KafkaTopics.TRANSACTION_FAILED,
             KafkaTopics.TRANSACTION_ROLLED_BACK
@@ -56,15 +64,48 @@ public class TransactionStatusConsumer {
 
         try {
             switch (topic) {
-                case KafkaTopics.TRANSACTION_COMPLETED  -> handleCompleted(payload);
-                case KafkaTopics.TRANSACTION_FAILED     -> handleFailed(payload);
-                case KafkaTopics.TRANSACTION_ROLLED_BACK -> handleRolledBack(payload);
+                case KafkaTopics.BALANCE_RESERVED          -> handleBalanceReserved(payload);
+                case KafkaTopics.RISK_ASSESSED             -> handleRiskAssessed(payload);
+                case KafkaTopics.PAYMENT_PROCESS_REQUESTED -> handlePaymentProcessing(payload);
+                case KafkaTopics.TRANSACTION_COMPLETED     -> handleCompleted(payload);
+                case KafkaTopics.TRANSACTION_FAILED        -> handleFailed(payload);
+                case KafkaTopics.TRANSACTION_ROLLED_BACK   -> handleRolledBack(payload);
                 default -> log.warn("Unhandled topic: {}", topic);
             }
         } catch (Exception e) {
             log.error("Error processing status event: topic={} error={}", topic, e.getMessage(), e);
-            throw e;   // let the error handler retry / DLQ
+            throw e;
         }
+    }
+
+    private void handleBalanceReserved(String payload) throws Exception {
+        BalanceReservedEvent event = objectMapper.readValue(payload, BalanceReservedEvent.class);
+        UUID txnId = event.getTransactionId();
+        updateStatus(txnId, TransactionStatus.RESERVED, "BalanceReservedEvent");
+    }
+
+    private void handleRiskAssessed(String payload) throws Exception {
+        RiskAssessedEvent event = objectMapper.readValue(payload, RiskAssessedEvent.class);
+        // Only advance to RISK_CLEARED on approval — rejection flows to TRANSACTION_FAILED
+        if (RiskDecision.APPROVED.equals(event.getDecision())) {
+            updateStatus(event.getTransactionId(), TransactionStatus.RISK_CLEARED, "RiskAssessedEvent");
+        }
+    }
+
+    private void handlePaymentProcessing(String payload) throws Exception {
+        PaymentProcessRequestedEvent event = objectMapper.readValue(payload, PaymentProcessRequestedEvent.class);
+        updateStatus(event.getTransactionId(), TransactionStatus.PROCESSING, "PaymentProcessRequestedEvent");
+    }
+
+    /** Generic helper — updates write model + read model + pushes WebSocket. */
+    private void updateStatus(UUID txnId, TransactionStatus status, String lastEvent) {
+        transactionRepository.findById(txnId).ifPresent(txn -> {
+            txn.setStatus(status);
+            transactionRepository.save(txn);
+            upsertView(txn, lastEvent);
+            pushWebSocket(txnId, status, lastEvent);
+            log.debug("Status updated: txnId={} status={}", txnId, status);
+        });
     }
 
     private void handleCompleted(String payload) throws Exception {
