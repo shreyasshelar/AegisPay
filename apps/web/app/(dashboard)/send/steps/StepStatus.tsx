@@ -15,7 +15,7 @@ import {
 import { toast } from 'sonner'
 import {
   useTransaction,
-  useTransactionSocket,
+  useTransactionStatusSocket,
   useResolveError,
   transactionKeys,
 } from '@aegispay/api-client'
@@ -23,7 +23,7 @@ import { AegisStatusTimeline } from '@aegispay/design-system'
 import { Button as AegisButton } from '@aegispay/design-system'
 import { useSendMoneyStore } from '@/lib/useSendMoneyStore'
 import { formatAmount } from '@/lib/utils'
-import type { TransactionNotification } from '@aegispay/shared-types'
+import type { TransactionStatusUpdate } from '@aegispay/shared-types'
 
 const TERMINAL = new Set(['COMPLETED', 'FAILED', 'ROLLED_BACK'])
 const FAILED   = new Set(['FAILED', 'ROLLED_BACK'])
@@ -43,15 +43,20 @@ export function StepStatus() {
 
   const resolveError = useResolveError()
 
-  // WebSocket for live updates
-  const wsBaseUrl = process.env.NEXT_PUBLIC_WS_BASE_URL ?? 'ws://localhost:8086'
-  useTransactionSocket({
-    userId:      session?.user?.id ?? '',
-    accessToken: session?.accessToken ?? null,
-    wsBaseUrl,
-    onNotification(notification: TransactionNotification) {
-      if (notification.transactionId !== transactionId) return
-      queryClient.invalidateQueries({ queryKey: transactionKeys.detail(transactionId!) })
+  // WebSocket: subscribe to /topic/transactions/{id}/status on transaction-service
+  const txWsBaseUrl = process.env.NEXT_PUBLIC_TX_WS_BASE_URL ?? 'ws://localhost:8082'
+  useTransactionStatusSocket({
+    transactionId: transactionId ?? null,
+    accessToken:   session?.accessToken ?? null,
+    wsBaseUrl:     txWsBaseUrl,
+    enabled:       !!transactionId,
+    onStatusUpdate(update: TransactionStatusUpdate) {
+      // Patch cache directly — no round-trip needed
+      queryClient.setQueryData(
+        transactionKeys.detail(update.transactionId),
+        (prev: Record<string, unknown> | undefined) =>
+          prev ? { ...prev, status: update.status } : prev,
+      )
     },
   })
 
@@ -147,7 +152,7 @@ export function StepStatus() {
         )}
 
         {/* Timeline */}
-        <AegisStatusTimeline status={tx.status} />
+        <AegisStatusTimeline currentStatus={tx.status} />
       </div>
 
       {/* AI error explanation — shown only on failure */}

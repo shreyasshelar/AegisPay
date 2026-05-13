@@ -26,9 +26,14 @@ import java.util.Set;
  * <p>Cross-currency settlement is handled natively by Stripe — pass the charge currency and
  * Stripe settles to the connected account's payout currency automatically.
  *
- * <p>PaymentIntent is created with {@code automatic_payment_methods} disabled — AegisPay drives
- * the payment method selection client-side and passes the {@code paymentMethodId} if available.
- * For server-to-server flows (ACH, SEPA Direct Debit, etc.) set {@code confirm: true}.
+ * <p>Payment method strategy:
+ * <ul>
+ *   <li>Dev/test: uses {@code stripe.default-payment-method} (default: {@code pm_card_visa}).
+ *   <li>Production: pass a stored {@code paymentMethodId} per-user via {@link PaymentRequest}.
+ * </ul>
+ * Stripe requires a payment method to be attached before a PaymentIntent can be confirmed
+ * server-side ({@code confirm: true}).  Creating the intent without one results in
+ * {@code payment_intent_unexpected_state}.
  */
 @Slf4j
 @Component
@@ -43,6 +48,10 @@ public class StripePaymentGatewayClient {
     @Value("${stripe.secret-key}")
     private String secretKey;
 
+    /** Default PM used for server-side confirmation (pm_card_visa in test mode). */
+    @Value("${stripe.default-payment-method:pm_card_visa}")
+    private String defaultPaymentMethodId;
+
     @PostConstruct
     void init() {
         Stripe.apiKey = secretKey;
@@ -56,8 +65,16 @@ public class StripePaymentGatewayClient {
             java.util.UUID payerId,
             java.util.UUID payeeId,
             BigDecimal amount,
-            String currency
-    ) {}
+            String currency,
+            /** Optional stored PaymentMethod ID (pm_…). Null → falls back to defaultPaymentMethodId. */
+            String paymentMethodId
+    ) {
+        /** Convenience constructor without explicit PM — uses service default. */
+        public PaymentRequest(java.util.UUID transactionId, java.util.UUID payerId,
+                              java.util.UUID payeeId, BigDecimal amount, String currency) {
+            this(transactionId, payerId, payeeId, amount, currency, null);
+        }
+    }
 
     public record PaymentResult(
             boolean success,
@@ -74,23 +91,24 @@ public class StripePaymentGatewayClient {
                 request.transactionId(), request.amount(), request.currency());
 
         long stripeAmount = toStripeAmount(request.amount(), request.currency());
-        String currency = request.currency().toLowerCase();
+        String currency   = request.currency().toLowerCase();
+        // Resolve payment method: explicit per-request → service default
+        String pmId = (request.paymentMethodId() != null && !request.paymentMethodId().isBlank())
+                ? request.paymentMethodId()
+                : defaultPaymentMethodId;
 
         try {
             PaymentIntentCreateParams params = PaymentIntentCreateParams.builder()
                     .setAmount(stripeAmount)
                     .setCurrency(currency)
-                    .setConfirm(true)               // server-side confirm
-                    .setAutomaticPaymentMethods(
-                            PaymentIntentCreateParams.AutomaticPaymentMethods.builder()
-                                    .setEnabled(true)
-                                    .setAllowRedirects(
-                                            PaymentIntentCreateParams.AutomaticPaymentMethods
-                                                    .AllowRedirects.NEVER)
-                                    .build())
+                    // Attach payment method so server-side confirm works
+                    .setPaymentMethod(pmId)
+                    .setConfirm(true)
+                    // off_session = no 3DS redirect; fine for server-driven P2P flows
+                    .setOffSession(true)
                     .putMetadata("transaction_id", request.transactionId().toString())
-                    .putMetadata("payer_id", request.payerId().toString())
-                    .putMetadata("payee_id", request.payeeId().toString())
+                    .putMetadata("payer_id",       request.payerId().toString())
+                    .putMetadata("payee_id",       request.payeeId().toString())
                     .setDescription("AegisPay txn " + request.transactionId())
                     .build();
 

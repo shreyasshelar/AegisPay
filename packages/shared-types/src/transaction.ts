@@ -58,7 +58,7 @@ export const PagedTransactionsSchema = z.object({
 })
 export type PagedTransactions = z.infer<typeof PagedTransactionsSchema>
 
-// WebSocket notification payload
+// WebSocket notification payload — from notification-service (/user queue)
 export const TransactionNotificationSchema = z.object({
   type: z.enum(['TRANSACTION_COMPLETED', 'TRANSACTION_FAILED', 'TRANSACTION_ROLLED_BACK']),
   title: z.string(),
@@ -66,3 +66,14 @@ export const TransactionNotificationSchema = z.object({
   transactionId: z.string().uuid().optional(),
 })
 export type TransactionNotification = z.infer<typeof TransactionNotificationSchema>
+
+// Real-time status update — from transaction-service (/topic/transactions/{id}/status)
+// Matches TransactionStatusResponse.java
+export const TransactionStatusUpdateSchema = z.object({
+  transactionId: z.string().uuid(),
+  status:        TransactionStatusSchema,
+  lastEvent:     z.string(),
+  updatedAt:     z.string().datetime({ offset: true }),
+  aiExplanation: z.string().nullable().optional(),
+})
+export type TransactionStatusUpdate = z.infer<typeof TransactionStatusUpdateSchema>
