@@ -1,5 +1,6 @@
 package com.aegispay.common.domain.event;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
@@ -8,7 +9,7 @@ import java.math.BigDecimal;
 import java.util.UUID;
 
 @Getter
-@NoArgsConstructor
+@NoArgsConstructor(onConstructor_ = @JsonCreator)
 @SuperBuilder
 public class BalanceCommittedEvent extends BaseEvent {
 
