@@ -166,3 +166,17 @@ All 13 original start-up bugs from the first session are fixed (see git history)
 ---
 
 *Last updated: 2026-05-11*
+
+
+
+i hit localhost 3000 and previous session i have logined in but expired or new docker compose up so lost empty then after 401 it should signout and go back to login right
+
+inr alignment in transaction
+
+transaction flow
+
+signup , other google and all entra etc 
+
+even if one transaction going on i should be able to do second transaction 
+
+transaction date filter not working 
