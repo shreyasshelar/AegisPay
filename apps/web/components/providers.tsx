@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { SessionProvider, useSession } from 'next-auth/react'
+import { SessionProvider, signOut, useSession } from 'next-auth/react'
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
-import { ApiProvider } from '@aegispay/api-client'
+import { ApiProvider, ApiError } from '@aegispay/api-client'
 import { Toaster } from 'sonner'
 
 // ── QueryClient singleton (per browser tab) ──────────────────────────────────
@@ -16,7 +16,12 @@ function makeQueryClient() {
       queries: {
         staleTime:            30_000,
         gcTime:               5 * 60_000,
-        retry:                1,
+        // Never retry 401s — they trigger sign-out immediately via onUnauthorized.
+        // Retry once for transient 5xx / network errors.
+        retry: (failureCount, error) => {
+          if (error instanceof ApiError && error.status === 401) return false
+          return failureCount < 1
+        },
         refetchOnWindowFocus: false,
       },
       mutations: { retry: 0 },
@@ -99,10 +104,21 @@ function ApiProviderWithSession({ children }: { children: React.ReactNode }) {
     return s.accessToken
   }, []) // stable — reads from refs at call time
 
+  // onUnauthorized: fired by Axios interceptor on any HTTP 401.
+  // Debounced via ref so concurrent 401s (dashboard loads multiple queries
+  // at once) only trigger one sign-out.
+  const handlingUnauthorized = useRef(false)
+  const onUnauthorized = useCallback(() => {
+    if (handlingUnauthorized.current) return
+    handlingUnauthorized.current = true
+    queryClient.clear()
+    void signOut({ callbackUrl: '/login' })
+  }, [queryClient])
+
   const baseURL = process.env.NEXT_PUBLIC_API_BASE_URL ?? ''
 
   return (
-    <ApiProvider baseURL={baseURL} getAccessToken={getAccessToken}>
+    <ApiProvider baseURL={baseURL} getAccessToken={getAccessToken} onUnauthorized={onUnauthorized}>
       {children}
     </ApiProvider>
   )
