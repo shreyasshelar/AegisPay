@@ -169,7 +169,7 @@ All 13 original start-up bugs from the first session are fixed (see git history)
 
 
 
-i hit localhost 3000 and previous session i have logined in but expired or new docker compose up so lost empty then after 401 it should signout and go back to login right
+i hit localhost 3000 and previous session i have logined in but expired or new docker compose up so lost empty then after 401 on the first 401 api response it should signout and go back to login right api calls are failing 401 and i am still on dashboard even though data is not visible 
 
 inr alignment in transaction
 

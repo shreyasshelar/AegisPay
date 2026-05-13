@@ -14,7 +14,7 @@ public class BalanceReserveRequestedEvent extends BaseEvent {
 
     private UUID transactionId;
     private UUID sagaId;
-    private UUID accountId;
+    private UUID userId;
     private BigDecimal amount;
     private String currency;
 }
