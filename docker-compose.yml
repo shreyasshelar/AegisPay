@@ -11,7 +11,6 @@
 #   mvn -pl services/user-service spring-boot:run
 
 services:
-
   # ── PostgreSQL 16 ────────────────────────────────────────────────────────────
   postgres:
     image: pgvector/pgvector:pg16
@@ -21,7 +20,7 @@ services:
       POSTGRES_PASSWORD: aegispay_dev
       POSTGRES_DB: aegispay
     ports:
-      - "5433:5432"   # 5433 on host avoids conflict with local PostgreSQL
+      - "5433:5432" # 5433 on host avoids conflict with local PostgreSQL
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./infra/local/postgres/init:/docker-entrypoint-initdb.d:ro
@@ -30,7 +29,7 @@ services:
       interval: 10s
       retries: 5
     restart: unless-stopped
-
+    
   # ── DB init (runs every start, idempotent — ensures all databases exist) ─────
   db-init:
     image: pgvector/pgvector:pg16
@@ -41,21 +40,18 @@ services:
     environment:
       PGPASSWORD: aegispay_dev
     command: >
-      psql -h postgres -U aegispay -d aegispay
-        -c "SELECT 'CREATE DATABASE aegispay_users'::text        WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname='aegispay_users')        \gexec"
-        -c "SELECT 'CREATE DATABASE aegispay_transactions'::text WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname='aegispay_transactions') \gexec"
-        -c "SELECT 'CREATE DATABASE aegispay_ledger'::text       WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname='aegispay_ledger')       \gexec"
-        -c "SELECT 'CREATE DATABASE aegispay_sagas'::text        WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname='aegispay_sagas')        \gexec"
-        -c "SELECT 'CREATE DATABASE aegispay_risk'::text         WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname='aegispay_risk')         \gexec"
-        -c "SELECT 'CREATE DATABASE aegispay_ai'::text           WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname='aegispay_ai')           \gexec"
-        -c "SELECT 'CREATE DATABASE aegispay_keycloak'::text     WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname='aegispay_keycloak')     \gexec"
-        -c "GRANT ALL PRIVILEGES ON DATABASE aegispay_users        TO aegispay"
-        -c "GRANT ALL PRIVILEGES ON DATABASE aegispay_transactions  TO aegispay"
-        -c "GRANT ALL PRIVILEGES ON DATABASE aegispay_ledger        TO aegispay"
-        -c "GRANT ALL PRIVILEGES ON DATABASE aegispay_sagas         TO aegispay"
-        -c "GRANT ALL PRIVILEGES ON DATABASE aegispay_risk          TO aegispay"
-        -c "GRANT ALL PRIVILEGES ON DATABASE aegispay_ai            TO aegispay"
-        -c "GRANT ALL PRIVILEGES ON DATABASE aegispay_keycloak      TO aegispay"
+      bash -c "
+        for db in aegispay_users aegispay_transactions aegispay_ledger aegispay_sagas aegispay_risk aegispay_ai aegispay_keycloak; do
+
+          if ! psql -h postgres -U aegispay -d postgres -tAc \"SELECT 1 FROM pg_database WHERE datname='$$db'\" | grep -q 1; then
+            echo \"Creating database: $$db\"
+            psql -h postgres -U aegispay -d postgres -c \"CREATE DATABASE \\\"$$db\\\"\";
+          fi;
+
+          psql -h postgres -U aegispay -d postgres -c \"GRANT ALL PRIVILEGES ON DATABASE \\\"$$db\\\" TO aegispay\";
+
+        done
+      "
     restart: "no"
 
   # ── Redis 7 ─────────────────────────────────────────────────────────────────
@@ -86,7 +82,11 @@ services:
     volumes:
       - mongodb_data:/data/db
     healthcheck:
-      test: ["CMD-SHELL", "mongosh --eval \"db.adminCommand('ping').ok\" --quiet 2>/dev/null | grep -q 1"]
+      test:
+        [
+          "CMD-SHELL",
+          'mongosh --eval "db.adminCommand(''ping'').ok" --quiet 2>/dev/null | grep -q 1',
+        ]
       interval: 15s
       retries: 10
       start_period: 60s
@@ -119,7 +119,7 @@ services:
       # Fixed cluster ID ensures volume data survives container restarts
       CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
     ports:
-      - "9094:9094"   # host access (EXTERNAL listener)
+      - "9094:9094" # host access (EXTERNAL listener)
     volumes:
       - kafka_data:/var/lib/kafka/data
     healthcheck:
@@ -177,11 +177,11 @@ services:
     environment:
       CLICKHOUSE_DB: aegispay_analytics
       CLICKHOUSE_USER: default
-      CLICKHOUSE_PASSWORD: ""          # empty for local dev
+      CLICKHOUSE_PASSWORD: "" # empty for local dev
       CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
     ports:
-      - "8123:8123"    # HTTP interface (JDBC)
-      - "9000:9000"    # Native protocol
+      - "8123:8123" # HTTP interface (JDBC)
+      - "9000:9000" # Native protocol
     volumes:
       - clickhouse_data:/var/lib/clickhouse
       - ./infra/clickhouse/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
