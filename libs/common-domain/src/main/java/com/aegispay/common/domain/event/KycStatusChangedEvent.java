@@ -1,6 +1,7 @@
 package com.aegispay.common.domain.event;
 
 import com.aegispay.common.domain.enums.KycStatus;
+import com.fasterxml.jackson.annotation.JsonCreator;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
@@ -8,7 +9,7 @@ import lombok.experimental.SuperBuilder;
 import java.util.UUID;
 
 @Getter
-@NoArgsConstructor
+@NoArgsConstructor(onConstructor_ = @JsonCreator)
 @SuperBuilder
 public class KycStatusChangedEvent extends BaseEvent {
 
