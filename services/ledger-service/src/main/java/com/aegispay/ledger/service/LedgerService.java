@@ -45,15 +45,15 @@ public class LedgerService {
 
     @Transactional
     public void reserveBalance(BalanceReserveRequestedEvent event) {
-        Account account = accountRepository.findByIdForUpdate(event.getAccountId())
-                .orElseThrow(() -> new AccountNotFoundException(event.getAccountId()));
+        Account account = accountRepository.findByUserIdAndCurrencyForUpdate(event.getUserId(), event.getCurrency())
+                .orElseThrow(() -> new AccountNotFoundException(event.getUserId()));
 
         BigDecimal amount = event.getAmount();
 
         if (account.getAvailableBalance().compareTo(amount) < 0) {
             log.warn("Insufficient funds for txn={}: available={} requested={}",
                     event.getTransactionId(), account.getAvailableBalance(), amount);
-            writeFailedEvent(event, account.getAvailableBalance(), "INSUFFICIENT_FUNDS");
+            writeFailedEvent(event, account.getId(), account.getAvailableBalance(), "INSUFFICIENT_FUNDS");
             return;
         }
 
@@ -218,7 +218,7 @@ public class LedgerService {
         });
     }
 
-    private void writeFailedEvent(BalanceReserveRequestedEvent event,
+    private void writeFailedEvent(BalanceReserveRequestedEvent event, UUID accountId,
                                   BigDecimal availableBalance, String reason) {
         BalanceReserveFailedEvent reply = BalanceReserveFailedEvent.builder()
                 .eventId(UUID.randomUUID())
@@ -226,7 +226,7 @@ public class LedgerService {
                 .schemaVersion(1)
                 .transactionId(event.getTransactionId())
                 .sagaId(event.getSagaId())
-                .accountId(event.getAccountId())
+                .accountId(accountId)
                 .requestedAmount(event.getAmount())
                 .availableBalance(availableBalance)
                 .failureReason(reason)
