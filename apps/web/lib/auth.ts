@@ -3,6 +3,13 @@ import type { NextAuthOptions, Session } from 'next-auth'
 import type { JWT } from 'next-auth/jwt'
 import KeycloakProvider from 'next-auth/providers/keycloak'
 
+// ── Startup guard — fail fast in production if secrets are missing ────────────
+if (process.env.NODE_ENV === 'production') {
+  if (!process.env.NEXTAUTH_SECRET) throw new Error('NEXTAUTH_SECRET is not set')
+  if (!process.env.KEYCLOAK_ID)     throw new Error('KEYCLOAK_ID is not set')
+  if (!process.env.KEYCLOAK_ISSUER) throw new Error('KEYCLOAK_ISSUER is not set')
+}
+
 // Force IPv4 for openid-client — Next.js 14 native fetch (undici) resolves
 // localhost → ::1 on macOS; Keycloak only listens on 127.0.0.1 → 3.5s timeout.
 const ipv4Agent = new http.Agent({ family: 4 })
@@ -78,7 +85,11 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
 
-  session: { strategy: 'jwt', maxAge: 24 * 60 * 60 },
+  session: {
+    strategy:   'jwt',
+    maxAge:     24 * 60 * 60,  // absolute expiry: 24 h
+    updateAge:   5 * 60,       // sliding: re-issue JWT every 5 min of activity
+  },
 
   debug: process.env.NODE_ENV === 'development',
 

@@ -56,11 +56,11 @@ export function StepAmount() {
         </div>
       </div>
 
-      {/* Amount + currency row */}
-      <div className="flex gap-3">
+      {/* Amount + currency row — items-end so input bottoms align */}
+      <div className="flex items-end gap-3">
         <div className="flex-1">
+          <label className="mb-1.5 block text-sm font-medium text-slate-700">Amount</label>
           <AegisAmountInput
-            label="Amount"
             currency={currency}
             defaultValue={amount}
             error={errors.amount?.message}
@@ -70,7 +70,7 @@ export function StepAmount() {
         <div className="flex flex-col gap-1">
           <label className="block text-sm font-medium text-slate-700">Currency</label>
           <select
-            className="h-[46px] rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-200"
+            className="h-14 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-200"
             {...register('currency')}
           >
             {CURRENCIES.map((c) => (
