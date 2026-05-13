@@ -1,9 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { signIn, useSession } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Loader2, ShieldCheck, AlertCircle } from 'lucide-react'
+
+const RATE_LIMIT_MS = 3_000 // 3 s cooldown between sign-in attempts
 
 export default function LoginPage() {
   const { status } = useSession()
@@ -11,6 +13,7 @@ export default function LoginPage() {
   const params      = useSearchParams()
   const [loading, setLoading]   = useState(false)
   const [error,   setError]     = useState<string | null>(null)
+  const lastAttempt = useRef<number>(0)
 
   // Redirect already-authenticated users
   useEffect(() => {
@@ -33,6 +36,10 @@ export default function LoginPage() {
   }, [params])
 
   async function handleSignIn() {
+    const now = Date.now()
+    if (now - lastAttempt.current < RATE_LIMIT_MS) return
+    lastAttempt.current = now
+
     setLoading(true)
     setError(null)
     try {

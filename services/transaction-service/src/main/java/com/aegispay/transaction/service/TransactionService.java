@@ -20,10 +20,16 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.support.PageableExecutionUtils;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.UUID;
 
 @Slf4j
@@ -37,6 +43,7 @@ public class TransactionService {
     private final TransactionMapper transactionMapper;
     private final IdempotencyService idempotencyService;
     private final TransactionEventProducer eventProducer;
+    private final MongoTemplate mongoTemplate;
 
     @Transactional
     public TransactionResponse create(TransactionRequest request,
@@ -118,10 +125,39 @@ public class TransactionService {
                         HttpStatus.NOT_FOUND));
     }
 
-    public PagedResponse<TransactionResponse> listForUser(UUID userId, int page, int size) {
-        Pageable pageable = PageRequest.of(page, Math.min(size, 100));
-        Page<TransactionView> views = viewRepository
-                .findByUserIdOrderByInitiatedAtDesc(userId.toString(), pageable);
+    public PagedResponse<TransactionResponse> listForUser(
+            UUID userId, int page, int size,
+            String status, String fromDate, String toDate) {
+
+        Pageable pageable = PageRequest.of(page, Math.min(size, 100),
+                Sort.by(Sort.Direction.DESC, "initiatedAt"));
+
+        // Build dynamic criteria — each condition added only when param is present
+        java.util.List<Criteria> conditions = new java.util.ArrayList<>();
+        conditions.add(Criteria.where("userId").is(userId.toString()));
+
+        if (status != null && !status.isBlank()) {
+            conditions.add(Criteria.where("status").is(status.toUpperCase()));
+        }
+
+        Instant from = (fromDate != null && !fromDate.isBlank()) ? Instant.parse(fromDate) : null;
+        Instant to   = (toDate   != null && !toDate.isBlank())   ? Instant.parse(toDate)   : null;
+
+        if (from != null && to != null) {
+            conditions.add(Criteria.where("initiatedAt").gte(from).lte(to));
+        } else if (from != null) {
+            conditions.add(Criteria.where("initiatedAt").gte(from));
+        } else if (to != null) {
+            conditions.add(Criteria.where("initiatedAt").lte(to));
+        }
+
+        Criteria criteria = new Criteria().andOperator(conditions.toArray(new Criteria[0]));
+
+        Query query = new Query(criteria).with(pageable);
+        long total  = mongoTemplate.count(Query.of(query).limit(-1).skip(-1), TransactionView.class);
+        java.util.List<TransactionView> content = mongoTemplate.find(query, TransactionView.class);
+
+        Page<TransactionView> views = PageableExecutionUtils.getPage(content, pageable, () -> total);
 
         return PagedResponse.<TransactionResponse>builder()
                 .content(views.map(transactionMapper::toListItemResponse).getContent())

@@ -54,15 +54,18 @@ public class TransactionController {
     @GetMapping
     public ResponseEntity<ApiResponse<PagedResponse<TransactionResponse>>> list(
             @AuthenticationPrincipal Jwt jwt,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "0")  int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false)    String status,
+            @RequestParam(required = false)    String fromDate,
+            @RequestParam(required = false)    String toDate) {
 
         UUID userId = UUID.fromString(jwt.getClaimAsString("aegispay_user_id") != null
                 ? jwt.getClaimAsString("aegispay_user_id")
                 : jwt.getSubject());
 
         PagedResponse<TransactionResponse> response =
-                transactionService.listForUser(userId, page, size);
+                transactionService.listForUser(userId, page, size, status, fromDate, toDate);
         return ResponseEntity.ok(ApiResponse.ok(response));
     }
 }

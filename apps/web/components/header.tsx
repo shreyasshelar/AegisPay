@@ -10,9 +10,11 @@ import { cn } from '@/lib/utils'
 interface HeaderProps {
   title?:    string
   subtitle?: string
+  /** Optional element rendered on the left side, after the title area. */
+  action?:   React.ReactNode
 }
 
-export function Header({ title, subtitle }: HeaderProps) {
+export function Header({ title, subtitle, action }: HeaderProps) {
   const { data: session }    = useSession()
   const queryClient          = useQueryClient()
   const [spinning, setSpinning] = useState(false)
@@ -25,14 +27,17 @@ export function Header({ title, subtitle }: HeaderProps) {
 
   return (
     <header className="flex h-16 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-6">
-      {/* Left — page title */}
-      <div>
-        {title && (
-          <h1 className="text-lg font-semibold text-slate-900">{title}</h1>
-        )}
-        {subtitle && (
-          <p className="text-xs text-slate-400">{subtitle}</p>
-        )}
+      {/* Left — page title + optional action */}
+      <div className="flex items-center gap-4">
+        <div>
+          {title && (
+            <h1 className="text-lg font-semibold text-slate-900">{title}</h1>
+          )}
+          {subtitle && (
+            <p className="text-xs text-slate-400">{subtitle}</p>
+          )}
+        </div>
+        {action}
       </div>
 
       {/* Right — actions */}
