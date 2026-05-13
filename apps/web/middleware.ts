@@ -29,6 +29,7 @@ export default withAuth(
 
 export const config = {
   matcher: [
+    // Protected pages
     '/dashboard/:path*',
     '/transactions/:path*',
     '/send/:path*',
@@ -37,5 +38,7 @@ export const config = {
     '/incidents/:path*',
     '/ledger/:path*',
     '/risk/:path*',
+    // Protected API routes — exclude /api/auth/* (NextAuth own endpoints)
+    '/api/((?!auth).+)',
   ],
 }

@@ -1,5 +1,6 @@
 'use client'
 
+import { Plus } from 'lucide-react'
 import { useSendMoneyStore } from '@/lib/useSendMoneyStore'
 import { StepPayee }  from './steps/StepPayee'
 import { StepAmount } from './steps/StepAmount'
@@ -57,11 +58,27 @@ function StepIndicator({ current }: { current: string }) {
 // ── Root component ─────────────────────────────────────────────────────────────
 
 export function SendMoneyClient() {
-  const step = useSendMoneyStore((s) => s.step)
+  const { step, reset } = useSendMoneyStore()
 
   return (
     <>
-      <Header title="Send Money" subtitle="Secure peer-to-peer transfer" />
+      <Header
+        title="Send Money"
+        subtitle="Secure peer-to-peer transfer"
+        action={
+          step === 'status'
+            ? (
+              <button
+                onClick={reset}
+                className="flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700"
+              >
+                <Plus className="h-4 w-4" />
+                New Transfer
+              </button>
+            )
+            : undefined
+        }
+      />
 
       <div className="flex justify-center px-6 pb-10 animate-fade-in">
         <div className="w-full max-w-md space-y-6">
