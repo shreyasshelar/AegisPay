@@ -187,9 +187,10 @@ _Last updated: 2026-05-11_
 
 transaction flow
 i hit localhost 3000 and previous session i have logined in but expired or new docker compose up so lost empty then after 401 on the first 401 api response it should signout and go back to login right api calls are failing 401 and i am still on dashboard even though data is not visible
-
 even if one transaction going on i should be able to do second transaction but on ui send page only see on going transaction
 transaction date filter not working on ui
-transaction send money ui page in step 2 amount , currency dowpdown is not aligned
+
+
+rules engiene no rules
 
 signup , other google and all entra etc
