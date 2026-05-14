@@ -1,6 +1,6 @@
 export { ApiProvider, useApiClient } from './context'
 export { useTransaction, useTransactionList, useInfiniteTransactions, useCreateTransaction, transactionKeys } from './useTransactions'
-export { useAccount, accountKeys } from './useAccount'
+export { useAccount, useAccounts, accountKeys } from './useAccount'
 export { useTransactionSocket, useTransactionStatusSocket } from './useWebSocket'
 export { useResolveError, useExplainFraud, useTriageIncident } from './useAi'
 export { useMe, useUser, useProcessKyc, useConfirmKyc, userKeys } from './useUsers'
