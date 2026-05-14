@@ -1,24 +1,29 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { signIn, useSession } from 'next-auth/react'
+import { signIn, signOut, useSession } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Loader2, ShieldCheck, AlertCircle } from 'lucide-react'
 
 const RATE_LIMIT_MS = 3_000 // 3 s cooldown between sign-in attempts
 
 export default function LoginPage() {
-  const { status } = useSession()
+  const { data: session, status } = useSession()
   const router      = useRouter()
   const params      = useSearchParams()
   const [loading, setLoading]   = useState(false)
   const [error,   setError]     = useState<string | null>(null)
   const lastAttempt = useRef<number>(0)
 
-  // Redirect already-authenticated users
+  // Redirect already-authenticated users — but NOT if the session has an error.
+  // A broken session (RefreshAccessTokenError) has status='authenticated' yet
+  // cannot be used; sending it to /dashboard would create a redirect loop with
+  // the middleware. Let providers.tsx call signOut() to clear the cookie first.
   useEffect(() => {
-    if (status === 'authenticated') router.replace('/dashboard')
-  }, [status, router])
+    if (status === 'authenticated' && !session?.error) {
+      router.replace('/dashboard')
+    }
+  }, [status, session?.error, router])
 
   // Map NextAuth error codes to friendly messages
   useEffect(() => {
@@ -50,7 +55,9 @@ export default function LoginPage() {
     }
   }
 
-  if (status === 'loading' || status === 'authenticated') {
+  // Show spinner only while loading, or while redirecting a clean authenticated session.
+  // A session with an error must fall through to the login form so the user can re-auth.
+  if (status === 'loading' || (status === 'authenticated' && !session?.error)) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary-600" />

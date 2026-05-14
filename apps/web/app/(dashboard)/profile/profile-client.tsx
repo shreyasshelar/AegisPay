@@ -2,6 +2,7 @@
 
 import { useRef, useState, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
+import { useAuthGuard } from '@/lib/useAuthGuard'
 import { toast } from 'sonner'
 import {
   UserCircle,
@@ -117,6 +118,7 @@ function ExtractedDataCard({ data }: { data: NonNullable<KycProcessingResult['ex
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function ProfileClient({ userId }: { userId: string }) {
+  const blocking          = useAuthGuard()
   const { data: session } = useSession()
   const fileInputRef      = useRef<HTMLInputElement>(null)
   const cameraInputRef    = useRef<HTMLInputElement>(null)
@@ -200,6 +202,10 @@ export function ProfileClient({ userId }: { userId: string }) {
       toast.error('Confirmation failed', { description: err instanceof Error ? err.message : 'Please try again' })
     }
   }
+
+  // ── Auth guard (all hooks above; conditional renders below) ──────────────
+
+  if (blocking) return null
 
   // ── Loading skeleton ───────────────────────────────────────────────────────
 

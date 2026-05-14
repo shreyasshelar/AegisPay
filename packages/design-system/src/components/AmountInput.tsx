@@ -1,20 +1,47 @@
 'use client'
 
 import { clsx } from 'clsx'
+import { ChevronDown } from 'lucide-react'
 import { forwardRef, useState, type InputHTMLAttributes } from 'react'
 
+const SYMBOLS: Record<string, string> = {
+  INR: '₹',
+  USD: '$',
+  EUR: '€',
+  GBP: '£',
+}
+
 interface AmountInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'onChange'> {
+  /** Currently selected currency code (controlled). */
   currency?: string
+  /** Available currencies shown in the embedded dropdown.
+   *  When omitted (or single entry) the dropdown is hidden. */
+  currencies?: readonly string[]
+  /** Called when the user picks a different currency. */
+  onCurrencyChange?: (currency: string) => void
+  /** Called with the sanitised numeric string on every keystroke. */
   onChange?: (value: string) => void
+  /** Validation error message. Space is always reserved so layout never shifts. */
   error?: string
 }
 
 export const AmountInput = forwardRef<HTMLInputElement, AmountInputProps>(
-  ({ currency = 'INR', onChange, error, className, value, ...props }, ref) => {
+  (
+    {
+      currency = 'INR',
+      currencies,
+      onCurrencyChange,
+      onChange,
+      error,
+      className,
+      value,
+      ...props
+    },
+    ref,
+  ) => {
     const [focused, setFocused] = useState(false)
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      // Allow only digits and a single decimal point with up to 2 decimal places
       const raw = e.target.value.replace(/[^\d.]/g, '')
       const parts = raw.split('.')
       const sanitised =
@@ -26,15 +53,11 @@ export const AmountInput = forwardRef<HTMLInputElement, AmountInputProps>(
       onChange?.(sanitised)
     }
 
-    const currencySymbol: Record<string, string> = {
-      INR: '₹',
-      USD: '$',
-      EUR: '€',
-      GBP: '£',
-    }
+    const showDropdown = currencies && currencies.length > 1 && !!onCurrencyChange
 
     return (
       <div className="w-full">
+        {/* ── Unified amount + currency container ── */}
         <div
           className={clsx(
             'relative flex items-center rounded-lg border bg-white transition-all',
@@ -44,16 +67,22 @@ export const AmountInput = forwardRef<HTMLInputElement, AmountInputProps>(
             error && 'border-[#E02424] ring-2 ring-[#E02424]/20',
           )}
         >
-          <span className="select-none pl-4 text-xl font-semibold text-neutral-500">
-            {currencySymbol[currency] ?? currency}
+          {/* Currency symbol — always in sync with selected currency */}
+          <span
+            className="select-none pl-4 text-xl font-semibold text-neutral-400"
+            aria-hidden
+          >
+            {SYMBOLS[currency] ?? currency}
           </span>
+
+          {/* Numeric input */}
           <input
             ref={ref}
             type="text"
             inputMode="decimal"
             pattern="[0-9]*\.?[0-9]{0,2}"
             className={clsx(
-              'h-14 flex-1 bg-transparent px-2 font-mono text-2xl font-bold text-neutral-900 outline-none placeholder:text-neutral-300',
+              'h-14 min-w-0 flex-1 bg-transparent px-2 font-mono text-2xl font-bold text-neutral-900 outline-none placeholder:text-neutral-300',
               className,
             )}
             placeholder="0.00"
@@ -65,13 +94,47 @@ export const AmountInput = forwardRef<HTMLInputElement, AmountInputProps>(
             aria-invalid={!!error}
             {...props}
           />
-          <span className="select-none pr-4 text-sm font-medium text-neutral-400">{currency}</span>
+
+          {/* ── Embedded currency selector ── */}
+          {showDropdown ? (
+            <div className="relative flex shrink-0 items-center border-l border-neutral-200">
+              <select
+                value={currency}
+                onChange={(e) => onCurrencyChange!(e.target.value)}
+                onFocus={() => setFocused(true)}
+                onBlur={() => setFocused(false)}
+                aria-label="Currency"
+                className="h-14 cursor-pointer appearance-none bg-transparent pl-3 pr-8 text-sm font-semibold text-neutral-700 outline-none"
+              >
+                {currencies!.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown
+                className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-neutral-400"
+                aria-hidden
+              />
+            </div>
+          ) : (
+            /* Static currency badge when no dropdown needed */
+            <span className="select-none pr-4 text-sm font-semibold text-neutral-400">
+              {currency}
+            </span>
+          )}
         </div>
-        {error && (
-          <p className="mt-1.5 text-sm text-[#E02424]" role="alert">
-            {error}
-          </p>
-        )}
+
+        {/* ── Error slot — always rendered, height reserved ── */}
+        <p
+          className={clsx(
+            'mt-1.5 h-5 text-sm leading-tight',
+            error ? 'text-[#E02424]' : 'invisible',
+          )}
+          role={error ? 'alert' : undefined}
+        >
+          {error ?? ' '}
+        </p>
       </div>
     )
   },
