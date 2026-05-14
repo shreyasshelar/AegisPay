@@ -54,7 +54,7 @@ export function TransactionDetailClient({
       queryClient.setQueryData(
         transactionKeys.detail(transactionId),
         (prev: Record<string, unknown> | undefined) =>
-          prev ? { ...prev, status: update.status } : prev,
+          prev ? { ...prev, status: update.status, ...(update.failureReason != null && { failureReason: update.failureReason }) } : prev,
       )
       // Toast on terminal transitions
       if (update.status === 'COMPLETED') {
@@ -147,7 +147,7 @@ export function TransactionDetailClient({
             <AegisBadge status={tx.status} />
           </div>
 
-          <AegisStatusTimeline currentStatus={tx.status} />
+          <AegisStatusTimeline currentStatus={tx.status} failureReason={tx.failureReason} />
 
           {!isTerminal && (
             <div className="mt-4 flex items-center gap-2 rounded-lg bg-primary-50 px-3 py-2 text-xs text-primary-700">

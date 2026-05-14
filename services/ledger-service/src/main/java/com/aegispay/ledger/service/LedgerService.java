@@ -42,40 +42,67 @@ public class LedgerService {
     private final LedgerMapper ledgerMapper;
     private final ObjectMapper objectMapper;
     private final LedgerServiceProperties properties;
+    private final ExchangeRateService exchangeRateService;
 
     @Transactional
     public void reserveBalance(BalanceReserveRequestedEvent event) {
-        Account account = accountRepository.findByUserIdAndCurrencyForUpdate(event.getUserId(), event.getCurrency())
-                .orElseThrow(() -> new AccountNotFoundException(event.getUserId()));
+        // Find the user's primary account (any currency — we convert to it).
+        // Using findByUserId and taking the first account means a single INR
+        // account covers all transaction currencies; no per-currency account needed.
+        java.util.List<Account> accounts =
+                accountRepository.findByUserId(event.getUserId());
+        if (accounts.isEmpty()) {
+            log.warn("No account found for userId={} txn={}",
+                    event.getUserId(), event.getTransactionId());
+            writeFailedEvent(event, null, java.math.BigDecimal.ZERO,
+                    "ACCOUNT_NOT_FOUND: no account for user " + event.getUserId());
+            return;
+        }
 
-        BigDecimal amount = event.getAmount();
+        // Acquire a pessimistic write lock on the chosen account.
+        Account account = accountRepository.findByIdForUpdate(accounts.get(0).getId())
+                .orElseThrow();
 
-        if (account.getAvailableBalance().compareTo(amount) < 0) {
-            log.warn("Insufficient funds for txn={}: available={} requested={}",
-                    event.getTransactionId(), account.getAvailableBalance(), amount);
-            writeFailedEvent(event, account.getId(), account.getAvailableBalance(), "INSUFFICIENT_FUNDS");
+        // Convert the transaction amount into the account's base currency.
+        // e.g. $5.30 USD → ₹442.55 INR at the current mid-market rate.
+        BigDecimal convertedAmount = exchangeRateService.convert(
+                event.getAmount(), event.getCurrency(), account.getCurrency());
+
+        if (account.getAvailableBalance().compareTo(convertedAmount) < 0) {
+            log.warn("Insufficient funds for txn={}: available={} {} requested={} {} (= {} {})",
+                    event.getTransactionId(),
+                    account.getAvailableBalance(), account.getCurrency(),
+                    event.getAmount(), event.getCurrency(),
+                    convertedAmount, account.getCurrency());
+            writeFailedEvent(event, account.getId(), account.getAvailableBalance(),
+                    "INSUFFICIENT_FUNDS");
             return;
         }
 
         BigDecimal balanceBefore = account.getAvailableBalance();
-        account.setAvailableBalance(account.getAvailableBalance().subtract(amount));
-        account.setReservedBalance(account.getReservedBalance().add(amount));
+        account.setAvailableBalance(account.getAvailableBalance().subtract(convertedAmount));
+        account.setReservedBalance(account.getReservedBalance().add(convertedAmount));
         accountRepository.save(account);
 
         ledgerEntryRepository.save(LedgerEntry.builder()
                 .accountId(account.getId())
                 .transactionId(event.getTransactionId())
                 .entryType(LedgerEntryType.RESERVE)
-                .amount(amount)
+                .amount(convertedAmount)
                 .balanceBefore(balanceBefore)
                 .balanceAfter(account.getAvailableBalance())
-                .description("Reserve for transaction " + event.getTransactionId())
+                .description(String.format("Reserve for txn %s: %s %s → %s %s",
+                        event.getTransactionId(),
+                        event.getAmount(), event.getCurrency(),
+                        convertedAmount, account.getCurrency()))
                 .build());
 
+        // Lock stores the BASE-CURRENCY amount so commit/rollback always
+        // use the exact figure that was deducted — no re-conversion needed.
         balanceLockRepository.save(BalanceLock.builder()
                 .transactionId(event.getTransactionId())
                 .accountId(account.getId())
-                .reservedAmount(amount)
+                .reservedAmount(convertedAmount)
                 .expiresAt(Instant.now().plus(properties.getBalanceLockExpiryMinutes(), ChronoUnit.MINUTES))
                 .build());
 
@@ -86,13 +113,16 @@ public class LedgerService {
                 .transactionId(event.getTransactionId())
                 .sagaId(event.getSagaId())
                 .accountId(account.getId())
-                .reservedAmount(amount)
+                .reservedAmount(convertedAmount)
                 .availableBalanceAfter(account.getAvailableBalance())
                 .build();
 
         writeOutbox(event.getTransactionId().toString(), "BalanceReservedEvent",
                 KafkaTopics.BALANCE_RESERVED, reply);
-        log.info("Balance reserved: txn={} amount={}", event.getTransactionId(), amount);
+        log.info("Balance reserved: txn={} {} {} → {} {}",
+                event.getTransactionId(),
+                event.getAmount(), event.getCurrency(),
+                convertedAmount, account.getCurrency());
     }
 
     @Transactional
@@ -100,7 +130,13 @@ public class LedgerService {
         Account account = accountRepository.findByIdForUpdate(event.getAccountId())
                 .orElseThrow(() -> new AccountNotFoundException(event.getAccountId()));
 
-        BigDecimal amount = event.getAmount();
+        // Use the lock's base-currency amount, not event.getAmount() which carries
+        // the raw transaction amount in the transaction's (possibly foreign) currency.
+        BigDecimal amount = balanceLockRepository
+                .findByTransactionId(event.getTransactionId())
+                .map(BalanceLock::getReservedAmount)
+                .orElse(event.getAmount());   // fallback if lock already cleaned up
+
         BigDecimal balanceBefore = account.getReservedBalance();
 
         account.setReservedBalance(account.getReservedBalance().subtract(amount));
@@ -141,7 +177,11 @@ public class LedgerService {
         Account account = accountRepository.findByIdForUpdate(event.getAccountId())
                 .orElseThrow(() -> new AccountNotFoundException(event.getAccountId()));
 
-        BigDecimal amount = event.getAmountToRelease();
+        // Use the lock's base-currency amount so we release exactly what was deducted.
+        BigDecimal amount = balanceLockRepository
+                .findByTransactionId(event.getTransactionId())
+                .map(BalanceLock::getReservedAmount)
+                .orElse(event.getAmountToRelease());  // fallback
         BigDecimal balanceBefore = account.getAvailableBalance();
 
         account.setAvailableBalance(account.getAvailableBalance().add(amount));
@@ -218,7 +258,7 @@ public class LedgerService {
         });
     }
 
-    private void writeFailedEvent(BalanceReserveRequestedEvent event, UUID accountId,
+    private void writeFailedEvent(BalanceReserveRequestedEvent event, @SuppressWarnings("SameParameterValue") UUID accountId,
                                   BigDecimal availableBalance, String reason) {
         BalanceReserveFailedEvent reply = BalanceReserveFailedEvent.builder()
                 .eventId(UUID.randomUUID())

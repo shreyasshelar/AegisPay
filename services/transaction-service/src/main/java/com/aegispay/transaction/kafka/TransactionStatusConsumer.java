@@ -97,13 +97,14 @@ public class TransactionStatusConsumer {
         updateStatus(event.getTransactionId(), TransactionStatus.PROCESSING, "PaymentProcessRequestedEvent");
     }
 
-    /** Generic helper — updates write model + read model + pushes WebSocket. */
+    /** Generic helper — updates write model + read model + pushes WebSocket.
+     *  Used for intermediate (non-terminal) status advances — no failureReason. */
     private void updateStatus(UUID txnId, TransactionStatus status, String lastEvent) {
         transactionRepository.findById(txnId).ifPresent(txn -> {
             txn.setStatus(status);
             transactionRepository.save(txn);
             upsertView(txn, lastEvent);
-            pushWebSocket(txnId, status, lastEvent);
+            pushWebSocket(txnId, status, lastEvent, null);
             log.debug("Status updated: txnId={} status={}", txnId, status);
         });
     }
@@ -118,7 +119,7 @@ public class TransactionStatusConsumer {
             txn.setExternalReference(event.getExternalReference());
             transactionRepository.save(txn);
             upsertView(txn, "TransactionCompletedEvent");
-            pushWebSocket(txnId, TransactionStatus.COMPLETED, "TransactionCompletedEvent");
+            pushWebSocket(txnId, TransactionStatus.COMPLETED, "TransactionCompletedEvent", null);
         });
     }
 
@@ -132,7 +133,9 @@ public class TransactionStatusConsumer {
             txn.setCompletedAt(Instant.now());
             transactionRepository.save(txn);
             upsertView(txn, "TransactionFailedEvent");
-            pushWebSocket(txnId, TransactionStatus.FAILED, "TransactionFailedEvent");
+            // Include failureReason so the UI can highlight the exact failed step
+            pushWebSocket(txnId, TransactionStatus.FAILED, "TransactionFailedEvent",
+                    event.getFailureReason());
         });
     }
 
@@ -146,7 +149,8 @@ public class TransactionStatusConsumer {
             txn.setCompletedAt(Instant.now());
             transactionRepository.save(txn);
             upsertView(txn, "TransactionRolledBackEvent");
-            pushWebSocket(txnId, TransactionStatus.ROLLED_BACK, "TransactionRolledBackEvent");
+            pushWebSocket(txnId, TransactionStatus.ROLLED_BACK, "TransactionRolledBackEvent",
+                    event.getRollbackReason());
         });
     }
 
@@ -172,12 +176,14 @@ public class TransactionStatusConsumer {
         viewRepository.save(view);
     }
 
-    private void pushWebSocket(UUID transactionId, TransactionStatus status, String lastEvent) {
+    private void pushWebSocket(UUID transactionId, TransactionStatus status,
+                               String lastEvent, String failureReason) {
         TransactionStatusResponse response = TransactionStatusResponse.builder()
                 .transactionId(transactionId)
                 .status(status.name())
                 .lastEvent(lastEvent)
                 .updatedAt(Instant.now())
+                .failureReason(failureReason)  // non-null only on FAILED / ROLLED_BACK
                 .build();
 
         messagingTemplate.convertAndSend(
