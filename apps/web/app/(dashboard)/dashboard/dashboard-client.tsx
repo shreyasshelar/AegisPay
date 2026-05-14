@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useAuthGuard } from '@/lib/useAuthGuard'
 import {
   ArrowUpRight,
   Wallet,
@@ -72,12 +73,15 @@ interface DashboardClientProps {
 }
 
 export function DashboardClient({ userId }: DashboardClientProps) {
+  const blocking = useAuthGuard()
   const { data: account, isLoading: accountLoading } = useAccount(userId)
   const { data: txPage, isLoading: txLoading } = useTransactionList(
     { page: 0, size: 10 },
   )
 
   const recentTxs: Transaction[] = txPage?.content ?? []
+
+  if (blocking) return null
 
   const completedCount = recentTxs.filter((t) => t.status === 'COMPLETED').length
   const failedCount    = recentTxs.filter((t) => t.status === 'FAILED').length

@@ -79,14 +79,28 @@ function ApiProviderWithSession({ children }: { children: React.ReactNode }) {
     }
   }, [status])
 
-  // Redirect to login when the Keycloak refresh token is exhausted.
-  // The middleware also handles this on the next protected-route navigation
-  // (deletes cookie, redirects to /login) as a belt-and-suspenders.
+  // ── Single shared sign-out path ──────────────────────────────────────────────
+  // Both RefreshAccessTokenError and HTTP 401 funnel here so they can never
+  // race and call signOut() twice (which produces double redirects / loops).
+  const signingOut = useRef(false)
+  const triggerSignOut = useCallback(() => {
+    if (signingOut.current) return
+    signingOut.current = true
+    queryClient.clear()
+    // signOut() calls /api/auth/signout, clears the session cookie, then
+    // redirects to /login. Using router.replace() instead would skip cookie
+    // deletion → login page sees status='authenticated' → redirect loop.
+    void signOut({ callbackUrl: '/login' })
+  }, [queryClient])
+
+  // Watch for expired Keycloak refresh token (set by auth.ts jwt callback).
+  // Middleware handles server-side navigation; this covers the client-side case
+  // where the user is already on a page when the token expires.
   useEffect(() => {
     if (session?.error === 'RefreshAccessTokenError') {
-      router.replace('/login')
+      triggerSignOut()
     }
-  }, [session?.error, router])
+  }, [session?.error, triggerSignOut])
 
   // getAccessToken: waits for the session gate before returning the token so
   // Axios never sends a request without an Authorization header during loading.
@@ -105,15 +119,11 @@ function ApiProviderWithSession({ children }: { children: React.ReactNode }) {
   }, []) // stable — reads from refs at call time
 
   // onUnauthorized: fired by Axios interceptor on any HTTP 401.
-  // Debounced via ref so concurrent 401s (dashboard loads multiple queries
-  // at once) only trigger one sign-out.
-  const handlingUnauthorized = useRef(false)
+  // Routes through triggerSignOut so the debounce is shared with the
+  // RefreshAccessTokenError handler above.
   const onUnauthorized = useCallback(() => {
-    if (handlingUnauthorized.current) return
-    handlingUnauthorized.current = true
-    queryClient.clear()
-    void signOut({ callbackUrl: '/login' })
-  }, [queryClient])
+    triggerSignOut()
+  }, [triggerSignOut])
 
   const baseURL = process.env.NEXT_PUBLIC_API_BASE_URL ?? ''
 
@@ -130,7 +140,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const queryClient = getQueryClient()
 
   return (
-    <SessionProvider>
+    // refetchInterval: poll /api/auth/session every 4 min so the jwt callback
+    // proactively refreshes the Keycloak access token (5 min lifetime, 60 s
+    // buffer) before it expires.  Without this, a user idle on a page >5 min
+    // gets a 401 on their next API call → onUnauthorized → mid-work sign-out.
+    // refetchOnWindowFocus: re-check immediately when the user returns to the tab.
+    <SessionProvider refetchInterval={4 * 60} refetchOnWindowFocus>
       <QueryClientProvider client={queryClient}>
         <ApiProviderWithSession>
           {children}

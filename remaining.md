@@ -185,15 +185,13 @@ All 13 original start-up bugs from the first session are fixed (see git history)
 
 _Last updated: 2026-05-11_
 
-refresh token flow not working
 
-ai service end to end with research 
 
-completed transaction loader visible even if tranaction completed there should be tick mark
-
-currency in transaction still not aligned vertically it is aligned but not in box or may be better ask chat gpt 
+currency in transaction still not aligned, vertically it is aligned but not in box or may be better ask chat gpt 
 
 rules engiene no rules
+
+ai service end to end with research 
 
 signup flows onboarding kyc etc , and  google and all entra etc sign up uuid customer n boarding kyc etc 
 
@@ -203,6 +201,4 @@ blogs regarding it
 
 study project
 
-check live transaction
-
-/send even if unauthenticated no api call still able to visit but session calls jwt success 
+check live transaction in prod main branch last only last 
