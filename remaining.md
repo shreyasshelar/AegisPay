@@ -185,12 +185,24 @@ All 13 original start-up bugs from the first session are fixed (see git history)
 
 _Last updated: 2026-05-11_
 
-transaction flow
-i hit localhost 3000 and previous session i have logined in but expired or new docker compose up so lost empty then after 401 on the first 401 api response it should signout and go back to login right api calls are failing 401 and i am still on dashboard even though data is not visible
-even if one transaction going on i should be able to do second transaction but on ui send page only see on going transaction
-transaction date filter not working on ui
+refresh token flow not working
 
+ai service end to end with research 
+
+completed transaction loader visible even if tranaction completed there should be tick mark
+
+currency in transaction still not aligned vertically it is aligned but not in box or may be better ask chat gpt 
 
 rules engiene no rules
 
-signup , other google and all entra etc
+signup flows onboarding kyc etc , and  google and all entra etc sign up uuid customer n boarding kyc etc 
+
+mobile android and ios testing
+
+blogs regarding it
+
+study project
+
+check live transaction
+
+/send even if unauthenticated no api call still able to visit but session calls jwt success 
