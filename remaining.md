@@ -185,15 +185,13 @@ All 13 original start-up bugs from the first session are fixed (see git history)
 
 _Last updated: 2026-05-11_
 
-
-
-currency in transaction still not aligned, vertically it is aligned but not in box or may be better ask chat gpt 
+data pipeline dashboards
 
 rules engiene no rules
 
-ai service end to end with research 
+ai service end to end with research
 
-signup flows onboarding kyc etc , and  google and all entra etc sign up uuid customer n boarding kyc etc 
+signup flows onboarding kyc etc , and google and all entra etc sign up uuid customer n boarding kyc etc
 
 mobile android and ios testing
 
@@ -201,4 +199,26 @@ blogs regarding it
 
 study project
 
-check live transaction in prod main branch last only last 
+check live transaction in prod main branch last only last
+
+fix protocol for llive exchange rates
+
+Request URL
+http://localhost:3000/api/v1/ai/errors/resolve
+Request Method
+POST
+Status Code
+500 Internal Server Error
+Remote Address
+[::1]:3000
+Referrer Policy
+strict-origin-when-cross-origin
+{
+    "errorCode": "Payment gateway failed",
+    "errorMessage": "Payment gateway failed: amount_too_small"
+}{
+    "errorCode": "AI_SERVICE_ERROR",
+    "message": "RAG pipeline error: Error while extracting response for type [org.springframework.ai.anthropic.api.AnthropicApi$ChatCompletionResponse] and content type [application/json]",
+    "httpStatus": 500,
+    "fieldErrors": null
+}
