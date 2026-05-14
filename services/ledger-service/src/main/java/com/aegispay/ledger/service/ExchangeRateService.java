@@ -1,7 +1,6 @@
 package com.aegispay.ledger.service;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -133,7 +132,7 @@ public class ExchangeRateService {
         try {
             String json = objectMapper.writeValueAsString(rates);
             redisTemplate.opsForValue().set(REDIS_KEY_PREFIX + base, json, CACHE_TTL);
-        } catch (JsonProcessingException | Exception e) {
+        } catch (Exception e) {
             // Non-fatal — next request will re-fetch
             log.warn("Redis write failed for fx:rates:{}: {}", base, e.getMessage());
         }
