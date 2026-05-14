@@ -85,9 +85,6 @@ export function DashboardClient({ userId }: DashboardClientProps) {
 
   const completedCount = recentTxs.filter((t) => t.status === 'COMPLETED').length
   const failedCount    = recentTxs.filter((t) => t.status === 'FAILED').length
-  const pendingCount   = recentTxs.filter(
-    (t) => !['COMPLETED', 'FAILED', 'ROLLED_BACK'].includes(t.status),
-  ).length
 
   return (
     <>

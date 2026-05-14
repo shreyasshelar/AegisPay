@@ -12,5 +12,6 @@ public record TransactionStatusResponse(
     String status,
     String lastEvent,
     Instant updatedAt,
+    String failureReason,  // non-null only on FAILED / ROLLED_BACK
     String aiExplanation   // delay reason / ETA from AI platform (may be null)
 ) {}

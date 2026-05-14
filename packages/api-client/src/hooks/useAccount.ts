@@ -7,7 +7,17 @@ export const accountKeys = {
   byUser: (userId: string) => [...accountKeys.all, userId] as const,
 }
 
-/** Customer hook — fetches own primary account via /me (no userId in URL). */
+/** Customer hook — fetches all own accounts (one per currency). */
+export function useAccounts(_userId?: string) {
+  const { ledger } = useApiClient()
+  return useQuery({
+    queryKey: accountKeys.me(),
+    queryFn:  () => ledger.getMyAccounts(),
+    staleTime: 15_000,
+  })
+}
+
+/** @deprecated Use useAccounts() for multi-currency support. */
 export function useAccount(_userId?: string) {
   const { ledger } = useApiClient()
   return useQuery({
