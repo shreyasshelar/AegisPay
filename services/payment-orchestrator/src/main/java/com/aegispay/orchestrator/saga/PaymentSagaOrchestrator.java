@@ -96,8 +96,9 @@ public class PaymentSagaOrchestrator {
         if (event.getDecision().name().equals("REJECTED")) {
             failStep(saga, ASSESS_RISK, "Risk rejected: score=" + event.getRiskScore());
             failSaga(saga, "Transaction rejected by risk engine: score=" + event.getRiskScore());
+            // No publishTransactionFailed here — onBalanceRolledBack emits the single
+            // terminal TRANSACTION_FAILED event after rollback completes.
             publishRollbackBalance(saga, saga.getFailureReason());
-            publishTransactionFailed(saga, "RISK_REJECTED", saga.getFailureReason());
             return;
         }
 
@@ -117,8 +118,9 @@ public class PaymentSagaOrchestrator {
         if (!event.isSuccess()) {
             failStep(saga, PROCESS_PAYMENT, event.getFailureMessage());
             failSaga(saga, "Payment gateway failed: " + event.getFailureCode());
+            // No publishTransactionFailed here — onBalanceRolledBack emits the single
+            // terminal TRANSACTION_FAILED event after rollback completes.
             publishRollbackBalance(saga, saga.getFailureReason());
-            publishTransactionFailed(saga, event.getFailureCode(), saga.getFailureReason());
             return;
         }
 
@@ -149,12 +151,28 @@ public class PaymentSagaOrchestrator {
     @Transactional
     public void onBalanceRolledBack(BalanceRolledBackEvent event) {
         Saga saga = requireSagaForUpdate(event.getTransactionId());
-        saga.setStatus(FAILED);
+        // Saga internally marks as ROLLED_BACK for audit trail
+        saga.setStatus(ROLLED_BACK);
         saga.setCompletedAt(Instant.now());
         sagaRepository.save(saga);
 
-        publishTransactionRolledBack(saga, saga.getFailureReason());
+        // Single terminal event to transaction-service — maps to FAILED on the
+        // transaction (user-facing).  No separate TRANSACTION_ROLLED_BACK event
+        // so there is no race and the UI always shows one clean failure state.
+        String failureCode = deriveFailureCode(saga.getFailureReason());
+        publishTransactionFailed(saga, failureCode, saga.getFailureReason());
         log.info("Saga ROLLED BACK: sagaId={} txn={}", saga.getId(), saga.getTransactionId());
+    }
+
+    /** Extracts a short failure code from the human-readable failure reason. */
+    private String deriveFailureCode(String reason) {
+        if (reason == null) return "UNKNOWN";
+        if (reason.contains("INSUFFICIENT_FUNDS")) return "INSUFFICIENT_FUNDS";
+        if (reason.contains("ACCOUNT_NOT_FOUND"))  return "ACCOUNT_NOT_FOUND";
+        if (reason.contains("risk engine"))         return "RISK_REJECTED";
+        if (reason.contains("Payment gateway"))     return "PAYMENT_GATEWAY_FAILED";
+        if (reason.contains("timed out"))           return "SAGA_TIMEOUT";
+        return "TRANSACTION_FAILED";
     }
 
     /** Called by SagaTimeoutScheduler for sagas past their deadline. */

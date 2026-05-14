@@ -143,13 +143,16 @@ public class TransactionStatusConsumer {
         TransactionRolledBackEvent event = objectMapper.readValue(payload, TransactionRolledBackEvent.class);
         UUID txnId = event.getTransactionId();
 
+        // Saga is internally ROLLED_BACK but the transaction (user-facing) is FAILED.
+        // This eliminates the race between TRANSACTION_FAILED and TRANSACTION_ROLLED_BACK
+        // and gives the UI a single clean terminal failure state.
         transactionRepository.findById(txnId).ifPresent(txn -> {
-            txn.setStatus(TransactionStatus.ROLLED_BACK);
+            txn.setStatus(TransactionStatus.FAILED);
             txn.setFailureReason(event.getRollbackReason());
             txn.setCompletedAt(Instant.now());
             transactionRepository.save(txn);
             upsertView(txn, "TransactionRolledBackEvent");
-            pushWebSocket(txnId, TransactionStatus.ROLLED_BACK, "TransactionRolledBackEvent",
+            pushWebSocket(txnId, TransactionStatus.FAILED, "TransactionRolledBackEvent",
                     event.getRollbackReason());
         });
     }

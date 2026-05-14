@@ -63,7 +63,7 @@ export function AegisStatusTimeline({
   className,
 }: StatusTimelineProps) {
   const currentIndex = STATUS_ORDER[currentStatus] ?? 0
-  const isFailed     = currentStatus === 'FAILED' || currentStatus === 'ROLLED_BACK'
+  const isFailed     = currentStatus === 'FAILED'
   const isTerminalOk = currentStatus === 'COMPLETED'
   const failIdx      = isFailed ? failedStepIndex(failureReason) : -1
 
@@ -142,9 +142,7 @@ export function AegisStatusTimeline({
                 {step.label}
               </p>
               <p className="text-xs text-neutral-500">
-                {isFailedStep && isFailed
-                  ? (currentStatus === 'ROLLED_BACK' ? 'Reversed — funds returned' : 'Failed at this step')
-                  : step.description}
+                {isFailedStep && isFailed ? 'Failed at this step' : step.description}
               </p>
             </div>
           </li>
