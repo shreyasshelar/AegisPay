@@ -19,7 +19,8 @@ public interface TransactionMapper {
     TransactionResponse toResponse(Transaction transaction);
 
     @Mapping(target = "transactionId", expression = "java(java.util.UUID.fromString(view.getId()))")
-    @Mapping(target = "aiExplanation", source = "aiExplanation")
+    @Mapping(target = "aiExplanation",   source = "aiExplanation")
+    @Mapping(target = "failureReason",   source = "failureReason")
     TransactionStatusResponse toStatusResponse(TransactionView view);
 
     /** Maps a MongoDB read-model view to the full response shape used by the list endpoint. */

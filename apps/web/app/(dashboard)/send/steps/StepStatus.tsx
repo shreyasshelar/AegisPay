@@ -55,7 +55,7 @@ export function StepStatus() {
       queryClient.setQueryData(
         transactionKeys.detail(update.transactionId),
         (prev: Record<string, unknown> | undefined) =>
-          prev ? { ...prev, status: update.status } : prev,
+          prev ? { ...prev, status: update.status, ...(update.failureReason != null && { failureReason: update.failureReason }) } : prev,
       )
     },
   })
@@ -152,7 +152,7 @@ export function StepStatus() {
         )}
 
         {/* Timeline */}
-        <AegisStatusTimeline currentStatus={tx.status} />
+        <AegisStatusTimeline currentStatus={tx.status} failureReason={tx.failureReason} />
       </div>
 
       {/* AI error explanation — shown only on failure */}

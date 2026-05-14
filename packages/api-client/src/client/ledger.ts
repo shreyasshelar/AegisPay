@@ -5,10 +5,15 @@ import { z } from 'zod'
 export class LedgerClient {
   constructor(private readonly client: AegisApiClient) {}
 
-  /** Customer: fetch own primary (INR) account via JWT sub — no userId needed. */
-  async getMyAccount(): Promise<Account> {
+  /** Customer: fetch all own accounts (one row per currency). */
+  async getMyAccounts(): Promise<Account[]> {
     const data = await this.client.get<unknown[]>('/api/v1/ledger/accounts/me')
-    const list = z.array(AccountSchema).parse(data)
+    return z.array(AccountSchema).parse(data)
+  }
+
+  /** @deprecated Use getMyAccounts() — kept for back-compat during migration. */
+  async getMyAccount(): Promise<Account> {
+    const list = await this.getMyAccounts()
     const primary = list.find(a => a.currency === 'INR') ?? list[0]
     if (!primary) throw new Error('No account found')
     return primary

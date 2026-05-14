@@ -74,6 +74,7 @@ export const TransactionStatusUpdateSchema = z.object({
   status:        TransactionStatusSchema,
   lastEvent:     z.string(),
   updatedAt:     z.string().datetime({ offset: true }),
+  failureReason: z.string().nullable().optional(),
   aiExplanation: z.string().nullable().optional(),
 })
 export type TransactionStatusUpdate = z.infer<typeof TransactionStatusUpdateSchema>
