@@ -3,6 +3,7 @@
 import { useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { useQueryClient, useQuery } from '@tanstack/react-query'
+import { useAuthGuard } from '@/lib/useAuthGuard'
 import { Bell, Loader2, CheckCircle2, XCircle, Info } from 'lucide-react'
 import { useApiClient, useTransactionSocket } from '@aegispay/api-client'
 import { Header } from '@/components/header'
@@ -24,6 +25,7 @@ function NotifIcon({ type }: { type: string }) {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function NotificationsClient() {
+  const blocking               = useAuthGuard()
   const { data: session }     = useSession()
   const { notifications: nc } = useApiClient()
   const queryClient            = useQueryClient()
@@ -52,6 +54,8 @@ export function NotificationsClient() {
   })
 
   const items: Notification[] = data?.content ?? []
+
+  if (blocking) return null
 
   return (
     <>

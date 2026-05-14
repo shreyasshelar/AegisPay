@@ -2,6 +2,7 @@
 
 import { Plus } from 'lucide-react'
 import { useSendMoneyStore } from '@/lib/useSendMoneyStore'
+import { useAuthGuard } from '@/lib/useAuthGuard'
 import { StepPayee }  from './steps/StepPayee'
 import { StepAmount } from './steps/StepAmount'
 import { StepReview } from './steps/StepReview'
@@ -58,7 +59,10 @@ function StepIndicator({ current }: { current: string }) {
 // ── Root component ─────────────────────────────────────────────────────────────
 
 export function SendMoneyClient() {
+  const blocking = useAuthGuard()
   const { step, reset } = useSendMoneyStore()
+
+  if (blocking) return null
 
   return (
     <>

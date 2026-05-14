@@ -3,6 +3,7 @@
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
+import { useAuthGuard } from '@/lib/useAuthGuard'
 import {
   ArrowLeft,
   Copy,
@@ -34,6 +35,7 @@ interface TransactionDetailClientProps {
 export function TransactionDetailClient({
   transactionId,
 }: TransactionDetailClientProps) {
+  const blocking           = useAuthGuard()
   const router             = useRouter()
   const { data: session }  = useSession()
   const queryClient        = useQueryClient()
@@ -85,6 +87,8 @@ export function TransactionDetailClient({
     await copyToClipboard(value)
     toast.success(`${label} copied`)
   }
+
+  if (blocking) return null
 
   // ── Loading ──────────────────────────────────────────────────────────────────
   if (isLoading) {

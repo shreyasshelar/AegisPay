@@ -32,9 +32,10 @@ export function AegisStatusTimeline({ currentStatus, className }: StatusTimeline
   return (
     <ol className={clsx('space-y-0', className)} aria-label="Transaction progress">
       {STEPS.map((step, idx) => {
-        const isCompleted = !isFailed && idx < currentIndex
-        const isCurrent = !isFailed && idx === currentIndex
-        const isPending = !isFailed && idx > currentIndex
+        const isTerminalSuccess = currentStatus === 'COMPLETED'
+        const isCompleted = !isFailed && (isTerminalSuccess ? idx <= currentIndex : idx < currentIndex)
+        const isCurrent = !isFailed && !isTerminalSuccess && idx === currentIndex
+        const isPending = !isFailed && !isTerminalSuccess && idx > currentIndex
 
         return (
           <li key={step.status} className="relative flex gap-4">
