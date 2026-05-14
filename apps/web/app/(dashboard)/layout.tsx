@@ -16,7 +16,10 @@ export default async function DashboardLayout({
 }) {
   const session = await getServerSession(authOptions)
 
-  if (!session) {
+  // No session or session carries a broken refresh-token error.
+  // Middleware handles RefreshAccessTokenError on server navigation, but this
+  // catches any edge case where the layout renders before middleware can act.
+  if (!session || session.error) {
     redirect('/login')
   }
 

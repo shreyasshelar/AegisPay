@@ -2,6 +2,7 @@
 
 import { useRef, useCallback, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useAuthGuard } from '@/lib/useAuthGuard'
 import { Loader2, TrendingUp, Filter, X } from 'lucide-react'
 import { useInfiniteTransactions } from '@aegispay/api-client'
 import { AegisTransactionRow } from '@aegispay/design-system'
@@ -24,6 +25,7 @@ interface TransactionsClientProps {
 }
 
 export function TransactionsClient({ userId }: TransactionsClientProps) {
+  const blocking = useAuthGuard()
   const router = useRouter()
 
   // ── Filter state ────────────────────────────────────────────────────────────
@@ -66,6 +68,8 @@ export function TransactionsClient({ userId }: TransactionsClientProps) {
 
   const allTransactions = data?.pages.flatMap((p) => p.content) ?? []
   const totalElements   = data?.pages[0]?.totalElements
+
+  if (blocking) return null
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (

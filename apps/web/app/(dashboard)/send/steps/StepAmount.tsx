@@ -26,12 +26,20 @@ export function StepAmount() {
   const {
     register,
     handleSubmit,
+    watch,
     setValue,
     formState: { errors },
   } = useForm<FormValues>({
     resolver:      zodResolver(schema),
-    defaultValues: { amount, currency: (currency as typeof CURRENCIES[number]) ?? 'INR', note },
+    defaultValues: {
+      amount,
+      currency: (currency as typeof CURRENCIES[number]) ?? 'INR',
+      note,
+    },
   })
+
+  // Watch currency so symbol stays in sync with selection
+  const selectedCurrency = watch('currency')
 
   function onSubmit(values: FormValues) {
     setAmount(values.amount)
@@ -56,28 +64,19 @@ export function StepAmount() {
         </div>
       </div>
 
-      {/* Amount + currency row — items-end so input bottoms align */}
-      <div className="flex items-end gap-3">
-        <div className="flex-1">
-          <label className="mb-1.5 block text-sm font-medium text-slate-700">Amount</label>
-          <AegisAmountInput
-            currency={currency}
-            defaultValue={amount}
-            error={errors.amount?.message}
-            onChange={(v) => setValue('amount', v, { shouldValidate: true })}
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="block text-sm font-medium text-slate-700">Currency</label>
-          <select
-            className="h-14 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-200"
-            {...register('currency')}
-          >
-            {CURRENCIES.map((c) => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
-        </div>
+      {/* ── Unified amount + currency field ── */}
+      <div>
+        <label className="mb-1.5 block text-sm font-medium text-slate-700">Amount</label>
+        <AegisAmountInput
+          currency={selectedCurrency}
+          currencies={CURRENCIES}
+          onCurrencyChange={(c) =>
+            setValue('currency', c as typeof CURRENCIES[number], { shouldValidate: true })
+          }
+          defaultValue={amount}
+          error={errors.amount?.message}
+          onChange={(v) => setValue('amount', v, { shouldValidate: true })}
+        />
       </div>
 
       {/* Note */}
