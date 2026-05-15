@@ -3,12 +3,61 @@ setlocal EnableDelayedExpansion
 title AegisPay Windows Bootstrap
 
 REM =========================================================
-REM COLORS
+REM AegisPay — Windows Bootstrap Script
+REM Starts Docker infra, builds all JARs, launches all services
+REM and the Next.js frontend.
+REM
+REM Prerequisites:
+REM   - Docker Desktop (WSL 2 backend enabled)
+REM   - Java 21 (JAVA_HOME set, or java.exe on PATH)
+REM   - Maven 3.9+ (mvn.cmd on PATH)
+REM   - Node 20 + pnpm 9 (node.exe on PATH)
 REM =========================================================
 
 echo =========================================================
-echo AegisPay Bootstrap
+echo   AegisPay Bootstrap  (Windows)
 echo =========================================================
+
+REM =========================================================
+REM AUTO-DETECT MAVEN
+REM  Looks for mvn.cmd on PATH first, then common install dirs.
+REM =========================================================
+
+set MVN_CMD=mvn
+where mvn >nul 2>&1
+IF %ERRORLEVEL% NEQ 0 (
+    REM Try common install locations
+    for %%d in (
+        "C:\Program Files\Apache\maven\bin\mvn.cmd"
+        "C:\tools\maven\bin\mvn.cmd"
+        "%USERPROFILE%\scoop\apps\maven\current\bin\mvn.cmd"
+        "%USERPROFILE%\AppData\Local\Programs\apache-maven\bin\mvn.cmd"
+    ) do (
+        if exist %%d (
+            set MVN_CMD=%%d
+            goto :mvn_found
+        )
+    )
+    echo ERROR: mvn not found on PATH and no common install dir matched.
+    echo        Install Maven 3.9+ and ensure mvn.cmd is on PATH.
+    echo        https://maven.apache.org/download.cgi
+    pause
+    exit /b 1
+    :mvn_found
+)
+echo Maven: !MVN_CMD!
+
+REM =========================================================
+REM JAVA CHECK (requires 21)
+REM =========================================================
+
+java -version >nul 2>&1
+IF %ERRORLEVEL% NEQ 0 (
+    echo ERROR: java not found on PATH.
+    echo        Install Temurin 21: https://adoptium.net
+    pause
+    exit /b 1
+)
 
 REM =========================================================
 REM ENVIRONMENT VARIABLES
@@ -30,30 +79,24 @@ set RISK_ENGINE_URI=http://localhost:8085
 set NOTIFICATION_SERVICE_URI=http://localhost:8086
 set AI_PLATFORM_URI=http://localhost:8091
 
-REM =========================================================
-REM JAVA CHECK
-REM =========================================================
-
-java -version >nul 2>&1
-
-IF %ERRORLEVEL% NEQ 0 (
-    echo Java not found
-    pause
-    exit /b
-)
+REM Optional — override if you have real keys
+IF "%STRIPE_SECRET_KEY%"=="" set STRIPE_SECRET_KEY=sk_test_51TTkk2CyjRW67i1DP4dcrEgzhOm9dUe61k9U5kPNoDST6Deuy9rAvgJY0ZL93kKbDmdP7SEAUXUM6M4TMMtxkWNb00eKgRIql5
+IF "%SMTP_PASSWORD%"=="" set SMTP_PASSWORD=mcinrqrbfqayklee
+IF "%SLACK_WEBHOOK_URL%"=="" set SLACK_WEBHOOK_URL=https://hooks.slack.com/services/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
+IF "%FAST2SMS_API_KEY%"=="" set FAST2SMS_API_KEY=ZNd8Xx4lqrERbj67Unwi1LHvB0smOFDayTCkgczIYKM9oPAfV2jDTskbhao0QZ3luvA7VfiLdWM2KNOe
 
 REM =========================================================
-REM FREE PORTS
+REM FREE REQUIRED PORTS
 REM =========================================================
 
 echo.
 echo Freeing required ports...
 
 for %%p in (
-5433 6379 27017 9094 8180 8123 8088 8090
+5433 6379 27017 9094 8180 8123 3100 8090
 8080 8081 8082 8083 8084 8085 8086 8087 8089 8091 3000
 ) do (
-    for /f "tokens=5" %%a in ('netstat -ano ^| findstr :%%p') do (
+    for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":%%p " 2^>nul') do (
         taskkill /PID %%a /F >nul 2>&1
     )
 )
@@ -67,15 +110,15 @@ REM =========================================================
 echo.
 echo Building shared libraries...
 
-call "C:\Users\kanaka\Documents\program_files\Maven\apache-maven-3.9.15\bin\mvn.cmd" --batch-mode --no-transfer-progress clean package ^
+call !MVN_CMD! --batch-mode --no-transfer-progress clean package ^
 -pl libs/common-domain,libs/common-security,libs/common-kafka,libs/common-observability ^
 --also-make ^
 -DskipTests -q
 
 IF %ERRORLEVEL% NEQ 0 (
-    echo Shared library build failed
+    echo ERROR: Shared library build failed
     pause
-    exit /b
+    exit /b 1
 )
 
 echo Shared libs built
@@ -99,24 +142,24 @@ ai-platform
 data-pipeline
 reconciliation-service
 ) do (
-    echo Building %%s...
+    echo   Building %%s...
 
-    call "C:\Users\kanaka\Documents\program_files\Maven\apache-maven-3.9.15\bin\mvn.cmd" --batch-mode --no-transfer-progress package ^
+    call !MVN_CMD! --batch-mode --no-transfer-progress package ^
     -pl services/%%s ^
     --also-make ^
     -DskipTests -q
 
     IF !ERRORLEVEL! NEQ 0 (
-        echo Build failed for %%s
+        echo ERROR: Build failed for %%s
         pause
-        exit /b
+        exit /b 1
     )
 )
 
 echo All service JARs built
 
 REM =========================================================
-REM CLEAN INFRA
+REM CLEAN INFRA (fresh volumes every start — ensures Keycloak bootstrap fires)
 REM =========================================================
 
 echo.
@@ -136,15 +179,12 @@ echo.
 echo Waiting for Keycloak realm...
 
 :wait_keycloak
-
 curl -sf http://localhost:8180/realms/aegispay >nul 2>&1
-
 IF %ERRORLEVEL% NEQ 0 (
-    echo Waiting for Keycloak...
+    echo   Keycloak not ready yet...
     timeout /t 3 >nul
     goto wait_keycloak
 )
-
 echo Keycloak ready
 
 REM =========================================================
@@ -152,90 +192,120 @@ REM CONFIGURE KEYCLOAK
 REM =========================================================
 
 echo.
-echo Configuring Keycloak...
+echo Configuring Keycloak client scopes...
 
 call infra\local\keycloak\configure-keycloak.bat
+
+echo Keycloak configured
+
+REM =========================================================
+REM WAIT FOR CLICKHOUSE
+REM =========================================================
+
+echo.
+echo Waiting for ClickHouse...
+
+:wait_clickhouse
+curl -sf http://localhost:8123/ping 2>nul | findstr "Ok" >nul 2>&1
+IF %ERRORLEVEL% NEQ 0 (
+    echo   ClickHouse not ready yet...
+    timeout /t 5 >nul
+    goto wait_clickhouse
+)
+echo ClickHouse ready
+
+REM =========================================================
+REM WAIT FOR GRAFANA
+REM =========================================================
+
+echo.
+echo Waiting for Grafana...
+
+:wait_grafana
+curl -sf http://localhost:3100/api/health 2>nul | findstr "ok" >nul 2>&1
+IF %ERRORLEVEL% NEQ 0 (
+    echo   Grafana not ready yet...
+    timeout /t 5 >nul
+    goto wait_grafana
+)
+echo Grafana ready
 
 REM =========================================================
 REM WAIT FOR KAFKA
 REM =========================================================
 
 echo.
-echo Waiting for Kafka...
+echo Waiting for Kafka broker...
 
 :wait_kafka
-
 docker exec aegispay-kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >nul 2>&1
-
 IF %ERRORLEVEL% NEQ 0 (
-    echo Waiting for Kafka broker...
+    echo   Kafka not ready yet...
     timeout /t 3 >nul
     goto wait_kafka
 )
-
 echo Kafka ready
 
 REM =========================================================
 REM CREATE LOG DIRECTORY
 REM =========================================================
 
-IF NOT EXIST logs (
-    mkdir logs
-)
+IF NOT EXIST logs mkdir logs
 
 REM =========================================================
-REM START SERVICES
+REM START SERVICES (Wave 1 — all except reconciliation)
 REM =========================================================
 
 echo.
-echo Starting backend services...
+echo Starting backend services (Wave 1)...
 
-start "api-gateway" cmd /k ^
+start "api-gateway" /MIN cmd /c ^
 "java -jar services\api-gateway\target\api-gateway-1.0.0-SNAPSHOT.jar > logs\api-gateway.log 2>&1"
 
-start "user-service" cmd /k ^
+start "user-service" /MIN cmd /c ^
 "java -jar services\user-service\target\user-service-1.0.0-SNAPSHOT.jar > logs\user-service.log 2>&1"
 
-start "transaction-service" cmd /k ^
+start "transaction-service" /MIN cmd /c ^
 "java -jar services\transaction-service\target\transaction-service-1.0.0-SNAPSHOT.jar > logs\transaction-service.log 2>&1"
 
-start "ledger-service" cmd /k ^
+start "ledger-service" /MIN cmd /c ^
 "java -jar services\ledger-service\target\ledger-service-1.0.0-SNAPSHOT.jar > logs\ledger-service.log 2>&1"
 
-start "payment-orchestrator" cmd /k ^
+start "payment-orchestrator" /MIN cmd /c ^
 "java -jar services\payment-orchestrator\target\payment-orchestrator-1.0.0-SNAPSHOT.jar > logs\payment-orchestrator.log 2>&1"
 
-start "risk-engine" cmd /k ^
+start "risk-engine" /MIN cmd /c ^
 "java -jar services\risk-engine\target\risk-engine-1.0.0-SNAPSHOT.jar > logs\risk-engine.log 2>&1"
 
-start "notification-service" cmd /k ^
+start "notification-service" /MIN cmd /c ^
 "java -jar services\notification-service\target\notification-service-1.0.0-SNAPSHOT.jar > logs\notification-service.log 2>&1"
 
-start "ai-platform" cmd /k ^
+start "ai-platform" /MIN cmd /c ^
 "java -jar services\ai-platform\target\ai-platform-1.0.0-SNAPSHOT.jar > logs\ai-platform.log 2>&1"
 
-start "data-pipeline" cmd /k ^
+start "data-pipeline" /MIN cmd /c ^
 "java -jar services\data-pipeline\target\data-pipeline-1.0.0-SNAPSHOT.jar > logs\data-pipeline.log 2>&1"
 
 REM =========================================================
-REM WAIT FOR LEDGER
+REM WAIT FOR LEDGER (reconciliation depends on it)
 REM =========================================================
 
 echo.
-echo Waiting for ledger-service...
+echo Waiting for ledger-service before starting reconciliation...
 
 :wait_ledger
-
 curl -sf http://localhost:8083/actuator/health >nul 2>&1
-
 IF %ERRORLEVEL% NEQ 0 (
     timeout /t 3 >nul
     goto wait_ledger
 )
-
 echo ledger-service healthy
 
-start "reconciliation-service" cmd /k ^
+REM =========================================================
+REM START SERVICES (Wave 2 — reconciliation)
+REM =========================================================
+
+start "reconciliation-service" /MIN cmd /c ^
 "java -jar services\reconciliation-service\target\reconciliation-service-1.0.0-SNAPSHOT.jar > logs\reconciliation-service.log 2>&1"
 
 REM =========================================================
@@ -243,7 +313,7 @@ REM HEALTH CHECKS
 REM =========================================================
 
 echo.
-echo Waiting for all services...
+echo Waiting for all services to be healthy...
 
 call :wait_service api-gateway 8080
 call :wait_service user-service 8081
@@ -256,8 +326,9 @@ call :wait_service reconciliation-service 8087
 call :wait_service data-pipeline 8089
 call :wait_service ai-platform 8091
 
-
-
+REM =========================================================
+REM SEED TEST ACCOUNTS
+REM =========================================================
 
 echo.
 echo Seeding test accounts...
@@ -266,24 +337,12 @@ set CUSTOMER_KC_UUID=59295e61-a284-40ed-8d3b-9e15bedeb040
 set PAYEE_KC_UUID=3bf3e523-9de8-4254-9cc9-d5fa50ff8d4a
 
 docker exec aegispay-postgres psql -U aegispay -d aegispay_ledger -c "INSERT INTO accounts (user_id, currency, available_balance, reserved_balance) VALUES ('%CUSTOMER_KC_UUID%', 'INR', 50000.00, 0.00), ('%PAYEE_KC_UUID%', 'INR', 25000.00, 0.00) ON CONFLICT (user_id, currency) DO NOTHING;" >nul 2>&1
-
-IF %ERRORLEVEL% NEQ 0 (
-    echo Ledger seed skipped
-) ELSE (
-    echo Ledger accounts seeded
-)
+IF %ERRORLEVEL% EQU 0 ( echo Ledger accounts seeded ) ELSE ( echo Ledger seed skipped ^(may already exist^) )
 
 docker exec aegispay-postgres psql -U aegispay -d aegispay_users -c "INSERT INTO users (external_id, email, first_name, last_name, phone, role, kyc_status, is_active) VALUES ('%CUSTOMER_KC_UUID%', 'customer@aegispay.local', 'Test', 'Customer', '+919000000001', 'CUSTOMER', 'APPROVED', true), ('%PAYEE_KC_UUID%', 'payee@aegispay.local', 'Test', 'Payee', '+919000000002', 'CUSTOMER', 'APPROVED', true) ON CONFLICT DO NOTHING;" >nul 2>&1
+IF %ERRORLEVEL% EQU 0 ( echo User data seeded ) ELSE ( echo User seed skipped ^(may already exist^) )
 
-IF %ERRORLEVEL% NEQ 0 (
-    echo User seed skipped
-) ELSE (
-    echo User data seeded
-)
-
-echo Test data seeded
-echo Customer Balance: INR 50000
-echo Payee Balance: INR 25000
+echo Test accounts ready — Customer INR 50000  ^|  Payee INR 25000
 
 REM =========================================================
 REM FRONTEND
@@ -293,13 +352,12 @@ echo.
 echo Starting frontend...
 
 IF NOT EXIST apps\web\.env.local (
-    copy apps\web\.env.local.example apps\web\.env.local
+    copy apps\web\.env.local.example apps\web\.env.local >nul
+    echo Created apps\web\.env.local from example
 )
 
-call npm install --silent --prefer-offline
-
-start "web-app" cmd /k ^
-"npm run dev --workspace=apps/web > logs\web.log 2>&1"
+call pnpm install --silent
+start "web-app" /MIN cmd /c "pnpm --filter @aegispay/web dev > logs\web.log 2>&1"
 
 REM =========================================================
 REM SUMMARY
@@ -307,33 +365,30 @@ REM =========================================================
 
 echo.
 echo =========================================================
-echo All services healthy
+echo   AegisPay is running!
 echo =========================================================
 echo.
-echo Web App:
-echo http://localhost:3000
+echo   Web App        -^>  http://localhost:3000
+echo   API Gateway    -^>  http://localhost:8080/actuator/health
+echo   Keycloak       -^>  http://localhost:8180   (admin / admin)
+echo   Kafka UI       -^>  http://localhost:8090
+echo   Grafana        -^>  http://localhost:3100   (admin / admin)
+echo   ClickHouse     -^>  http://localhost:8123
+echo   PostgreSQL     -^>  localhost:5433          (aegispay / aegispay_dev)
 echo.
-echo API Gateway:
-echo http://localhost:8080/actuator/health
+echo   Test accounts:
+echo     Sender : customer@aegispay.local / Test@1234  (INR 50000)
+echo     Payee  : payee@aegispay.local    / Test@1234  (INR 25000)
+echo     Payee UUID: %PAYEE_KC_UUID%
 echo.
-echo Keycloak:
-echo http://localhost:8180
-echo admin / admin
+echo   Logs: logs\
 echo.
-echo Kafka UI:
-echo http://localhost:8090
+echo   Stop everything:
+echo     docker compose down
+echo     taskkill /F /IM java.exe
+echo     taskkill /F /IM node.exe
 echo.
-echo Superset:
-echo http://localhost:8088
-echo.
-echo Logs:
-echo logs\
-echo.
-echo Stop everything:
-echo docker compose down
-echo taskkill /F /IM java.exe
-echo taskkill /F /IM node.exe
-echo.
+echo =========================================================
 pause
 exit /b
 
@@ -342,21 +397,14 @@ REM WAIT FUNCTION
 REM =========================================================
 
 :wait_service
-
-set SERVICE_NAME=%1
-set PORT=%2
-
-echo Waiting for %SERVICE_NAME% on %PORT%...
-
-:service_loop
-
-curl -sf http://localhost:%PORT%/actuator/health >nul 2>&1
-
+set _SVC=%1
+set _PORT=%2
+echo   Waiting for %_SVC% on port %_PORT%...
+:_svc_loop
+curl -sf http://localhost:%_PORT%/actuator/health >nul 2>&1
 IF %ERRORLEVEL% NEQ 0 (
     timeout /t 3 >nul
-    goto service_loop
+    goto _svc_loop
 )
-
-echo %SERVICE_NAME% healthy
-
+echo   %_SVC% healthy
 exit /b

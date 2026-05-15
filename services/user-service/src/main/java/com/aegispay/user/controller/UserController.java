@@ -6,6 +6,7 @@ import com.aegispay.user.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -42,6 +43,23 @@ public class UserController {
     public ResponseEntity<ApiResponse<UserResponse>> getMe(@AuthenticationPrincipal Jwt jwt) {
         UserResponse response = userService.getByExternalId(jwt.getSubject());
         return ResponseEntity.ok(ApiResponse.ok(response));
+    }
+
+    /**
+     * Back-office: paginated user list, optionally filtered by KYC status.
+     * Accessible to BACK_OFFICE, ADMIN, and MERCHANT_OPS roles only.
+     *
+     * <p>Example: {@code GET /api/v1/users?page=0&size=50&kycStatus=PENDING}
+     */
+    @GetMapping
+    @PreAuthorize("hasAnyRole('BACK_OFFICE', 'ADMIN', 'MERCHANT_OPS')")
+    public ResponseEntity<ApiResponse<Page<UserResponse>>> listUsers(
+            @RequestParam(defaultValue = "0")  int page,
+            @RequestParam(defaultValue = "50") int size,
+            @RequestParam(required = false)    String kycStatus) {
+
+        Page<UserResponse> result = userService.listUsers(page, size, kycStatus);
+        return ResponseEntity.ok(ApiResponse.ok(result));
     }
 
     /** Get any user by internal UUID. Requires BACK_OFFICE, ADMIN, or MERCHANT_OPS role. */

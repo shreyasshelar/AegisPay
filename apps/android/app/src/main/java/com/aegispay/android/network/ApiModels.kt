@@ -72,6 +72,13 @@ enum class KycStatus {
 }
 
 @JsonClass(generateAdapter = true)
+data class UserRegistrationRequest(
+    @Json(name = "firstName") val firstName: String,
+    @Json(name = "lastName")  val lastName:  String,
+    @Json(name = "email")     val email:     String,
+)
+
+@JsonClass(generateAdapter = true)
 data class UserProfile(
     @Json(name = "id")        val id:        String,
     @Json(name = "email")     val email:     String,
@@ -185,6 +192,13 @@ data class RiskCase(
 @JsonClass(generateAdapter = true)
 data class PagedRiskCases(
     @Json(name = "content")       val content:       List<RiskCase>,
+    @Json(name = "totalElements") val totalElements: Int,
+    @Json(name = "last")          val last:          Boolean,
+)
+
+@JsonClass(generateAdapter = true)
+data class PagedUsers(
+    @Json(name = "content")       val content:       List<UserProfile>,
     @Json(name = "totalElements") val totalElements: Int,
     @Json(name = "last")          val last:          Boolean,
 )

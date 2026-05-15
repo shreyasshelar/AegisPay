@@ -20,6 +20,9 @@ struct RootView: View {
             case .unauthenticated:
                 LoginView()
 
+            case .needsRegistration(let email):
+                OnboardingView(prefillEmail: email)
+
             case .authenticated:
                 MainTabView()
                     .overlay {

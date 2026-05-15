@@ -26,6 +26,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.shape.CircleShape
+import com.aegispay.android.network.KycStatus
 import com.aegispay.android.network.Transaction
 import com.aegispay.android.network.TransactionStatus
 import com.aegispay.android.ui.components.AegisCard
@@ -45,6 +46,7 @@ fun SendMoneyScreen(
     viewModel:           SendMoneyViewModel,
     onNavigateUp:        () -> Unit,
     onNavigateToDetail:  (String) -> Unit,
+    onNavigateToProfile: () -> Unit = {},
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context  = LocalContext.current
@@ -75,43 +77,119 @@ fun SendMoneyScreen(
         },
         containerColor = AegisColor.Bg,
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-        ) {
-            // Step indicator (hidden on STATUS)
-            if (uiState.step != SendStep.STATUS) {
-                StepIndicator(current = uiState.step)
+        when {
+            // ── KYC loading ───────────────────────────────────────────────────
+            uiState.kycLoading -> {
+                Box(
+                    Modifier.fillMaxSize().padding(padding),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator()
+                }
             }
 
-            AnimatedContent(
-                targetState  = uiState.step,
-                transitionSpec = {
-                    slideInHorizontally { it } + fadeIn() togetherWith
-                    slideOutHorizontally { -it } + fadeOut()
-                },
-                label = "send-step",
-            ) { step ->
+            // ── KYC blocked ───────────────────────────────────────────────────
+            uiState.kycStatus != null && uiState.kycStatus != KycStatus.APPROVED -> {
+                KycBlockedCard(
+                    modifier             = Modifier.fillMaxSize().padding(padding),
+                    onNavigateToProfile  = onNavigateToProfile,
+                )
+            }
+
+            // ── Wizard ────────────────────────────────────────────────────────
+            else -> {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                        .padding(padding),
                 ) {
-                    when (step) {
-                        SendStep.PAYEE  -> PayeeStep(viewModel, uiState)
-                        SendStep.AMOUNT -> AmountStep(viewModel, uiState)
-                        SendStep.REVIEW -> ReviewStep(viewModel, uiState)
-                        SendStep.STATUS -> StatusStep(
-                            uiState           = uiState,
-                            viewModel         = viewModel,
-                            onNavigateToDetail = onNavigateToDetail,
-                        )
+                    if (uiState.step != SendStep.STATUS) {
+                        StepIndicator(current = uiState.step)
+                    }
+                    AnimatedContent(
+                        targetState  = uiState.step,
+                        transitionSpec = {
+                            slideInHorizontally { it } + fadeIn() togetherWith
+                            slideOutHorizontally { -it } + fadeOut()
+                        },
+                        label = "send-step",
+                    ) { step ->
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .verticalScroll(rememberScrollState())
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                        ) {
+                            when (step) {
+                                SendStep.PAYEE  -> PayeeStep(viewModel, uiState)
+                                SendStep.AMOUNT -> AmountStep(viewModel, uiState)
+                                SendStep.REVIEW -> ReviewStep(viewModel, uiState)
+                                SendStep.STATUS -> StatusStep(
+                                    uiState           = uiState,
+                                    viewModel         = viewModel,
+                                    onNavigateToDetail = onNavigateToDetail,
+                                )
+                            }
+                        }
                     }
                 }
             }
+        }
+    }
+}
+
+// ── KYC blocked card ──────────────────────────────────────────────────────────
+
+@Composable
+private fun KycBlockedCard(
+    modifier:            Modifier = Modifier,
+    onNavigateToProfile: () -> Unit,
+) {
+    Column(
+        modifier            = modifier.padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Surface(
+            shape  = CircleShape,
+            color  = MaterialTheme.colorScheme.secondaryContainer,
+            modifier = Modifier.size(80.dp),
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector        = Icons.Default.Shield,
+                    contentDescription = null,
+                    tint               = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier           = Modifier.size(40.dp),
+                )
+            }
+        }
+        Spacer(Modifier.height(20.dp))
+        Text(
+            text       = "Identity verification required",
+            style      = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            textAlign  = TextAlign.Center,
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text      = "You need to complete KYC verification before sending money. This protects you and your recipients from fraud.",
+            style     = MaterialTheme.typography.bodyMedium,
+            color     = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(24.dp))
+        Button(
+            onClick  = onNavigateToProfile,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = AegisColor.Primary),
+        ) {
+            Text("Complete KYC now", fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.width(8.dp))
+            Icon(Icons.Default.ArrowForward, contentDescription = null, modifier = Modifier.size(18.dp))
         }
     }
 }

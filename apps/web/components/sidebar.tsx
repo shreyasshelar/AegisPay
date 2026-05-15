@@ -15,11 +15,13 @@ import {
   Database,
   LogOut,
   ChevronRight,
+  Users2,
 } from 'lucide-react'
 import { useTransactionSocket } from '@aegispay/api-client'
 import { useNotificationStore } from '@/lib/useNotificationStore'
 import { cn } from '@/lib/utils'
 import type { TransactionNotification } from '@aegispay/shared-types'
+import { toast } from 'sonner'
 
 interface NavItem {
   label:  string
@@ -37,6 +39,7 @@ const NAV_ITEMS: NavItem[] = [
 ]
 
 const BACKOFFICE_ITEMS: NavItem[] = [
+  { label: 'Users',      href: '/back-office/users',     icon: Users2,        roles: ['BACK_OFFICE', 'ADMIN'] },
   { label: 'Risk Cases', href: '/back-office/risk',      icon: AlertTriangle, roles: ['BACK_OFFICE', 'ADMIN'] },
   { label: 'Incidents',  href: '/back-office/incidents', icon: ShieldCheck,   roles: ['BACK_OFFICE', 'ADMIN'] },
   { label: 'Ledger',     href: '/back-office/ledger',    icon: Database,      roles: ['BACK_OFFICE', 'ADMIN'] },
@@ -60,6 +63,8 @@ export function Sidebar() {
       queryClient.invalidateQueries({ queryKey: ['notifications', 'list'] })
       if (!pathname.startsWith('/notifications')) {
         increment()
+        // Show toast only when the user isn't already on the notifications page
+        toast.info(notification.title, { description: notification.body })
       }
     },
   })

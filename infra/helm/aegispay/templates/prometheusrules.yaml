@@ -108,6 +108,81 @@ spec:
           annotations:
             summary: "AI platform p99 RAG query latency exceeds 10 seconds"
 
+    - name: aegispay.notification
+      interval: 30s
+      rules:
+        - alert: NotificationDeliveryFailureHigh
+          expr: |
+            sum(rate(notification_delivery_failure_total[5m])) > {{ .Values.monitoring.thresholds.notificationErrorRatePerMin | default 0.5 }}
+          for: 5m
+          labels:
+            severity: warning
+            team: platform
+          annotations:
+            summary: "Notification delivery failure rate is elevated"
+            description: "More than {{ .Values.monitoring.thresholds.notificationErrorRatePerMin | default 0.5 }} notification delivery failures/min over the last 5 minutes. Check SMTP, Slack webhook, and Fast2SMS configs."
+
+        - alert: NotificationServiceDown
+          expr: |
+            up{job="notification-service"} == 0
+          for: 2m
+          labels:
+            severity: critical
+            team: platform
+          annotations:
+            summary: "Notification service is unreachable"
+            description: "The notification-service pod has been down for 2+ minutes — WebSocket, email, SMS and Slack notifications are not being delivered."
+
+    - name: aegispay.datapipeline
+      interval: 30s
+      rules:
+        - alert: DataPipelineSinkErrorHigh
+          expr: |
+            sum(rate(clickhouse_sink_error_total[5m])) > {{ .Values.monitoring.thresholds.dataPipelineSinkErrorsPerMin | default 0.2 }}
+          for: 5m
+          labels:
+            severity: warning
+            team: platform
+          annotations:
+            summary: "ClickHouse sink is experiencing elevated write errors"
+            description: "data-pipeline is failing to flush records to ClickHouse. Grafana dashboards will show stale data. Check ClickHouse connectivity and schema alignment."
+
+        - alert: DataPipelineSinkBacklogHigh
+          expr: |
+            clickhouse_sink_pending_records > 1000
+          for: 5m
+          labels:
+            severity: warning
+            team: platform
+          annotations:
+            summary: "ClickHouse sink backlog is high"
+            description: "More than 1000 records are queued in the data-pipeline sink without being flushed to ClickHouse."
+
+    - name: aegispay.reconciliation
+      interval: 60s
+      rules:
+        - alert: ReconciliationBreakCountHigh
+          expr: |
+            aegispay_reconciliation_unresolved_breaks > {{ .Values.monitoring.thresholds.reconciliationBreakCount | default 5 }}
+          for: 15m
+          labels:
+            severity: critical
+            team: finance
+          annotations:
+            summary: "High number of unresolved reconciliation breaks"
+            description: "There are {{ "{{" }} $value {{ "}}" }} unresolved reconciliation breaks. Investigate via the SLA & Latency Grafana dashboard → Reconciliation Breaks table."
+
+        - alert: ReconciliationJobFailed
+          expr: |
+            kube_job_failed{job_name=~"reconciliation.*", namespace="{{ .Values.global.namespace }}"} > 0
+          for: 0m
+          labels:
+            severity: critical
+            team: finance
+          annotations:
+            summary: "Reconciliation job has failed"
+            description: "The reconciliation CronJob has a failed run. Manual inspection required."
+
     - name: aegispay.service
       interval: 30s
       rules:

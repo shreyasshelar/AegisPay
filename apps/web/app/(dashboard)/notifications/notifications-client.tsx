@@ -1,16 +1,14 @@
 'use client'
 
 import { useEffect } from 'react'
-import { useSession } from 'next-auth/react'
-import { useQueryClient, useQuery } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { useAuthGuard } from '@/lib/useAuthGuard'
 import { Bell, Loader2, CheckCircle2, XCircle, Info } from 'lucide-react'
-import { useApiClient, useTransactionSocket } from '@aegispay/api-client'
+import { useApiClient } from '@aegispay/api-client'
 import { Header } from '@/components/header'
 import { timeAgo } from '@/lib/utils'
 import { useNotificationStore } from '@/lib/useNotificationStore'
-import type { TransactionNotification, Notification } from '@aegispay/shared-types'
-import { toast } from 'sonner'
+import type { Notification } from '@aegispay/shared-types'
 
 // ── Notification icon helper ─────────────────────────────────────────────────
 
@@ -26,31 +24,16 @@ function NotifIcon({ type }: { type: string }) {
 
 export function NotificationsClient() {
   const blocking               = useAuthGuard()
-  const { data: session }     = useSession()
   const { notifications: nc } = useApiClient()
-  const queryClient            = useQueryClient()
-  const wsBaseUrl              = process.env.NEXT_PUBLIC_WS_BASE_URL ?? 'ws://localhost:8086'
-  const { reset: resetUnread, increment } = useNotificationStore()
+  const { reset: resetUnread } = useNotificationStore()
 
-  // Clear badge when this page is mounted
+  // Clear badge when this page is mounted (sidebar's WS handler skips increment here)
   useEffect(() => { resetUnread() }, [resetUnread])
 
   const { data, isLoading } = useQuery({
     queryKey: ['notifications', 'list'],
     queryFn:  () => nc.list(0, 50),
     staleTime: 30_000,
-  })
-
-  // Live incoming notifications via WebSocket
-  useTransactionSocket({
-    userId:      session?.user?.id ?? '',
-    accessToken: session?.accessToken ?? null,
-    wsBaseUrl,
-    onNotification(notification: TransactionNotification) {
-      queryClient.invalidateQueries({ queryKey: ['notifications', 'list'] })
-      increment()
-      toast.info(notification.title, { description: notification.body })
-    },
   })
 
   const items: Notification[] = data?.content ?? []

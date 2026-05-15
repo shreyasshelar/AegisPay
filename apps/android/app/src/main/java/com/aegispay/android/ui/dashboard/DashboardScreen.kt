@@ -19,19 +19,20 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.aegispay.android.network.KycStatus
 import com.aegispay.android.ui.components.*
 import com.aegispay.android.ui.theme.AegisColor
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(
-    viewModel:                DashboardViewModel,
-    onNavigateToTransactions: () -> Unit,
-    onNavigateToDetail:       (String) -> Unit,
-    onNavigateToSend:         () -> Unit,
+    viewModel:                 DashboardViewModel,
+    onNavigateToTransactions:  () -> Unit,
+    onNavigateToDetail:        (String) -> Unit,
+    onNavigateToSend:          () -> Unit,
     onNavigateToNotifications: () -> Unit,
-    onNavigateToProfile:      () -> Unit,
-    onNavigateToBackOffice:   () -> Unit = {},
+    onNavigateToProfile:       () -> Unit,
+    onNavigateToBackOffice:    () -> Unit = {},
 ) {
     val uiState       by viewModel.uiState.collectAsState()
     val badgeCount    by viewModel.badgeCount.collectAsState()
@@ -75,6 +76,17 @@ fun DashboardScreen(
             contentPadding      = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            // ── KYC nudge banner ──────────────────────────────────────────────
+            val kyc = uiState.kycStatus
+            if (kyc != null && kyc != KycStatus.APPROVED) {
+                item {
+                    KycNudgeBanner(
+                        kycStatus           = kyc,
+                        onNavigateToProfile = onNavigateToProfile,
+                    )
+                }
+            }
+
             // ── Balance card ──────────────────────────────────────────────────
             item {
                 Box(
@@ -286,6 +298,72 @@ fun DashboardScreen(
 }
 
 // ── Quick action tile ─────────────────────────────────────────────────────────
+
+// ── KYC nudge banner ──────────────────────────────────────────────────────────
+
+@Composable
+private fun KycNudgeBanner(
+    kycStatus:           KycStatus,
+    onNavigateToProfile: () -> Unit,
+) {
+    val (icon, message) = when (kycStatus) {
+        KycStatus.PENDING ->
+            Icons.Default.Shield to "Complete identity verification to unlock all features."
+        KycStatus.DOCUMENT_SUBMITTED, KycStatus.AI_PROCESSING ->
+            Icons.Default.AccessTime to "Your identity is being verified. We'll notify you when it's done."
+        KycStatus.REJECTED ->
+            Icons.Default.Warning to "Verification failed. Please re-submit your documents."
+        KycStatus.MANUAL_REVIEW ->
+            Icons.Default.HourglassBottom to "Your documents are under manual review."
+        KycStatus.APPROVED -> return   // never shown
+    }
+
+    val isRejected = kycStatus == KycStatus.REJECTED
+    val bgColor    = if (isRejected) MaterialTheme.colorScheme.errorContainer
+                     else MaterialTheme.colorScheme.tertiaryContainer
+    val onColor    = if (isRejected) MaterialTheme.colorScheme.onErrorContainer
+                     else MaterialTheme.colorScheme.onTertiaryContainer
+
+    Surface(
+        onClick = onNavigateToProfile,
+        shape  = MaterialTheme.shapes.large,
+        color  = bgColor,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier            = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment   = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Icon(
+                imageVector        = icon,
+                contentDescription = null,
+                tint               = onColor,
+                modifier           = Modifier.size(24.dp),
+            )
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text       = "Identity verification",
+                    style      = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color      = onColor,
+                )
+                Text(
+                    text      = message,
+                    style     = MaterialTheme.typography.bodySmall,
+                    color     = onColor.copy(alpha = 0.8f),
+                    maxLines  = 2,
+                )
+            }
+            Icon(
+                imageVector        = Icons.Default.ChevronRight,
+                contentDescription = null,
+                tint               = onColor.copy(alpha = 0.6f),
+                modifier           = Modifier.size(20.dp),
+            )
+        }
+    }
+}
 
 @Composable
 private fun QuickAction(
