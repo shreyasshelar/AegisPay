@@ -3,18 +3,20 @@ package com.aegispay.notification.kafka;
 import com.aegispay.common.domain.enums.NotificationType;
 import com.aegispay.common.domain.event.TransactionCompletedEvent;
 import com.aegispay.common.domain.event.TransactionFailedEvent;
-import com.aegispay.common.domain.event.TransactionRolledBackEvent;
 import com.aegispay.common.kafka.KafkaTopics;
 import com.aegispay.notification.dispatcher.NotificationDispatcher;
+import com.aegispay.notification.domain.document.UserContactDocument;
 import com.aegispay.notification.repository.UserContactRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
+import java.util.Optional;
 
 @Slf4j
 @Component
@@ -25,24 +27,42 @@ public class TransactionStatusConsumer {
     private final UserContactRepository userContactRepository;
     private final ObjectMapper objectMapper;
 
-    /** Returns the user's phone number, or null if not found or blank — never throws. */
-    private String resolvePhone(String userId) {
+    /** Ops Slack webhook — receives FAILED alerts regardless of individual user settings. */
+    @Value("${aegispay.notification.slack.webhook-url:}")
+    private String slackWebhookUrl;
+
+    // ── Contact resolution helpers ────────────────────────────────────────────
+
+    private Optional<UserContactDocument> resolveContact(String userId) {
         try {
-            var opt = userContactRepository.findById(userId);
-            if (opt.isEmpty()) return null;
-            String phone = opt.get().getPhoneNumber();
-            return (phone != null && !phone.isBlank()) ? phone : null;
+            return userContactRepository.findById(userId);
         } catch (Exception ex) {
-            log.warn("Phone lookup failed for userId={}: {}", userId, ex.getMessage());
-            return null;
+            log.warn("Contact lookup failed for userId={}: {}", userId, ex.getMessage());
+            return Optional.empty();
         }
     }
+
+    private String resolvePhone(String userId) {
+        return resolveContact(userId)
+                .map(UserContactDocument::getPhoneNumber)
+                .filter(p -> p != null && !p.isBlank())
+                .orElse(null);
+    }
+
+    private String resolveEmail(String userId) {
+        return resolveContact(userId)
+                .map(UserContactDocument::getEmail)
+                .filter(e -> e != null && !e.isBlank())
+                .orElse(null);
+    }
+
+    // ── Kafka listener ────────────────────────────────────────────────────────
 
     @KafkaListener(
         topics = {
             KafkaTopics.TRANSACTION_COMPLETED,
-            KafkaTopics.TRANSACTION_FAILED,
-            KafkaTopics.TRANSACTION_ROLLED_BACK
+            KafkaTopics.TRANSACTION_FAILED
+            // TRANSACTION_ROLLED_BACK removed — orchestrator now maps rollback → TRANSACTION_FAILED
         },
         groupId = "notification-service-transactions"
     )
@@ -50,39 +70,54 @@ public class TransactionStatusConsumer {
         log.debug("Received transaction event: topic={} key={}", record.topic(), record.key());
         try {
             switch (record.topic()) {
+
                 case KafkaTopics.TRANSACTION_COMPLETED -> {
                     TransactionCompletedEvent e = objectMapper.readValue(record.value(), TransactionCompletedEvent.class);
+                    String userId = e.getUserId().toString();
                     Map<String, String> vars = Map.of(
-                        "amount", e.getAmount().toPlainString(),
-                        "currency", e.getCurrency(),
+                        "amount",            e.getAmount().toPlainString(),
+                        "currency",          e.getCurrency(),
                         "externalReference", e.getExternalReference() != null ? e.getExternalReference() : "");
-                    // WebSocket only for success — SMS would be too noisy
-                    dispatcher.dispatch(e.getUserId().toString(), NotificationType.TRANSACTION_COMPLETED,
-                            "WEBSOCKET", null, vars);
+
+                    // WebSocket — real-time in-app
+                    dispatcher.dispatch(userId, NotificationType.TRANSACTION_COMPLETED, "WEBSOCKET", null, vars);
+
+                    // Email — confirmation receipt
+                    String email = resolveEmail(userId);
+                    if (email != null) {
+                        dispatcher.dispatch(userId, NotificationType.TRANSACTION_COMPLETED, "EMAIL", email, vars);
+                    }
                 }
+
                 case KafkaTopics.TRANSACTION_FAILED -> {
                     TransactionFailedEvent e = objectMapper.readValue(record.value(), TransactionFailedEvent.class);
                     String userId = e.getUserId().toString();
                     Map<String, String> vars = Map.of(
                         "failureReason", e.getFailureReason() != null ? e.getFailureReason() : "Unknown",
                         "failureCode",   e.getFailureCode()   != null ? e.getFailureCode()   : "");
+
+                    // WebSocket — real-time in-app
                     dispatcher.dispatch(userId, NotificationType.TRANSACTION_FAILED, "WEBSOCKET", null, vars);
+
+                    // Email — failure notice to user
+                    String email = resolveEmail(userId);
+                    if (email != null) {
+                        dispatcher.dispatch(userId, NotificationType.TRANSACTION_FAILED, "EMAIL", email, vars);
+                    }
+
+                    // SMS — urgent alert (only if phone on file)
                     String phone = resolvePhone(userId);
                     if (phone != null) {
                         dispatcher.dispatch(userId, NotificationType.TRANSACTION_FAILED, "SMS", phone, vars);
                     }
-                }
-                case KafkaTopics.TRANSACTION_ROLLED_BACK -> {
-                    TransactionRolledBackEvent e = objectMapper.readValue(record.value(), TransactionRolledBackEvent.class);
-                    String userId = e.getUserId().toString();
-                    Map<String, String> vars = Map.of(
-                        "rollbackReason", e.getRollbackReason() != null ? e.getRollbackReason() : "");
-                    dispatcher.dispatch(userId, NotificationType.TRANSACTION_ROLLED_BACK, "WEBSOCKET", null, vars);
-                    String phone = resolvePhone(userId);
-                    if (phone != null) {
-                        dispatcher.dispatch(userId, NotificationType.TRANSACTION_ROLLED_BACK, "SMS", phone, vars);
+
+                    // Slack — ops/internal alert (always fired if webhook configured)
+                    if (!slackWebhookUrl.isBlank()) {
+                        dispatcher.dispatch(userId, NotificationType.TRANSACTION_FAILED, "SLACK",
+                                slackWebhookUrl, vars);
                     }
                 }
+
                 default -> log.warn("Unhandled topic: {}", record.topic());
             }
         } catch (Exception e) {

@@ -21,6 +21,7 @@ public interface TransactionMapper {
     @Mapping(target = "transactionId", expression = "java(java.util.UUID.fromString(view.getId()))")
     @Mapping(target = "aiExplanation",   source = "aiExplanation")
     @Mapping(target = "failureReason",   source = "failureReason")
+    @Mapping(target = "failureCode",     source = "failureCode")
     TransactionStatusResponse toStatusResponse(TransactionView view);
 
     /** Maps a MongoDB read-model view to the full response shape used by the list endpoint. */
@@ -40,6 +41,7 @@ public interface TransactionMapper {
                 .initiatedAt(view.getInitiatedAt())
                 .completedAt(view.getCompletedAt())
                 .failureReason(view.getFailureReason())
+                .failureCode(view.getFailureCode())
                 .externalReference(view.getExternalReference())
                 .build();
     }

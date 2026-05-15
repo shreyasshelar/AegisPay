@@ -33,7 +33,8 @@ public class UserEventProducer {
                 .occurredAt(Instant.now())
                 .schemaVersion(1)
                 .userId(user.getId())
-                .maskedEmail(maskEmail(user.getEmail()))
+                .email(user.getEmail())              // full email for notification delivery
+                .maskedEmail(maskEmail(user.getEmail())) // display-only masked version
                 .phoneNumber(user.getPhone())
                 .role(user.getRole())
                 .tenantId(user.getTenantId())

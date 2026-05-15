@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect } from 'react'
 import { Plus } from 'lucide-react'
 import { useSendMoneyStore } from '@/lib/useSendMoneyStore'
 import { useAuthGuard } from '@/lib/useAuthGuard'
@@ -61,6 +62,11 @@ function StepIndicator({ current }: { current: string }) {
 export function SendMoneyClient() {
   const blocking = useAuthGuard()
   const { step, reset } = useSendMoneyStore()
+
+  // Reset wizard state every time this page mounts so previous transaction doesn't leak
+  useEffect(() => {
+    reset()
+  }, [reset])
 
   if (blocking) return null
 
