@@ -7,6 +7,9 @@ import Combine
 enum AuthState: Equatable {
     case loading
     case unauthenticated
+    /// Keycloak PKCE succeeded but no AegisPay account exists yet.
+    /// The associated value carries the email pre-filled from the ID-token.
+    case needsRegistration(email: String?)
     case authenticated
 }
 
@@ -20,7 +23,8 @@ final class AuthStore: ObservableObject {
     @Published private(set) var currentUser: AuthUser?
     @Published private(set) var lastError: AuthError?
 
-    private let tokenStore = TokenStore.shared
+    private let tokenStore  = TokenStore.shared
+    private let userService = UserService()
 
     /// AppAuth in-progress authorization flow handle (must be kept alive).
     private var currentAuthorizationFlow: OIDExternalUserAgentSession?
@@ -67,7 +71,7 @@ final class AuthStore: ObservableObject {
             }
 
             try persistTokens(from: authResponse)
-            state = .authenticated
+            await resolveRegistrationState()
 
         } catch {
             lastError = AuthError.from(error)
@@ -102,19 +106,72 @@ final class AuthStore: ObservableObject {
 
     private func restoreSession() async {
         if tokenStore.isAccessTokenValid {
-            currentUser = buildUser()
-            state = .authenticated
+            await resolveRegistrationState()
         } else if tokenStore.canRefresh {
             do {
                 _ = try await refreshTokens()
-                currentUser = buildUser()
-                state = .authenticated
+                await resolveRegistrationState()
             } catch {
                 state = .unauthenticated
             }
         } else {
             state = .unauthenticated
         }
+    }
+
+    /// Checks whether the user exists in AegisPay after a successful Keycloak login.
+    /// - If `aegispay_user_id` is already in the token → fully authenticated.
+    /// - If missing → call `/me`; 200 → store id, authenticated; 404 → needsRegistration.
+    private func resolveRegistrationState() async {
+        // Fast path: user ID already known from token claims
+        if tokenStore.userId != nil {
+            currentUser = buildUser()
+            state = .authenticated
+            return
+        }
+        // Slow path: first login — look up by Keycloak sub
+        do {
+            if let profile = try await userService.getMe() {
+                // User exists — store their AegisPay UUID for future calls
+                let ttl = tokenStore.expiresAt?.timeIntervalSinceNow ?? 3600
+                tokenStore.store(
+                    accessToken:  tokenStore.accessToken!,
+                    refreshToken: tokenStore.refreshToken,
+                    idToken:      tokenStore.idToken,
+                    expiresIn:    max(ttl, 60),
+                    userId:       profile.id,
+                    userRole:     tokenStore.userRole
+                )
+                currentUser = buildUser()
+                state = .authenticated
+            } else {
+                // 404 — brand-new user, no AegisPay account yet
+                let email = tokenStore.idToken.flatMap { decodeJWTPayload($0)["email"] as? String }
+                state = .needsRegistration(email: email)
+            }
+        } catch {
+            // Network error during /me lookup — stay unauthenticated so the user can retry
+            state = .unauthenticated
+        }
+    }
+
+    /// Called by `OnboardingViewModel` after successful `/register`.
+    /// Stores the new AegisPay user ID and transitions to `.authenticated`.
+    func completeRegistration(userId: String) {
+        guard let accessToken = tokenStore.accessToken,
+              let refreshToken = tokenStore.refreshToken
+        else { return }
+        let ttl = tokenStore.expiresAt?.timeIntervalSinceNow ?? 3600
+        tokenStore.store(
+            accessToken:  accessToken,
+            refreshToken: refreshToken,
+            idToken:      tokenStore.idToken,
+            expiresIn:    max(ttl, 60),
+            userId:       userId,
+            userRole:     tokenStore.userRole
+        )
+        currentUser = buildUser()
+        state = .authenticated
     }
 
     @discardableResult
@@ -182,7 +239,10 @@ final class AuthStore: ObservableObject {
         var userRole: String?
         if let idToken = authState.lastTokenResponse?.idToken {
             let claims = decodeJWTPayload(idToken)
-            userId   = claims["sub"] as? String
+            // Keycloak adds aegispay_user_id as a custom claim via a mapper —
+            // this is the AegisPay domain UUID. "sub" is Keycloak's internal UUID
+            // and must NOT be used here; it would mismatch every backend lookup.
+            userId   = claims["aegispay_user_id"] as? String
             let roles = (claims["realm_access"] as? [String: Any])?["roles"] as? [String] ?? []
             userRole = roles.contains("ADMIN") ? "ADMIN"
                      : roles.contains("BACK_OFFICE") ? "BACK_OFFICE"

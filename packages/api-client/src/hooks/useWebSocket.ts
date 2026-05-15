@@ -43,12 +43,14 @@ export function useTransactionSocket({
   wsBaseUrl,
   onNotification,
 }: UseTransactionSocketOptions) {
-  const wsRef = useRef<WebSocket | null>(null)
+  const wsRef             = useRef<WebSocket | null>(null)
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const onNotificationRef = useRef(onNotification)
+  const stoppedRef        = useRef(false)   // set true on cleanup; prevents onclose from re-scheduling
   onNotificationRef.current = onNotification
 
   const connect = useCallback(() => {
+    if (stoppedRef.current) return
     if (!accessToken || !userId) return
     if (wsRef.current?.readyState === WebSocket.OPEN) return
 
@@ -98,7 +100,10 @@ export function useTransactionSocket({
     }
 
     ws.onclose = () => {
-      // Reconnect after 5 s
+      // Guard: if cleanup already ran, do NOT reconnect (fixes StrictMode double-mount
+      // race where the onclose of the first mount's WS fires after cleanup and creates
+      // a phantom third connection).
+      if (stoppedRef.current) return
       reconnectTimerRef.current = setTimeout(connect, 5_000)
     }
 
@@ -108,8 +113,10 @@ export function useTransactionSocket({
   }, [accessToken, userId, wsBaseUrl])
 
   useEffect(() => {
+    stoppedRef.current = false
     connect()
     return () => {
+      stoppedRef.current = true
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current)
       wsRef.current?.close()
     }
@@ -128,9 +135,11 @@ export function useTransactionStatusSocket({
   const wsRef              = useRef<WebSocket | null>(null)
   const reconnectTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null)
   const onStatusUpdateRef  = useRef(onStatusUpdate)
+  const stoppedRef         = useRef(false)
   onStatusUpdateRef.current = onStatusUpdate
 
   const connect = useCallback(() => {
+    if (stoppedRef.current) return
     if (!enabled || !accessToken || !transactionId) return
     if (wsRef.current?.readyState === WebSocket.OPEN) return
 
@@ -180,6 +189,7 @@ export function useTransactionStatusSocket({
     }
 
     ws.onclose = () => {
+      if (stoppedRef.current) return
       reconnectTimerRef.current = setTimeout(connect, 5_000)
     }
 
@@ -187,8 +197,10 @@ export function useTransactionStatusSocket({
   }, [enabled, accessToken, transactionId, wsBaseUrl])
 
   useEffect(() => {
+    stoppedRef.current = false
     connect()
     return () => {
+      stoppedRef.current = true
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current)
       wsRef.current?.close()
     }

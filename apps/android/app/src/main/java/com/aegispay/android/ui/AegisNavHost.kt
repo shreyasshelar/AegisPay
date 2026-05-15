@@ -12,6 +12,7 @@ import com.aegispay.android.ui.auth.LoginScreen
 import com.aegispay.android.ui.backoffice.BackOfficeScreen
 import com.aegispay.android.ui.dashboard.DashboardScreen
 import com.aegispay.android.ui.notifications.NotificationsScreen
+import com.aegispay.android.ui.onboarding.OnboardingScreen
 import com.aegispay.android.ui.profile.ProfileScreen
 import com.aegispay.android.ui.sendmoney.SendMoneyScreen
 import com.aegispay.android.ui.transactions.TransactionDetailScreen
@@ -21,6 +22,7 @@ import com.aegispay.android.ui.transactions.TransactionListScreen
 
 object Route {
     const val LOGIN              = "login"
+    const val ONBOARDING         = "onboarding"
     const val DASHBOARD          = "dashboard"
     const val TRANSACTIONS       = "transactions"
     const val TRANSACTION_DETAIL = "transactions/{transactionId}"
@@ -55,7 +57,12 @@ fun AegisNavHost(
         when (authState) {
             is AuthState.Authenticated -> {
                 navController.navigate(Route.DASHBOARD) {
-                    popUpTo(Route.LOGIN) { inclusive = true }
+                    popUpTo(0) { inclusive = true }
+                }
+            }
+            is AuthState.NeedsRegistration -> {
+                navController.navigate(Route.ONBOARDING) {
+                    popUpTo(0) { inclusive = true }
                 }
             }
             is AuthState.Unauthenticated -> {
@@ -67,9 +74,15 @@ fun AegisNavHost(
         }
     }
 
+    val startDest = when (authState) {
+        is AuthState.Authenticated      -> Route.DASHBOARD
+        is AuthState.NeedsRegistration  -> Route.ONBOARDING
+        else                            -> Route.LOGIN
+    }
+
     NavHost(
         navController    = navController,
-        startDestination = if (authState is AuthState.Authenticated) Route.DASHBOARD else Route.LOGIN,
+        startDestination = startDest,
         modifier         = modifier,
     ) {
 
@@ -77,6 +90,15 @@ fun AegisNavHost(
             LoginScreen(
                 viewModel       = authViewModel,
                 onStartAuthFlow = onStartAuthFlow,
+            )
+        }
+
+        composable(Route.ONBOARDING) {
+            val email = (authState as? AuthState.NeedsRegistration)?.email
+            OnboardingScreen(
+                viewModel    = hiltViewModel(),
+                prefillEmail = email,
+                onSignOut    = { authViewModel.signOut() },
             )
         }
 
@@ -114,13 +136,14 @@ fun AegisNavHost(
 
         composable(Route.SEND_MONEY) {
             SendMoneyScreen(
-                viewModel          = hiltViewModel(),
-                onNavigateUp       = { navController.navigateUp() },
-                onNavigateToDetail = { id ->
+                viewModel           = hiltViewModel(),
+                onNavigateUp        = { navController.navigateUp() },
+                onNavigateToDetail  = { id ->
                     navController.navigate(Route.transactionDetail(id)) {
                         popUpTo(Route.DASHBOARD)
                     }
                 },
+                onNavigateToProfile = { navController.navigate(Route.PROFILE) },
             )
         }
 

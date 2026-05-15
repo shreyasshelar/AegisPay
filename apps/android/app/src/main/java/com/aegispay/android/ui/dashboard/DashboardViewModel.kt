@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.aegispay.android.auth.AuthRepository
 import com.aegispay.android.network.Account
 import com.aegispay.android.network.AegisApiService
+import com.aegispay.android.network.KycStatus
 import com.aegispay.android.network.StompWebSocketClient
 import com.aegispay.android.network.Transaction
 import com.aegispay.android.push.NotificationBadgeState
@@ -20,6 +21,7 @@ data class DashboardUiState(
     val isLoadingTransactions: Boolean           = true,
     val account:               Account?          = null,
     val recentTransactions:    List<Transaction> = emptyList(),
+    val kycStatus:             KycStatus?        = null,
     val error:                 String?           = null,
 )
 
@@ -72,6 +74,10 @@ class DashboardViewModel @Inject constructor(
                 .onFailure { e ->
                     _uiState.update { it.copy(isLoadingTransactions = false, error = e.message) }
                 }
+
+            // KYC status — best-effort; failure does not block the dashboard
+            runCatching { api.getUser(userId).kycStatus }
+                .onSuccess { kyc -> _uiState.update { it.copy(kycStatus = kyc) } }
         }
     }
 

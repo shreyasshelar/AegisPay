@@ -8,33 +8,96 @@ struct SendMoneyView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                // Step indicator (hidden on status screen)
-                if vm.step != .status {
-                    stepIndicator
-                        .padding(.horizontal, 24)
-                        .padding(.top, 16)
-                        .padding(.bottom, 8)
-                }
-
-                ScrollView {
-                    VStack(spacing: 16) {
-                        switch vm.step {
-                        case .payee:  payeeStep
-                        case .amount: amountStep
-                        case .review: reviewStep
-                        case .status: statusStep
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
+            Group {
+                if vm.kycLoading {
+                    // Brief loading state to avoid flash of blocked screen on fast connections
+                    ProgressView()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(Color.aegisBg)
+                } else if let kyc = vm.kycStatus, kyc != .approved {
+                    kycBlockedView
+                } else {
+                    sendWizard
                 }
             }
-            .background(Color.aegisBg)
             .navigationTitle("Send Money")
             .navigationBarTitleDisplayMode(.large)
-            .animation(.easeInOut(duration: 0.25), value: vm.step)
+            .task { await vm.loadKycStatus(userId: authStore.currentUser?.id ?? "") }
         }
+    }
+
+    // MARK: — KYC blocked screen
+
+    private var kycBlockedView: some View {
+        VStack(spacing: 24) {
+            Spacer()
+            VStack(spacing: 20) {
+                ZStack {
+                    Circle()
+                        .fill(Color.aegisWarning.opacity(0.1))
+                        .frame(width: 80, height: 80)
+                    Image(systemName: "shield.slash.fill")
+                        .font(.system(size: 34))
+                        .foregroundStyle(Color.aegisWarning)
+                }
+
+                VStack(spacing: 8) {
+                    Text("Identity verification required")
+                        .font(.aegisSubhead)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(Color.aegisText)
+                    Text("You need to complete KYC verification before sending money. This protects you and your recipients from fraud.")
+                        .font(.aegisBody)
+                        .foregroundStyle(Color.aegisTextMuted)
+                        .multilineTextAlignment(.center)
+                }
+            }
+            .padding(.horizontal, 32)
+
+            NavigationLink(destination: ProfileView()) {
+                Label("Complete KYC now", systemImage: "arrow.right")
+                    .font(.aegisBodySmall)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(Color.aegisPrimary)
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+            }
+            .padding(.horizontal, 32)
+
+            Spacer()
+        }
+        .background(Color.aegisBg)
+    }
+
+    // MARK: — Wizard
+
+    private var sendWizard: some View {
+        VStack(spacing: 0) {
+            // Step indicator (hidden on status screen)
+            if vm.step != .status {
+                stepIndicator
+                    .padding(.horizontal, 24)
+                    .padding(.top, 16)
+                    .padding(.bottom, 8)
+            }
+
+            ScrollView {
+                VStack(spacing: 16) {
+                    switch vm.step {
+                    case .payee:  payeeStep
+                    case .amount: amountStep
+                    case .review: reviewStep
+                    case .status: statusStep
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+            }
+        }
+        .background(Color.aegisBg)
+        .animation(.easeInOut(duration: 0.25), value: vm.step)
     }
 
     // MARK: — Step indicator

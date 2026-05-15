@@ -38,6 +38,7 @@ export const config = {
     '/incidents/:path*',
     '/ledger/:path*',
     '/risk/:path*',
+    '/back-office/:path*',
     // Protected API routes — exclude /api/auth/* (NextAuth own endpoints)
     '/api/((?!auth).+)',
   ],

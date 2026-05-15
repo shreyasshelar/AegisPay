@@ -14,6 +14,10 @@ final class SendMoneyViewModel: ObservableObject {
     // ── Step ──────────────────────────────────────────────────────────────────
     @Published private(set) var step: SendStep = .payee
 
+    // ── KYC gate ──────────────────────────────────────────────────────────────
+    @Published private(set) var kycStatus:    KycStatus?
+    @Published private(set) var kycLoading:   Bool = true
+
     // ── Form state ────────────────────────────────────────────────────────────
     @Published var payeeId    = ""
     @Published var amountText = ""
@@ -37,10 +41,19 @@ final class SendMoneyViewModel: ObservableObject {
     private(set) var idempotencyKey = UUID().uuidString
 
     // ── Services ──────────────────────────────────────────────────────────────
-    private let txService = TransactionService()
-    private let aiService = AiService()
+    private let txService   = TransactionService()
+    private let aiService   = AiService()
+    private let userService = UserService()
     private var socket:    StompWebSocket?
     private var pollTask:  Task<Void, Never>?
+
+    // ── KYC check ────────────────────────────────────────────────────────────
+
+    func loadKycStatus(userId: String) async {
+        kycLoading = true
+        kycStatus  = (try? await userService.getProfile(userId: userId))?.kycStatus
+        kycLoading = false
+    }
 
     // ── Validation ────────────────────────────────────────────────────────────
 

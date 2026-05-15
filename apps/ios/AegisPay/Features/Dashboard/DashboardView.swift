@@ -11,6 +11,11 @@ struct DashboardView: View {
             ScrollView {
                 LazyVStack(spacing: 16) {
 
+                    // ── KYC nudge banner ──────────────────────────────────────
+                    if let kyc = vm.kycStatus, kyc != .approved {
+                        kycNudgeBanner(status: kyc)
+                    }
+
                     // ── Balance card ──────────────────────────────────────────
                     balanceCard
 
@@ -70,6 +75,54 @@ struct DashboardView: View {
     }
 
     // ── Subviews ──────────────────────────────────────────────────────────────
+
+    @ViewBuilder
+    private func kycNudgeBanner(status: KycStatus) -> some View {
+        let (icon, message): (String, String) = {
+            switch status {
+            case .pending:
+                return ("shield.lefthalf.filled", "Complete identity verification to unlock all features.")
+            case .documentSubmitted, .aiProcessing:
+                return ("clock.fill", "Your identity is being verified. We'll notify you when it's done.")
+            case .rejected:
+                return ("exclamationmark.shield.fill", "Verification failed. Please re-submit your documents.")
+            case .manualReview:
+                return ("person.badge.clock.fill", "Your documents are under manual review.")
+            case .approved:
+                return ("checkmark.shield.fill", "")  // never shown
+            }
+        }()
+
+        NavigationLink(destination: ProfileView()) {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.system(size: 22))
+                    .foregroundStyle(status == .rejected ? Color.aegisDanger : Color.aegisWarning)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Identity verification")
+                        .font(.aegisBodySmall)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(Color.aegisText)
+                    Text(message)
+                        .font(.aegisCaption)
+                        .foregroundStyle(Color.aegisTextMuted)
+                        .lineLimit(2)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.aegisTextSubtle)
+            }
+            .padding(14)
+            .background(status == .rejected ? Color.aegisDangerLight : Color.aegisWarningLight)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(status == .rejected ? Color.aegisDanger.opacity(0.3) : Color.aegisWarning.opacity(0.3), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
 
     @ViewBuilder
     private var balanceCard: some View {

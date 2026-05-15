@@ -155,7 +155,49 @@ services:
     autoscaling:
       enabled: false
 
-global:
   clickhouse:
-    url: "jdbc:clickhouse://localhost:8123/aegispay_analytics"
+    url: "jdbc:clickhouse://clickhouse.aegispay-infra.svc.cluster.local:8123/aegispay_analytics"
     username: "default"
+  smtp:
+    host: "smtp.gmail.com"
+    port: "587"
+    username: "aegispay.dev@gmail.com"
+    fromAddress: "aegispay.dev@gmail.com"
+
+secrets:
+  useVault: false
+  aws:
+    region: ap-south-1
+  db:
+    secretPath: "aegispay/dev/db"
+  redis:
+    secretPath: "aegispay/dev/redis"
+  ai:
+    secretPath: "aegispay/dev/ai-keys"
+  kafka:
+    secretPath: "aegispay/dev/kafka"
+  stripe:
+    secretPath: "aegispay/dev/stripe"
+  smtp:
+    secretPath: "aegispay/dev/smtp"
+  slack:
+    secretPath: "aegispay/dev/slack"
+  fast2sms:
+    secretPath: "aegispay/dev/fast2sms"
+  clickhouse:
+    secretPath: "aegispay/dev/clickhouse"
+
+grafana:
+  enabled: true
+  adminPasswordPlain: "admin"      # plain text for dev — no ESO needed
+  adminPasswordSecret:
+    name: ""                       # empty = use adminPasswordPlain
+    key: ""
+  persistence:
+    enabled: false                 # ephemeral in dev is fine
+  ingress:
+    enabled: true
+    className: nginx
+    host: grafana.dev.aegispay.io
+    tls:
+      enabled: false

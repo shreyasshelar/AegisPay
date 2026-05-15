@@ -71,7 +71,11 @@ export const authOptions: NextAuthOptions = {
       httpOptions: { agent: ipv4Agent, timeout: 10000 },
       profile(profile) {
         return {
-          id:    profile.sub,
+          // Use the AegisPay domain UUID if present; fall back to Keycloak sub.
+          // This is critical for WebSocket subscriptions and API calls that
+          // look up users by their AegisPay UUID, not the Keycloak internal UUID.
+          id:    (profile as Record<string, unknown>).aegispay_user_id as string | undefined
+                   ?? profile.sub,
           name:  profile.name ?? profile.preferred_username,
           email: profile.email,
           image: profile.picture,
