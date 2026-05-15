@@ -31,9 +31,10 @@ public class UserRegisteredConsumer {
             UserRegisteredEvent event = objectMapper.readValue(record.value(), UserRegisteredEvent.class);
             String userId = event.getUserId().toString();
 
-            // Persist phone + masked email so SMS can be sent on future events
+            // Persist email, phone + masked email so EMAIL/SMS can be sent on future events
             UserContactDocument contact = UserContactDocument.builder()
                     .userId(userId)
+                    .email(event.getEmail())
                     .phoneNumber(event.getPhoneNumber())
                     .maskedEmail(event.getMaskedEmail())
                     .updatedAt(Instant.now())

@@ -45,6 +45,28 @@ public class StripePaymentGatewayClient {
             "RWF", "UGX", "VND", "VUV", "XAF", "XOF", "XPF"
     );
 
+    /**
+     * Stripe minimum charge amounts in base currency units (not smallest unit).
+     * Source: https://stripe.com/docs/currencies#minimum-and-maximum-charge-amounts
+     * Enforced pre-flight to return a clean "amount_too_small" result before making the API call.
+     */
+    private static final java.util.Map<String, BigDecimal> STRIPE_MINIMUMS = java.util.Map.ofEntries(
+            java.util.Map.entry("USD", new BigDecimal("0.50")),
+            java.util.Map.entry("EUR", new BigDecimal("0.50")),
+            java.util.Map.entry("GBP", new BigDecimal("0.30")),
+            java.util.Map.entry("INR", new BigDecimal("50.00")),
+            java.util.Map.entry("CAD", new BigDecimal("0.50")),
+            java.util.Map.entry("AUD", new BigDecimal("0.50")),
+            java.util.Map.entry("SGD", new BigDecimal("0.50")),
+            java.util.Map.entry("HKD", new BigDecimal("4.00")),
+            java.util.Map.entry("JPY", new BigDecimal("50")),    // zero-decimal
+            java.util.Map.entry("MXN", new BigDecimal("10.00")),
+            java.util.Map.entry("NOK", new BigDecimal("3.00")),
+            java.util.Map.entry("DKK", new BigDecimal("2.50")),
+            java.util.Map.entry("SEK", new BigDecimal("3.00")),
+            java.util.Map.entry("CHF", new BigDecimal("0.50"))
+    );
+
     @Value("${stripe.secret-key}")
     private String secretKey;
 
@@ -89,6 +111,16 @@ public class StripePaymentGatewayClient {
     public PaymentResult processPayment(PaymentRequest request) {
         log.info("Initiating Stripe PaymentIntent for txn={} amount={} {}",
                 request.transactionId(), request.amount(), request.currency());
+
+        // Pre-flight: validate Stripe minimum charge amount to avoid remote round-trip on known failures
+        BigDecimal minimum = STRIPE_MINIMUMS.get(request.currency().toUpperCase());
+        if (minimum != null && request.amount().compareTo(minimum) < 0) {
+            log.warn("Amount {} {} is below Stripe minimum {} for txn={}",
+                    request.amount(), request.currency(), minimum, request.transactionId());
+            return new PaymentResult(false, null, "amount_too_small",
+                    "Amount %s %s is below the minimum charge amount of %s"
+                            .formatted(request.amount(), request.currency(), minimum));
+        }
 
         long stripeAmount = toStripeAmount(request.amount(), request.currency());
         String currency   = request.currency().toLowerCase();
