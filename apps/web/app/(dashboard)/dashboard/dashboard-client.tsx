@@ -126,14 +126,14 @@ export function DashboardClient({ userId }: DashboardClientProps) {
                 iconColor="text-warning-600"
               />
               <StatCard
-                label="Completed (recent)"
+                label="Completed (last 10)"
                 value={String(completedCount)}
                 icon={CheckCircle2}
                 iconBg="bg-success-50"
                 iconColor="text-success-600"
               />
               <StatCard
-                label="Failed (recent)"
+                label="Failed (last 10)"
                 value={String(failedCount)}
                 icon={XCircle}
                 iconBg="bg-danger-50"

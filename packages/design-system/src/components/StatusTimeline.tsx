@@ -100,7 +100,7 @@ export function AegisStatusTimeline({
               <span
                 aria-hidden
                 className={clsx(
-                  'absolute left-5 top-10 h-full w-0.5',
+                  'absolute left-5 top-10 bottom-0 w-0.5',
                   isCompleted                    ? 'bg-[#0E9F6E]'
                   : isFailedStep                 ? 'bg-[#E02424]'
                   :                                'bg-neutral-200',

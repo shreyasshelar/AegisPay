@@ -198,6 +198,18 @@ services:
           secretKeyRef:
             name: aegispay-smtp-secret
             key: password
+      - name: SLACK_WEBHOOK_URL
+        valueFrom:
+          secretKeyRef:
+            name: aegispay-slack-secret
+            key: webhook-url
+            optional: true   # Slack is optional — service starts without it
+      - name: FAST2SMS_API_KEY
+        valueFrom:
+          secretKeyRef:
+            name: aegispay-fast2sms-secret
+            key: api-key
+            optional: true   # SMS is optional — service starts without it
 
   ai_platform:
     enabled: true

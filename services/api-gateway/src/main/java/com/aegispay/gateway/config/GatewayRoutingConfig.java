@@ -66,6 +66,15 @@ public class GatewayRoutingConfig {
                     .circuitBreaker(cb -> cb
                         .setName("transaction-service")
                         .setFallbackUri("forward:/fallback/service-unavailable"))
+                    // POST is safe to retry because transaction-service is idempotency-key protected
+                    .retry(retryConfig -> retryConfig
+                        .setRetries(2)
+                        .setMethods(
+                            org.springframework.http.HttpMethod.GET,
+                            org.springframework.http.HttpMethod.POST)
+                        .setStatuses(
+                            org.springframework.http.HttpStatus.BAD_GATEWAY,
+                            org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE))
                 )
                 .uri(svc.getTransactionService()))
 
