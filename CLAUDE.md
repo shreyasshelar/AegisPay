@@ -2,167 +2,138 @@
 
 ## 📌 System Type
 
-Event-driven fintech platform designed to handle:
-- Distributed transactions
-- Fraud detection
-- Real-time notifications
-- AI-assisted decision making
-- Intelligent onboarding and error resolution
+Production-grade event-driven fintech platform. Every design decision is driven by one guarantee: **money must never be lost or doubled, even when any single component fails.**
+
+Core capabilities:
+- Distributed payment transactions (Saga pattern, Outbox, idempotency)
+- Real-time fraud detection (rule engine + AI RAG)
+- Immutable double-entry ledger
+- Real-time notifications (WebSocket, Email, SMS, Slack)
+- AI-assisted error explanation and fraud copilot
+- Analytics via ClickHouse + Grafana
 
 ---
 
-## 🏗️ Architecture Summary
+## 🏗️ Architecture
 
-- Microservices-based system
-- Kafka as event backbone
-- CQRS for read/write separation
-- Saga pattern for distributed transactions
-- Outbox pattern for reliability
-- Immutable ledger for financial correctness
-- AI platform for fraud, onboarding, and operations
+10 Spring Boot microservices + 1 Next.js frontend, connected by Kafka.
 
----
-
-## 🔁 Core Transaction Flow
-
-1. User initiates payment
-2. API Gateway authenticates request (OAuth2 + JWT)
-3. Transaction Service creates transaction (PENDING)
-4. Outbox publishes event to Kafka
-5. Ledger Service reserves funds
-6. Risk Engine evaluates fraud (rules + AI RAG)
-7. Payment Orchestrator (Saga) decides next step
-8. Payment Gateway processes payment
-9. Ledger commits or rolls back
-10. Notification Service sends updates
-11. CQRS read models updated for dashboard
+```
+Next.js (3000)
+    ↓ HTTPS/WebSocket
+API Gateway (8080) — JWT auth, rate limit, circuit breaker, retry
+    ↓ route
+User (8081) | Transaction (8082) | Ledger (8083) | Orchestrator (8084)
+Risk (8085) | Notification (8086) | Recon (8087) | DataPipeline (8089) | AI (8091)
+    ↓ Kafka
+Data Layer: Postgres (5433) + Redis (6379) + MongoDB (27017)
+    ↓ Kafka → DataPipeline → ClickHouse (8123)
+                                  ↓
+                           Grafana (3100)
+```
 
 ---
 
-## 🧠 Smart Onboarding Flow
+## 🔁 Core Transaction Flow (numbered steps)
 
-- AI-driven progressive KYC
-- OCR + document validation
-- Aadhaar/PAN auto extraction (simulated)
-- Consent-based financial data (Account Aggregator style)
-- Dropout prediction with proactive nudges
-
----
-
-## 📊 Real-Time Transaction Visibility
-
-- Lifecycle tracking:
-  INITIATED → RESERVED → RISK CLEARED → PROCESSING → COMPLETED
-- AI-powered explanations:
-  - Delay reasons
-  - Estimated completion time
-- Real-time updates via WebSocket
+1. User submits payment → Next.js → API Gateway (JWT validate, rate limit, idempotency check)
+2. Gateway → Transaction Service: creates transaction (PENDING) + Outbox event (same DB transaction)
+3. Outbox Relay → Kafka: `transaction.initiated`
+4. Ledger Service: reserves funds (`reserved_balance += amount`)
+5. Risk Engine: rule evaluation + AI RAG → `risk.assessed {ALLOW/REVIEW/BLOCK}`
+6. Payment Orchestrator (Saga): if ALLOW → call Stripe API
+7. Stripe success → `payment.completed` → Ledger commits (debit payer, credit payee)
+8. Transaction status → COMPLETED; Notification Service → WebSocket + Email (+SMS+Slack if FAILED)
+9. Data Pipeline: Kafka events → ClickHouse (5s batch flush) → Grafana dashboards
 
 ---
 
-## 🤖 AI Components
+## 📐 Key Design Patterns
 
-### Fraud Copilot (RAG)
-- Uses historical fraud cases
-- Explains risk decisions
-- Augments rule-based detection
+| Pattern | Where used | Why |
+|---------|-----------|-----|
+| **Outbox Pattern** | Transaction Service | Atomic write to DB + Kafka — event can never be lost |
+| **Saga (Orchestration)** | Payment Orchestrator | Distributed transaction with compensating rollback, no 2PC |
+| **CQRS** | Transaction Service | Write → Postgres; Read → MongoDB (denormalised) |
+| **Idempotency** | API Gateway (Redis), DB (UNIQUE), all Kafka consumers | Exactly-once behaviour from at-least-once delivery |
+| **Double-entry Ledger** | Ledger Service | Mathematical correctness: SUM(debits) = SUM(credits) always |
+| **Circuit Breaker** | API Gateway (Resilience4j) | Prevents cascade failures; fallback returns structured error |
+| **RAG** | AI Platform | Explainable AI — retrieved docs justify every AI response |
 
-### Error Resolution Agent
-- Translates vague bank errors into clear explanations
-- Suggests fixes (retry/change bank/etc.)
-- Uses RAG over past incidents
+---
 
-### Incident Triage Agent (Agentic AI)
-- Reads logs, metrics, deployment history
-- Suggests root cause and resolution
-- Assists SRE teams
+## 🗄️ Data Architecture
 
-### OCR + KYC AI
-- Extracts structured data from documents
-- Detects tampering
-- Performs quality scoring
+| Store | Services | Data |
+|-------|---------|------|
+| PostgreSQL (5433) | All services (separate DB per service) | Transactional, normalised, Flyway-managed |
+| Redis (6379) | API Gateway, Ledger | Rate limits, idempotency keys, session cache |
+| MongoDB (27017) | Transaction Service, Notification Service | CQRS read models, user contacts |
+| ClickHouse (8123) | Data Pipeline, Reconciliation | Analytics: `transaction_facts`, `risk_assessments`, `saga_latencies`, `reconciliation_breaks` |
+| pgvector (in Postgres) | AI Platform | Embedding vectors for RAG knowledge base |
+
+---
+
+## 📡 Kafka Topics
+
+`transaction.initiated` → `balance.reserved` → `risk.assessed` → `payment.completed` → `ledger.committed` → `transaction.completed` / `transaction.failed`
+
+Cross-cutting: `user.registered` (User Svc → Notification Svc), `risk.assessment.completed` (Risk → DataPipeline)
 
 ---
 
 ## 🔐 Security Model
 
-- OAuth2 + JWT authentication
-- Multi-IdP support:
-  - Azure Entra ID
-  - Okta
-  - Keycloak
-- Role + actor-based authorization (Customer, MO, BO, Admin, Partner)
-- Rate limiting (Redis)
-- Idempotency keys (anti-replay)
-- Zero-trust architecture
-- Sensitive data masking in logs
-
----
-
-## 📡 Messaging System (Kafka)
-
-Key topics:
-
-- transaction.initiated
-- balance.reserved
-- risk.assessed
-- payment.completed
-- transaction.failed
-
----
-
-## 🗄️ Data Model
-
-- transactions (state machine)
-- outbox (event reliability)
-- ledger_entries (append-only, immutable)
-- read models (CQRS views)
-- vector database (AI knowledge base)
-
----
-
-## 🔁 Key Design Patterns
-
-- Saga Pattern (distributed transactions)
-- CQRS (read/write separation)
-- Outbox Pattern (reliable messaging)
-- Idempotency Pattern (exactly-once behavior)
-- Event Sourcing (ledger design)
-- Event-driven architecture
-- RAG (AI explainability)
-- Agentic AI (decision systems)
-
----
-
-## 🎯 Key Guarantees
-
-- No double spending
-- No lost events
-- Consistent money movement
-- Full audit trail (ledger)
-- High scalability and fault tolerance
+- **OAuth2 + JWT** via Keycloak 24 (self-hosted, multi-IdP: Google, Microsoft, GitHub, Apple)
+- **JWT claims**: `aegispay_user_id` (domain UUID), `realm_access.roles` (CUSTOMER/BACK_OFFICE/ADMIN/PARTNER)
+- **STOMP WebSocket auth**: `StompAuthChannelInterceptor` validates JWT from CONNECT frame headers — required for `convertAndSendToUser` routing
+- **Rate limiting**: Redis sliding window per userId (100 req/60s default)
+- **Secret management**: External Secrets Operator → AWS Secrets Manager (dev/staging) or HashiCorp Vault (prod/on-prem)
 
 ---
 
 ## 📊 Observability
 
-- Distributed tracing (W3C traceparent)
-- Structured logging (masked)
-- Metrics (Micrometer)
-- Correlation IDs across services
+**Two Grafana instances** (intentional separation):
+- **kube-prometheus-stack Grafana** → Prometheus → JVM, Kafka lag, K8s workloads, HTTP rates
+- **AegisPay Grafana (3100)** → ClickHouse → Payment Ops, Fraud Intelligence, SLA & Latency
+
+**PrometheusRules**: `SagaTimeoutRateHigh`, `DlqDepthNonZero`, `BalanceNegative`, `NotificationDeliveryFailureHigh`, `DataPipelineSinkErrorHigh`, `ReconciliationBreakCountHigh`
 
 ---
 
-## 💡 Design Philosophy
+## 🚨 Critical Guarantees
 
-- Prefer eventual consistency over 2PC
-- Ensure idempotency at every layer
-- Use events as the source of truth
-- Separate read and write concerns (CQRS)
-- Use AI for augmentation, not control
+1. **No double-spend**: optimistic locking + `FOR UPDATE` on balance read
+2. **No lost events**: Outbox pattern — event in same DB transaction as domain entity
+3. **No lost money**: double-entry bookkeeping, `SUM(all_entries) = 0` invariant
+4. **No silent failures**: every failure has a `failureCode` + AI explanation + notification
+5. **No data drift**: CQRS read models updated by same Kafka events that drive state machine
 
 ---
 
-## 🧠 System Summary
+## 🏗️ Infrastructure
 
-A production-grade, event-driven fintech platform that guarantees financial correctness under failure using Saga, Outbox, and immutable ledger, while augmenting decision-making with AI (RAG + agentic systems) for fraud detection, onboarding intelligence, and operational efficiency
+| Local | Kubernetes | Notes |
+|-------|-----------|-------|
+| `docker compose up -d` | Helm chart `infra/helm/aegispay/` | 5 envs: dev/staging/prod/on-prem/local |
+| `./start-local.sh` (macOS/Linux) | Argo CD GitOps sync | macOS + Windows bootstrap scripts |
+| `start-aegispay.bat` (Windows) | | Auto-detects Maven, waits for all services |
+
+**Ports**: Gateway:8080, User:8081, Tx:8082, Ledger:8083, Orch:8084, Risk:8085, Notify:8086, Recon:8087, DataPipeline:8089, AI:8091, Web:3000, Keycloak:8180, Kafka:9094, KafkaUI:8090, ClickHouse:8123, Grafana:3100, Postgres:5433, Redis:6379, Mongo:27017
+
+---
+
+## 📁 Key File Locations
+
+| Area | Path |
+|------|------|
+| Docker Compose | `docker-compose.yml` |
+| Helm chart | `infra/helm/aegispay/` |
+| Grafana dashboards | `infra/grafana/dashboards/` + `infra/helm/aegispay/files/dashboards/` |
+| Grafana provisioning | `infra/grafana/provisioning/` |
+| ClickHouse init SQL | `infra/clickhouse/init.sql` |
+| Local dev guide | `docs/local-dev.md` |
+| Architecture docs | `docs/architecture/`, `docs/flows/`, `docs/patterns/` |
+| Keycloak realm | `infra/local/keycloak/realm-export.json` |
+| Shared libs | `libs/common-domain`, `libs/common-events`, `libs/common-kafka`, `libs/common-security`, `libs/common-observability` |

@@ -70,6 +70,8 @@ grafana:
     existingSecret: grafana-admin-secret
     userKey: admin-user
     passwordKey: admin-password
+  plugins:
+    - grafana-clickhouse-datasource
 
   persistence:
     enabled: true
@@ -108,7 +110,7 @@ grafana:
     datasources:
       enabled: true
 
-  # Auto-configure Prometheus datasource
+  # Auto-configure datasources
   datasources:
     datasources.yaml:
       apiVersion: 1
@@ -118,6 +120,21 @@ grafana:
           url: http://monitoring-prometheus.monitoring.svc.cluster.local:9090
           isDefault: true
           access: proxy
+        # AegisPay ClickHouse — analytics dashboards (payment ops, fraud, SLA)
+        - name: ClickHouse
+          type: grafana-clickhouse-datasource
+          uid: aegispay-clickhouse
+          isDefault: false
+          jsonData:
+            host: clickhouse.aegispay-infra.svc.cluster.local
+            port: 9000
+            username: default
+            defaultDatabase: aegispay_analytics
+            protocol: native
+            secure: false
+          secureJsonData:
+            password: ${CLICKHOUSE_PASSWORD}
+          editable: false
 
   # Pre-built dashboards
   dashboardProviders:

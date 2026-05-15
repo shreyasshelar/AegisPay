@@ -52,6 +52,39 @@ services:
     image:
       tag: latest
 
+  data_pipeline:
+    replicas: 1
+    image:
+      tag: latest
+    resources:
+      requests:
+        cpu: 150m
+        memory: 384Mi
+      limits:
+        cpu: 750m
+        memory: 768Mi
+    autoscaling:
+      enabled: false
+
+  reconciliation_service:
+    replicas: 1
+    image:
+      tag: latest
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+global:
+  smtp:
+    host: "smtp.gmail.com"
+    port: "587"
+    username: "aegispay.dev@gmail.com"
+    fromAddress: "aegispay.dev@gmail.com"
+
 ingress:
   enabled: true
   host: api.staging.aegispay.io
@@ -75,3 +108,27 @@ secrets:
     secretPath: aegispay/staging/ai-keys
   kafka:
     secretPath: aegispay/staging/kafka
+  stripe:
+    secretPath: aegispay/staging/stripe
+  smtp:
+    secretPath: aegispay/staging/smtp
+  slack:
+    secretPath: aegispay/staging/slack
+  fast2sms:
+    secretPath: aegispay/staging/fast2sms
+  clickhouse:
+    secretPath: aegispay/staging/clickhouse
+
+grafana:
+  enabled: true
+  persistence:
+    enabled: true
+    storageClassName: gp3
+    size: 5Gi
+  ingress:
+    enabled: true
+    className: nginx
+    host: grafana.staging.aegispay.io
+    tls:
+      enabled: true
+      secretName: grafana-staging-tls

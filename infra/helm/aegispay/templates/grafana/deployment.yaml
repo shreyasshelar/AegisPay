@@ -1,0 +1,151 @@
+{{- if .Values.grafana.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "aegispay.labels" . | nindent 4 }}
+    app.kubernetes.io/name: grafana
+    app.kubernetes.io/component: analytics
+    app.kubernetes.io/version: {{ .Values.grafana.image.tag | quote }}
+spec:
+  replicas: {{ .Values.grafana.replicas | default 1 }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: grafana
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        {{- include "aegispay.labels" . | nindent 8 }}
+        app.kubernetes.io/name: grafana
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: analytics
+        app.kubernetes.io/version: {{ .Values.grafana.image.tag | quote }}
+      annotations:
+        checksum/datasources: {{ include (print .Template.BasePath "/grafana/configmap.yaml") . | sha256sum }}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 472      # grafana official UID
+        runAsGroup: 472
+        fsGroup: 472
+        seccompProfile:
+          type: RuntimeDefault
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        # Grafana plugins must be pre-installed before the main process starts.
+        - name: install-plugins
+          image: "grafana/grafana-oss:{{ .Values.grafana.image.tag | default "10.4.2" }}"
+          command:
+            - sh
+            - -c
+            - |
+              {{- range .Values.grafana.plugins }}
+              grafana cli --pluginsDir /var/lib/grafana/plugins plugins install {{ . }}
+              {{- end }}
+              echo "Plugins installed"
+          volumeMounts:
+            - name: storage
+              mountPath: /var/lib/grafana
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false   # grafana-cli writes to pluginsDir
+            capabilities:
+              drop: [ALL]
+      containers:
+        - name: grafana
+          image: "grafana/grafana-oss:{{ .Values.grafana.image.tag | default "10.4.2" }}"
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.grafana.port | default 3100 }}
+              protocol: TCP
+          env:
+            - name: GF_SECURITY_ADMIN_USER
+              value: {{ .Values.grafana.adminUser | default "admin" | quote }}
+            {{- if .Values.grafana.adminPasswordPlain }}
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              value: {{ .Values.grafana.adminPasswordPlain | quote }}
+            {{- else }}
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.grafana.adminPasswordSecret.name }}
+                  key: {{ .Values.grafana.adminPasswordSecret.key }}
+            {{- end }}
+            - name: GF_USERS_ALLOW_SIGN_UP
+              value: "false"
+            - name: GF_SERVER_HTTP_PORT
+              value: {{ .Values.grafana.port | default 3100 | quote }}
+            - name: GF_PATHS_PROVISIONING
+              value: "/etc/grafana/provisioning"
+            - name: GF_PATHS_PLUGINS
+              value: "/var/lib/grafana/plugins"
+            - name: GF_PATHS_DATA
+              value: "/var/lib/grafana"
+            # ClickHouse password injected from ESO-managed secret
+            - name: CLICKHOUSE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.grafana.clickhouseDatasource.passwordSecretRef.name }}
+                  key: {{ .Values.grafana.clickhouseDatasource.passwordSecretRef.key }}
+                  optional: true   # empty password in dev is fine
+          volumeMounts:
+            - name: storage
+              mountPath: /var/lib/grafana
+            - name: datasources
+              mountPath: /etc/grafana/provisioning/datasources
+              readOnly: true
+            - name: dashboard-provider
+              mountPath: /etc/grafana/provisioning/dashboards
+              readOnly: true
+            - name: dashboards
+              mountPath: /var/lib/grafana/dashboards
+              readOnly: true
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.grafana.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false   # Grafana writes temp files to its data dir
+            capabilities:
+              drop: [ALL]
+      volumes:
+        - name: storage
+          {{- if .Values.grafana.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: grafana-storage
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: datasources
+          configMap:
+            name: grafana-datasources
+        - name: dashboard-provider
+          configMap:
+            name: grafana-dashboard-provider
+        - name: dashboards
+          configMap:
+            name: grafana-dashboards
+      terminationGracePeriodSeconds: 30
+{{- end }}

@@ -53,8 +53,9 @@ port_name() {
     27017) echo "MongoDB" ;;
     9094) echo "Kafka" ;;
     8180) echo "Keycloak" ;;
-    8123) echo "ClickHouse" ;;
-    8088) echo "Superset" ;;
+    8123) echo "ClickHouse HTTP" ;;
+    9000) echo "ClickHouse Native" ;;
+    3100) echo "Grafana" ;;
     8091) echo "AI Platform" ;;
     8090) echo "Kafka UI" ;;
     8080) echo "API Gateway" ;;
@@ -73,7 +74,7 @@ port_name() {
 
 # ── Port conflict check + auto-kill ───────────────────────────────────────────
 step "Freeing required ports..."
-INFRA_PORTS="5433 6379 27017 9094 8180 8123 8088 8090"
+INFRA_PORTS="5433 6379 27017 9094 8180 8123 3100 8090"
 SVC_PORTS="8080 8081 8082 8083 8084 8085 8086 8087 8089 8091 3000"
 
 for port in $INFRA_PORTS $SVC_PORTS; do
@@ -141,6 +142,30 @@ done
 step "Configuring Keycloak client scopes via Admin API..."
 infra/local/keycloak/configure-keycloak.sh
 ok "Keycloak configured"
+
+step "Waiting for ClickHouse to be ready..."
+printf "  ⏳  waiting for ClickHouse :8123 ..."
+while true; do
+  if curl -sf http://localhost:8123/ping 2>/dev/null | grep -q "Ok"; then
+    echo ""
+    ok "ClickHouse ready"
+    break
+  fi
+  printf "."
+  sleep 5
+done
+
+step "Waiting for Grafana to be ready..."
+printf "  ⏳  waiting for Grafana :3100 ..."
+while true; do
+  if curl -sf http://localhost:3100/api/health 2>/dev/null | grep -q "ok"; then
+    echo ""
+    ok "Grafana ready"
+    break
+  fi
+  printf "."
+  sleep 5
+done
 
 step "Waiting for Kafka broker to be ready..."
 printf "  ⏳  waiting for Kafka :9094 ..."
@@ -261,7 +286,8 @@ echo "  🔌  API Gateway  → http://localhost:8080/actuator/health"
 echo "  🔑  Keycloak     → http://localhost:8180  (admin / admin)"
 echo "  📨  Kafka UI     → http://localhost:8090"
 echo "  🤖  AI Platform  → http://localhost:8091/actuator/health"
-echo "  📊  Superset     → http://localhost:8088  (admin / admin)"
+echo "  📊  Grafana      → http://localhost:3100  (admin / admin)"
+echo "  🗄️  ClickHouse   → http://localhost:8123"
 echo "  🐘  PostgreSQL   → localhost:5433         (aegispay / aegispay_dev)"
 echo ""
 echo "  Test accounts:"

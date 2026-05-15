@@ -18,6 +18,8 @@ grafana:
   enabled: true
   adminUser: admin
   adminPassword: ${GRAFANA_ADMIN_PASSWORD:-changeme}
+  plugins:
+    - grafana-clickhouse-datasource
   persistence:
     enabled: true
     storageClassName: gp3
@@ -30,6 +32,19 @@ grafana:
           type: prometheus
           url: http://kube-prometheus-stack-prometheus:9090
           isDefault: true
+        - name: ClickHouse
+          type: grafana-clickhouse-datasource
+          uid: aegispay-clickhouse
+          isDefault: false
+          jsonData:
+            host: clickhouse.aegispay-infra.svc.cluster.local
+            port: 9000
+            username: default
+            defaultDatabase: aegispay_analytics
+            protocol: native
+            secure: false
+          secureJsonData:
+            password: ""   # empty in dev
 
 alertmanager:
   enabled: true

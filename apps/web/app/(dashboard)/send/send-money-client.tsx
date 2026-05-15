@@ -1,9 +1,12 @@
 'use client'
 
 import { useEffect } from 'react'
-import { Plus } from 'lucide-react'
+import Link          from 'next/link'
+import { Plus, ShieldAlert, ArrowRight } from 'lucide-react'
+import { useSession } from 'next-auth/react'
 import { useSendMoneyStore } from '@/lib/useSendMoneyStore'
 import { useAuthGuard } from '@/lib/useAuthGuard'
+import { useUser } from '@aegispay/api-client'
 import { StepPayee }  from './steps/StepPayee'
 import { StepAmount } from './steps/StepAmount'
 import { StepReview } from './steps/StepReview'
@@ -59,9 +62,45 @@ function StepIndicator({ current }: { current: string }) {
 
 // ── Root component ─────────────────────────────────────────────────────────────
 
+// ── KYC guard banner ───────────────────────────────────────────────────────────
+
+function KycGuardBanner() {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[60vh] px-6">
+      <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-sm ring-1 ring-warning-200 space-y-5 text-center">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-warning-50">
+          <ShieldAlert className="h-7 w-7 text-warning-500" />
+        </div>
+        <div>
+          <h2 className="text-lg font-semibold text-slate-900">Identity verification required</h2>
+          <p className="mt-2 text-sm text-slate-500">
+            You need to complete KYC verification before sending money. This protects you and
+            your recipients from fraud.
+          </p>
+        </div>
+        <Link
+          href="/profile"
+          className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary-600 px-5 py-3 text-sm font-semibold text-white hover:bg-primary-700 transition-colors"
+        >
+          Complete KYC now
+          <ArrowRight className="h-4 w-4" />
+        </Link>
+      </div>
+    </div>
+  )
+}
+
+// ── Root component ─────────────────────────────────────────────────────────────
+
 export function SendMoneyClient() {
-  const blocking = useAuthGuard()
-  const { step, reset } = useSendMoneyStore()
+  const blocking           = useAuthGuard()
+  const { data: session }  = useSession()
+  const { step, reset }    = useSendMoneyStore()
+
+  // Check if the user's KYC is approved before allowing any send action
+  const { data: user, isLoading: userLoading } = useUser(session?.user?.id ?? '', {
+    enabled: !!session?.user?.id,
+  })
 
   // Reset wizard state every time this page mounts so previous transaction doesn't leak
   useEffect(() => {
@@ -69,6 +108,12 @@ export function SendMoneyClient() {
   }, [reset])
 
   if (blocking) return null
+
+  // Wait for KYC status to load (avoid flash of "blocked" on fast connections)
+  if (userLoading) return null
+
+  // Block send flow if KYC not approved
+  if (user && user.kycStatus !== 'APPROVED') return <KycGuardBanner />
 
   return (
     <>

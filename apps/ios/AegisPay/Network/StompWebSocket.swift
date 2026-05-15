@@ -17,6 +17,11 @@ final class StompWebSocket: NSObject {
 
     private var isStopped = false
 
+    /// Tracks consecutive failures for exponential back-off.
+    /// Reset to 0 on a successful CONNECTED frame.
+    private var reconnectAttempts = 0
+    private let maxReconnectDelay: Double = 60   // cap at 60 s
+
     init(userId: String, wsBaseURL: String, onMessage: @escaping MessageHandler) {
         self.userId    = userId
         self.wsBaseURL = wsBaseURL
@@ -32,7 +37,8 @@ final class StompWebSocket: NSObject {
     }
 
     func disconnect() {
-        isStopped = true
+        isStopped        = true
+        reconnectAttempts = 0
         reconnectTask?.cancel()
         socket?.cancel(with: .goingAway, reason: nil)
         socket  = nil
@@ -92,10 +98,12 @@ final class StompWebSocket: NSObject {
                 self.receiveLoop(accessToken: accessToken)
 
             case .failure:
-                // Reconnect after 5 s
                 guard !self.isStopped else { return }
+                // Exponential back-off: 5 s → 10 s → 20 s → 40 s → cap 60 s
+                let delay = min(5.0 * pow(2.0, Double(self.reconnectAttempts)), self.maxReconnectDelay)
+                self.reconnectAttempts = min(self.reconnectAttempts + 1, 10)
                 self.reconnectTask = Task {
-                    try? await Task.sleep(for: .seconds(5))
+                    try? await Task.sleep(for: .seconds(delay))
                     guard !self.isStopped else { return }
                     self.openSocket(accessToken: accessToken)
                 }
@@ -105,6 +113,7 @@ final class StompWebSocket: NSObject {
 
     private func handleFrame(_ raw: String) {
         if raw.hasPrefix("CONNECTED") {
+            reconnectAttempts = 0   // successful handshake — reset back-off counter
             sendSubscribe()
             return
         }
