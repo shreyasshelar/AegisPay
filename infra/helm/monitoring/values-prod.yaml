@@ -53,6 +53,8 @@ grafana:
   enabled: true
   adminUser: admin
   adminPassword: ${GRAFANA_ADMIN_PASSWORD:-changeme}
+  plugins:
+    - grafana-clickhouse-datasource
   ingress:
     enabled: true
     ingressClassName: nginx
@@ -74,6 +76,21 @@ grafana:
           type: prometheus
           url: http://kube-prometheus-stack-prometheus:9090
           isDefault: true
+          editable: false
+        # AegisPay ClickHouse analytics (separate from Prometheus metrics)
+        - name: ClickHouse
+          type: grafana-clickhouse-datasource
+          uid: aegispay-clickhouse
+          isDefault: false
+          jsonData:
+            host: clickhouse.aegispay-infra.svc.cluster.local
+            port: 9000
+            username: default
+            defaultDatabase: aegispay_analytics
+            protocol: native
+            secure: false
+          secureJsonData:
+            password: ${CLICKHOUSE_PASSWORD}
           editable: false
   dashboardProviders:
     dashboardproviders.yaml:

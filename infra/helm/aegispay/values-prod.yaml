@@ -58,6 +58,28 @@ services:
     image:
       tag: latest
 
+  data_pipeline:
+    replicas: 2
+    image:
+      tag: latest
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 4
+      targetCPUUtilizationPercentage: 70
+
+  reconciliation_service:
+    replicas: 1
+    image:
+      tag: latest
+
+global:
+  smtp:
+    host: "smtp.gmail.com"
+    port: "587"
+    username: "aegispay.dev@gmail.com"
+    fromAddress: "aegispay.dev@gmail.com"
+
 ingress:
   enabled: true
   host: api.aegispay.io
@@ -95,3 +117,39 @@ secrets:
     secretPath: aegispay/prod/smtp
   slack:
     secretPath: aegispay/prod/slack
+  fast2sms:
+    secretPath: aegispay/prod/fast2sms
+  clickhouse:
+    secretPath: aegispay/prod/clickhouse
+
+grafana:
+  enabled: true
+  persistence:
+    enabled: true
+    storageClassName: gp3
+    size: 20Gi
+  ingress:
+    enabled: true
+    className: nginx
+    host: grafana.aegispay.io
+    tls:
+      enabled: true
+      secretName: grafana-prod-tls
+    annotations:
+      nginx.ingress.kubernetes.io/auth-type: basic
+      nginx.ingress.kubernetes.io/auth-secret: grafana-basic-auth
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+monitoring:
+  thresholds:
+    sagaTimeoutRatePerMin: 0.05
+    kafkaConsumerLagMax: 2000
+    notificationErrorRatePerMin: 0.2
+    dataPipelineSinkErrorsPerMin: 0.1
+    reconciliationBreakCount: 2

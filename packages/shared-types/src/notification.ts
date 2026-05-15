@@ -28,7 +28,7 @@ export const PagedNotificationsSchema = z.object({
   content: z.array(NotificationSchema),
   totalElements: z.number(),
   totalPages: z.number(),
-  number: z.number(),
+  page: z.number(),
   size: z.number(),
   last: z.boolean(),
 })

@@ -15,6 +15,9 @@ import com.aegispay.user.repository.KycDocumentRepository;
 import com.aegispay.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
@@ -257,6 +260,28 @@ public class UserService {
         user.setPushTokenPlatform(request.platform());
         userRepository.save(user);
         log.debug("Push token registered: userId={} platform={}", userId, request.platform());
+    }
+
+    // ── Back-office: list users ────────────────────────────────────────────────
+
+    /**
+     * Returns a paginated list of users, optionally filtered by KYC status.
+     * Accessible to BACK_OFFICE, ADMIN, and MERCHANT_OPS roles only.
+     *
+     * @param page      0-based page index
+     * @param size      page size (capped at 100)
+     * @param kycStatus optional filter — any value from {@link KycStatus}
+     */
+    @Transactional(readOnly = true)
+    public Page<UserResponse> listUsers(int page, int size, String kycStatus) {
+        var pageable = PageRequest.of(page, Math.min(size, 100), Sort.by("createdAt").descending());
+
+        Page<User> users = (kycStatus != null && !kycStatus.isBlank())
+                ? userRepository.findAllByKycStatusOrderByCreatedAtDesc(
+                        KycStatus.valueOf(kycStatus.toUpperCase()), pageable)
+                : userRepository.findAllByOrderByCreatedAtDesc(pageable);
+
+        return users.map(userMapper::toResponse);
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────────

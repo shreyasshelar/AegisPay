@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import com.aegispay.android.BuildConfig
+import com.aegispay.android.network.AegisApiService
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -13,6 +14,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import net.openid.appauth.*
 import org.json.JSONObject
+import retrofit2.HttpException
 import java.util.Base64
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -24,6 +26,8 @@ import kotlin.coroutines.resumeWithException
 sealed interface AuthState {
     data object Loading        : AuthState
     data object Unauthenticated: AuthState
+    /** Keycloak PKCE succeeded but no AegisPay account exists yet. */
+    data class  NeedsRegistration(val email: String?) : AuthState
     data class  Authenticated(val user: AuthUser) : AuthState
 }
 
@@ -44,6 +48,7 @@ data class AuthUser(
 class AuthRepository @Inject constructor(
     @ApplicationContext private val context: Context,
     private val tokenStore: TokenStore,
+    private val api:        AegisApiService,
 ) {
     private val authService = AuthorizationService(context)
 
@@ -54,10 +59,10 @@ class AuthRepository @Inject constructor(
 
     suspend fun restoreSession() {
         if (tokenStore.isAccessTokenValid) {
-            _authState.value = AuthState.Authenticated(buildUser())
+            resolveRegistrationState()
         } else if (tokenStore.canRefresh) {
             runCatching { refresh() }
-                .onSuccess { _authState.value = AuthState.Authenticated(buildUser()) }
+                .onSuccess { resolveRegistrationState() }
                 .onFailure { _authState.value = AuthState.Unauthenticated }
         } else {
             _authState.value = AuthState.Unauthenticated
@@ -97,7 +102,7 @@ class AuthRepository @Inject constructor(
         val tokenResponse = exchangeCode(response)
         persistTokens(tokenResponse)
         withContext(Dispatchers.Main) {
-            _authState.value = AuthState.Authenticated(buildUser())
+            resolveRegistrationState()
         }
     }
 
@@ -175,7 +180,10 @@ class AuthRepository @Inject constructor(
 
         response.idToken?.let { jwt ->
             decodeJwtPayload(jwt)?.let { claims ->
-                userId    = claims.optString("sub").takeIf { it.isNotBlank() }
+                // Keycloak adds aegispay_user_id as a custom claim via a mapper —
+                // this is the AegisPay domain UUID. "sub" is Keycloak's internal UUID
+                // and must NOT be used; it would mismatch every backend lookup.
+                userId    = claims.optString("aegispay_user_id").takeIf { it.isNotBlank() }
                 userEmail = claims.optString("email").takeIf { it.isNotBlank() }
                 userName  = claims.optString("name").takeIf { it.isNotBlank() }
                 val roles = claims.optJSONObject("realm_access")?.optJSONArray("roles")
@@ -198,6 +206,62 @@ class AuthRepository @Inject constructor(
             userEmail    = userEmail,
             userName     = userName,
         )
+    }
+
+    /**
+     * Checks whether the user has an AegisPay account after a successful Keycloak login.
+     * - Fast path: `aegispay_user_id` already in token → authenticated.
+     * - Slow path: call `GET /users/me`; 200 → store id; 404 → NeedsRegistration.
+     */
+    private suspend fun resolveRegistrationState() {
+        // Fast path: AegisPay user ID already present in token claims
+        if (tokenStore.userId?.isNotBlank() == true) {
+            _authState.value = AuthState.Authenticated(buildUser())
+            return
+        }
+        // Slow path: first login — resolve via Keycloak sub
+        try {
+            val profile = api.getMe()
+            val ttl = ((tokenStore.expiresAtMs - System.currentTimeMillis()) / 1_000L).coerceAtLeast(60L)
+            tokenStore.store(
+                accessToken  = tokenStore.accessToken!!,
+                refreshToken = tokenStore.refreshToken,
+                idToken      = tokenStore.idToken,
+                expiresInSec = ttl,
+                userId       = profile.id,
+                userRole     = tokenStore.userRole,
+                userEmail    = tokenStore.userEmail,
+                userName     = tokenStore.userName,
+            )
+            _authState.value = AuthState.Authenticated(buildUser())
+        } catch (e: HttpException) {
+            if (e.code() == 404) {
+                _authState.value = AuthState.NeedsRegistration(email = tokenStore.userEmail)
+            } else {
+                _authState.value = AuthState.Unauthenticated
+            }
+        } catch (_: Exception) {
+            _authState.value = AuthState.Unauthenticated
+        }
+    }
+
+    /**
+     * Called by [OnboardingViewModel] after a successful `/register` call.
+     * Persists the new AegisPay UUID and transitions to [AuthState.Authenticated].
+     */
+    suspend fun completeRegistration(userId: String) {
+        val ttl = ((tokenStore.expiresAtMs - System.currentTimeMillis()) / 1_000L).coerceAtLeast(60L)
+        tokenStore.store(
+            accessToken  = tokenStore.accessToken ?: return,
+            refreshToken = tokenStore.refreshToken,
+            idToken      = tokenStore.idToken,
+            expiresInSec = ttl,
+            userId       = userId,
+            userRole     = tokenStore.userRole,
+            userEmail    = tokenStore.userEmail,
+            userName     = tokenStore.userName,
+        )
+        _authState.value = AuthState.Authenticated(buildUser())
     }
 
     private fun decodeJwtPayload(jwt: String): JSONObject? = runCatching {

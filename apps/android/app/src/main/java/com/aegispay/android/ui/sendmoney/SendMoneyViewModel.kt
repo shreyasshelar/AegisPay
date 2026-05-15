@@ -7,6 +7,7 @@ import com.aegispay.android.network.AegisApiService
 import com.aegispay.android.network.CreateTransactionRequest
 import com.aegispay.android.network.ErrorResolutionRequest
 import com.aegispay.android.network.ErrorResolutionResponse
+import com.aegispay.android.network.KycStatus
 import com.aegispay.android.network.StompWebSocketClient
 import com.aegispay.android.network.Transaction
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -24,6 +25,10 @@ enum class SendStep { PAYEE, AMOUNT, REVIEW, STATUS }
 
 data class SendMoneyUiState(
     val step:               SendStep              = SendStep.PAYEE,
+
+    // KYC gate
+    val kycStatus:          KycStatus?            = null,
+    val kycLoading:         Boolean               = true,
 
     // Form fields
     val payeeId:            String                = "",
@@ -59,6 +64,20 @@ class SendMoneyViewModel @Inject constructor(
 
     // Idempotency key — generated once per session, reused on retry
     private var idempotencyKey: String = UUID.randomUUID().toString()
+
+    init { loadKycStatus() }
+
+    private fun loadKycStatus() {
+        val userId = authRepository.currentUserId ?: run {
+            _uiState.update { it.copy(kycLoading = false) }
+            return
+        }
+        viewModelScope.launch {
+            _uiState.update { it.copy(kycLoading = true) }
+            val status = runCatching { api.getUser(userId).kycStatus }.getOrNull()
+            _uiState.update { it.copy(kycStatus = status, kycLoading = false) }
+        }
+    }
 
     private var pollingJob:  Job?                  = null
     private var stompClient: StompWebSocketClient? = null

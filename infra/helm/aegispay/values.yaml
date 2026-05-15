@@ -27,6 +27,11 @@ global:
   clickhouse:
     url: "jdbc:clickhouse://clickhouse.aegispay-infra.svc.cluster.local:8123/aegispay_analytics"
     username: "default"
+  smtp:
+    host: "smtp.gmail.com"
+    port: "587"
+    username: ""          # set per-env or via ExternalSecret
+    fromAddress: ""       # set per-env
 
 # ─── Service definitions ──────────────────────────────────────────────────────
 services:
@@ -337,6 +342,8 @@ secrets:
     secretPath: "aegispay/smtp"
   slack:
     secretPath: "aegispay/slack"
+  fast2sms:
+    secretPath: "aegispay/fast2sms"
   clickhouse:
     secretPath: "aegispay/clickhouse"
 
@@ -349,6 +356,55 @@ clickhouse:
     enabled: true
     clientVersion: "24.4"
 
+# ─── Grafana (ClickHouse analytics dashboards) ───────────────────────────────
+# This deploys a dedicated Grafana for AegisPay's ClickHouse analytics.
+# Separate from kube-prometheus-stack's Grafana (which covers Prometheus metrics).
+grafana:
+  enabled: true
+  image:
+    tag: "10.4.2"
+  port: 3100
+  replicas: 1
+  adminUser: admin
+  # adminPassword is read from the grafana-admin-secret K8s secret (managed by ESO).
+  # Set grafana.adminPasswordPlain only for non-prod environments where ESO is not used.
+  adminPasswordPlain: ""
+  adminPasswordSecret:
+    name: grafana-admin-secret
+    key: admin-password
+  persistence:
+    enabled: true
+    storageClassName: ""    # empty = use cluster default StorageClass
+    size: 5Gi
+    accessMode: ReadWriteOnce
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  ingress:
+    enabled: false
+    className: nginx
+    host: grafana.aegispay.io
+    tls:
+      enabled: false
+      secretName: grafana-tls
+    annotations: {}
+  plugins:
+    - grafana-clickhouse-datasource
+  # ClickHouse datasource — points at the in-cluster ClickHouse
+  clickhouseDatasource:
+    host: "clickhouse.aegispay-infra.svc.cluster.local"
+    port: 9000
+    username: "default"
+    database: "aegispay_analytics"
+    # password is empty in dev; in prod it is read from aegispay-clickhouse-secret
+    passwordSecretRef:
+      name: aegispay-clickhouse-secret
+      key: password
+
 # ─── Monitoring & Alerting ───────────────────────────────────────────────────
 monitoring:
   prometheusRules:
@@ -356,3 +412,6 @@ monitoring:
   thresholds:
     sagaTimeoutRatePerMin: 0.1
     kafkaConsumerLagMax: 5000
+    notificationErrorRatePerMin: 0.5   # alert if >0.5 notification failures/min
+    dataPipelineSinkErrorsPerMin: 0.2  # alert if ClickHouse sink errors exceed threshold
+    reconciliationBreakCount: 5        # alert if unresolved breaks exceed this
