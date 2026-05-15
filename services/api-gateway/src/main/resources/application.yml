@@ -24,6 +24,24 @@ spring:
             waitDurationInOpenState: 10s
             permittedNumberOfCallsInHalfOpenState: 5
 
+# Resilience4j native config — per-route circuit breaker overrides
+resilience4j:
+  circuitbreaker:
+    instances:
+      # Transaction service: more lenient window so idempotent retries don't open the circuit
+      transaction-service:
+        slidingWindowSize: 20
+        failureRateThreshold: 60
+        waitDurationInOpenState: 15s
+        permittedNumberOfCallsInHalfOpenState: 5
+        minimumNumberOfCalls: 5
+      user-service:
+        slidingWindowSize: 20
+        failureRateThreshold: 60
+        waitDurationInOpenState: 15s
+        permittedNumberOfCallsInHalfOpenState: 5
+        minimumNumberOfCalls: 5
+
   security:
     oauth2:
       resourceserver:

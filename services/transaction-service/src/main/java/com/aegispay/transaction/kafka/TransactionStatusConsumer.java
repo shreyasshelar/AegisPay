@@ -104,7 +104,7 @@ public class TransactionStatusConsumer {
             txn.setStatus(status);
             transactionRepository.save(txn);
             upsertView(txn, lastEvent);
-            pushWebSocket(txnId, status, lastEvent, null);
+            pushWebSocket(txnId, status, lastEvent, null, null);
             log.debug("Status updated: txnId={} status={}", txnId, status);
         });
     }
@@ -119,7 +119,7 @@ public class TransactionStatusConsumer {
             txn.setExternalReference(event.getExternalReference());
             transactionRepository.save(txn);
             upsertView(txn, "TransactionCompletedEvent");
-            pushWebSocket(txnId, TransactionStatus.COMPLETED, "TransactionCompletedEvent", null);
+            pushWebSocket(txnId, TransactionStatus.COMPLETED, "TransactionCompletedEvent", null, null);
         });
     }
 
@@ -130,12 +130,13 @@ public class TransactionStatusConsumer {
         transactionRepository.findById(txnId).ifPresent(txn -> {
             txn.setStatus(TransactionStatus.FAILED);
             txn.setFailureReason(event.getFailureReason());
+            txn.setFailureCode(event.getFailureCode());
             txn.setCompletedAt(Instant.now());
             transactionRepository.save(txn);
             upsertView(txn, "TransactionFailedEvent");
-            // Include failureReason so the UI can highlight the exact failed step
+            // Include failureReason + failureCode so the UI can highlight the exact failed step
             pushWebSocket(txnId, TransactionStatus.FAILED, "TransactionFailedEvent",
-                    event.getFailureReason());
+                    event.getFailureReason(), event.getFailureCode());
         });
     }
 
@@ -153,7 +154,7 @@ public class TransactionStatusConsumer {
             transactionRepository.save(txn);
             upsertView(txn, "TransactionRolledBackEvent");
             pushWebSocket(txnId, TransactionStatus.FAILED, "TransactionRolledBackEvent",
-                    event.getRollbackReason());
+                    event.getRollbackReason(), null);
         });
     }
 
@@ -174,19 +175,21 @@ public class TransactionStatusConsumer {
         view.setUpdatedAt(Instant.now());
         view.setCompletedAt(txn.getCompletedAt());
         view.setFailureReason(txn.getFailureReason());
+        view.setFailureCode(txn.getFailureCode());
         view.setExternalReference(txn.getExternalReference());
 
         viewRepository.save(view);
     }
 
     private void pushWebSocket(UUID transactionId, TransactionStatus status,
-                               String lastEvent, String failureReason) {
+                               String lastEvent, String failureReason, String failureCode) {
         TransactionStatusResponse response = TransactionStatusResponse.builder()
                 .transactionId(transactionId)
                 .status(status.name())
                 .lastEvent(lastEvent)
                 .updatedAt(Instant.now())
                 .failureReason(failureReason)  // non-null only on FAILED / ROLLED_BACK
+                .failureCode(failureCode)       // machine-readable code
                 .build();
 
         messagingTemplate.convertAndSend(

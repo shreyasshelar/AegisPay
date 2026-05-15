@@ -13,5 +13,6 @@ public record TransactionStatusResponse(
     String lastEvent,
     Instant updatedAt,
     String failureReason,  // non-null only on FAILED / ROLLED_BACK
+    String failureCode,    // machine-readable code (e.g. "amount_too_small")
     String aiExplanation   // delay reason / ETA from AI platform (may be null)
 ) {}

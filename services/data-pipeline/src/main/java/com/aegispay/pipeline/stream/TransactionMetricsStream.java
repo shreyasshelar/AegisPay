@@ -49,13 +49,11 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class TransactionMetricsStream {
 
-    private static final String TOPIC_COMPLETED   = "transaction.completed";
-    private static final String TOPIC_FAILED      = "transaction.failed";
-    private static final String TOPIC_ROLLED_BACK = "transaction.rolled-back";
+    private static final String TOPIC_COMPLETED = "transaction.completed";
+    private static final String TOPIC_FAILED    = "transaction.failed";
 
-    private static final String STATUS_COMPLETED   = "COMPLETED";
-    private static final String STATUS_FAILED      = "FAILED";
-    private static final String STATUS_ROLLED_BACK = "ROLLED_BACK";
+    private static final String STATUS_COMPLETED = "COMPLETED";
+    private static final String STATUS_FAILED    = "FAILED";
 
     private final StreamsBuilder  streamsBuilder;
     private final ClickHouseSink  clickHouseSink;
@@ -85,17 +83,19 @@ public class TransactionMetricsStream {
                 String currency    = stringFrom(payload, "currency", "UNKNOWN");
                 Instant completedAt = instantFrom(payload, "completedAt");
 
-                TransactionFactRecord record = new TransactionFactRecord(
+                clickHouseSink.writeTransactionFact(new TransactionFactRecord(
+                        transactionId, userId, amount, currency,
+                        STATUS_COMPLETED, null, completedAt, 0L));
+
+                // Saga latency: processingLatencyMs not in event yet → store 0 until
+                // orchestrator adds saga timing to TransactionCompletedEvent
+                clickHouseSink.writeSagaLatency(new ClickHouseSink.SagaLatencyRecord(
                         transactionId,
-                        userId,
-                        amount,
-                        currency,
-                        STATUS_COMPLETED,
-                        null,           // no failure code for completed tx
+                        null,         // sagaId not in event → null → nil UUID in flush
+                        null,         // startedAt not in event → null → completedAt used
                         completedAt,
-                        0L              // latency unknown without saga start time
-                );
-                clickHouseSink.writeTransactionFact(record);
+                        0L,
+                        STATUS_COMPLETED));
 
             } catch (Exception ex) {
                 log.error("Error processing transaction.completed message key={}: {}", key, ex.getMessage(), ex);
@@ -132,36 +132,9 @@ public class TransactionMetricsStream {
             }
         });
 
-        // ── 3. transaction.rolled-back ────────────────────────────────────────
-        KStream<String, String> rolledBackStream =
-                streamsBuilder.stream(TOPIC_ROLLED_BACK, stringConsumed);
-
-        rolledBackStream.foreach((key, value) -> {
-            try {
-                Map<String, Object> payload = parseJson(value);
-                if (payload == null) return;
-
-                UUID transactionId = uuidFrom(payload, "transactionId");
-                UUID userId        = uuidFrom(payload, "userId");
-
-                TransactionFactRecord record = new TransactionFactRecord(
-                        transactionId,
-                        userId,
-                        BigDecimal.ZERO,
-                        "UNKNOWN",
-                        STATUS_ROLLED_BACK,
-                        stringFrom(payload, "rollbackReason", null),
-                        Instant.now(),
-                        0L
-                );
-                clickHouseSink.writeTransactionFact(record);
-
-            } catch (Exception ex) {
-                log.error("Error processing transaction.rolled-back message key={}: {}", key, ex.getMessage(), ex);
-            }
-        });
-
-        // ── 4. Tumbling-window count: COMPLETED vs FAILED ─────────────────────
+        // ── 3. Tumbling-window count: COMPLETED vs FAILED ─────────────────────
+        // Note: transaction.rolled-back stream removed — orchestrator now maps all
+        // terminal failures to transaction.failed (single terminal failure event).
         // Merge completed and failed streams, re-key by status, then count
         // within 1-minute tumbling windows. The result is logged for
         // observability; in a future iteration this can be written to ClickHouse
@@ -193,8 +166,8 @@ public class TransactionMetricsStream {
                                 windowedKey.key(),
                                 count));
 
-        log.info("TransactionMetricsStream topology built: topics=[{}, {}, {}], windowSize={}m",
-                TOPIC_COMPLETED, TOPIC_FAILED, TOPIC_ROLLED_BACK, windowSizeMinutes);
+        log.info("TransactionMetricsStream topology built: topics=[{}, {}], windowSize={}m",
+                TOPIC_COMPLETED, TOPIC_FAILED, windowSizeMinutes);
     }
 
     // ── JSON helpers ──────────────────────────────────────────────────────────

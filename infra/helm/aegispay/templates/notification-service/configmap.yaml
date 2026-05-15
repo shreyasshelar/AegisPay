@@ -18,4 +18,8 @@ data:
   MONGODB_URI: {{ .Values.global.mongodb.uri | quote }}
   OAUTH2_ISSUER_URI: {{ .Values.global.oauth2.issuerUri | quote }}
   SERVER_PORT: "8086"
+  SMTP_HOST: {{ .Values.global.smtp.host | default "smtp.gmail.com" | quote }}
+  SMTP_PORT: {{ .Values.global.smtp.port | default "587" | quote }}
+  SMTP_USERNAME: {{ .Values.global.smtp.username | default "" | quote }}
+  SMTP_FROM_ADDRESS: {{ .Values.global.smtp.fromAddress | default "" | quote }}
 {{- end }}

@@ -24,6 +24,7 @@ export const TransactionSchema = z.object({
   initiatedAt: z.string().datetime(),
   completedAt: z.string().datetime().nullable(),
   failureReason: z.string().nullable(),
+  failureCode: z.string().nullable().optional(),
   note: z.string().nullable(),
   externalReference: z.string().nullable().optional(),
 })
@@ -75,6 +76,7 @@ export const TransactionStatusUpdateSchema = z.object({
   lastEvent:     z.string(),
   updatedAt:     z.string().datetime({ offset: true }),
   failureReason: z.string().nullable().optional(),
+  failureCode:   z.string().nullable().optional(),
   aiExplanation: z.string().nullable().optional(),
 })
 export type TransactionStatusUpdate = z.infer<typeof TransactionStatusUpdateSchema>

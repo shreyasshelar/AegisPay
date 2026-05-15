@@ -42,6 +42,7 @@ public class TransactionView {
     private Instant completedAt;
 
     private String failureReason;
+    private String failureCode;
     private String externalReference;
 
     /** AI-generated ETA or delay explanation (populated asynchronously). */

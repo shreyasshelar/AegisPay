@@ -65,6 +65,10 @@ public class Transaction {
     @Column(name = "failure_reason")
     private String failureReason;
 
+    /** Machine-readable failure code (e.g. "amount_too_small", "INSUFFICIENT_FUNDS"). */
+    @Column(name = "failure_code", length = 100)
+    private String failureCode;
+
     @Column(name = "external_reference", length = 255)
     private String externalReference;
 

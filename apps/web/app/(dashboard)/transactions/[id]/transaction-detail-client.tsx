@@ -54,7 +54,12 @@ export function TransactionDetailClient({
       queryClient.setQueryData(
         transactionKeys.detail(transactionId),
         (prev: Record<string, unknown> | undefined) =>
-          prev ? { ...prev, status: update.status, ...(update.failureReason != null && { failureReason: update.failureReason }) } : prev,
+          prev ? {
+            ...prev,
+            status: update.status,
+            ...(update.failureReason != null && { failureReason: update.failureReason }),
+            ...(update.failureCode   != null && { failureCode:   update.failureCode }),
+          } : prev,
       )
       // Toast on terminal transitions
       if (update.status === 'COMPLETED') {
@@ -75,8 +80,12 @@ export function TransactionDetailClient({
       !resolveError.isPending
     ) {
       resolveError.mutate({
-        errorCode:    tx.failureReason.split(':')[0].trim(),
-        errorMessage: tx.failureReason,
+        // Prefer machine-readable failureCode; fall back to text after last ':' in failureReason
+        errorCode:    tx.failureCode ??
+                      (tx.failureReason?.includes(':')
+                        ? tx.failureReason.split(':').pop()!.trim()
+                        : tx.failureReason ?? 'UNKNOWN'),
+        errorMessage: tx.failureReason ?? undefined,
       })
     }
   // Only run when tx first loads (not on every render)
@@ -172,7 +181,10 @@ export function TransactionDetailClient({
                 <button
                   onClick={() =>
                     resolveError.mutate({
-                      errorCode:    tx.failureReason?.split(':')[0].trim() ?? 'UNKNOWN',
+                      errorCode:    tx.failureCode ??
+                                    (tx.failureReason?.includes(':')
+                                      ? tx.failureReason.split(':').pop()!.trim()
+                                      : tx.failureReason ?? 'UNKNOWN'),
                       errorMessage: tx.failureReason ?? undefined,
                     })
                   }

@@ -60,6 +60,8 @@ aegispay:
     sms:
       fast2sms:
         api-key: ${FAST2SMS_API_KEY:}
+    slack:
+      webhook-url: ${SLACK_WEBHOOK_URL:}
 
 logging:
   pattern:

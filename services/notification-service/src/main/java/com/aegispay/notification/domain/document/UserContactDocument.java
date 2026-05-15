@@ -21,6 +21,11 @@ public class UserContactDocument {
     @Nullable
     private String phoneNumber;
 
+    /** Full deliverable email address — used for email notifications. */
+    @Nullable
+    private String email;
+
+    /** Masked display-only version (e.g. j***@gmail.com) — shown in UI. */
     @Nullable
     private String maskedEmail;
 

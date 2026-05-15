@@ -26,5 +26,6 @@ public record TransactionResponse(
     Instant initiatedAt,
     Instant completedAt,
     String failureReason,
+    String failureCode,
     String externalReference
 ) {}

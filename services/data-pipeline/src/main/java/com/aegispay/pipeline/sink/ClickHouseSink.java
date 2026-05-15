@@ -99,9 +99,11 @@ public class ClickHouseSink {
 
     public record SagaLatencyRecord(
             UUID transactionId,
+            UUID sagaId,          // may be null when saga ID is unavailable
+            Instant startedAt,    // may be null when start time is unavailable
+            Instant completedAt,
             long latencyMs,
-            String finalStatus,
-            Instant completedAt
+            String finalStatus
     ) {}
 
     // ── SQL constants ─────────────────────────────────────────────────────────
@@ -111,15 +113,17 @@ public class ClickHouseSink {
             "(transaction_id, user_id, amount, currency, status, failure_code, event_time, processing_latency_ms) " +
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
 
+    // rule_flags is Array(String) — ClickHouse JDBC requires the value as String[]
     private static final String INSERT_RISK_ASSESSMENT =
             "INSERT INTO risk_assessments " +
             "(transaction_id, user_id, risk_score, decision, rule_flags, event_time) " +
             "VALUES (?, ?, ?, ?, ?, ?)";
 
+    // saga_latencies table: saga_id/started_at filled with neutral defaults when unavailable
     private static final String INSERT_SAGA_LATENCY =
             "INSERT INTO saga_latencies " +
-            "(transaction_id, latency_ms, final_status, completed_at) " +
-            "VALUES (?, ?, ?, ?)";
+            "(transaction_id, saga_id, started_at, completed_at, latency_ms, final_status) " +
+            "VALUES (?, ?, ?, ?, ?, ?)";
 
     // ── State ─────────────────────────────────────────────────────────────────
 
@@ -235,7 +239,8 @@ public class ClickHouseSink {
                             r.userId().toString(),
                             r.riskScore(),
                             r.decision(),
-                            String.join(",", r.ruleFlags()),   // ClickHouse Array(String) via comma-separated
+                            // ClickHouse JDBC requires String[] for Array(String) columns
+                            r.ruleFlags().toArray(new String[0]),
                             r.eventTime().toEpochMilli()
                     })
                     .toList();
@@ -254,12 +259,16 @@ public class ClickHouseSink {
         }
         log.debug("Flushing {} saga_latencies to ClickHouse", batch.size());
         try {
+            // saga_id / started_at may be null when not available — use sentinel values
+            UUID nilUuid = new UUID(0, 0);
             List<Object[]> batchArgs = batch.stream()
                     .map(r -> new Object[]{
                             r.transactionId().toString(),
+                            (r.sagaId() != null ? r.sagaId() : nilUuid).toString(),
+                            (r.startedAt() != null ? r.startedAt() : r.completedAt()).toEpochMilli(),
+                            r.completedAt().toEpochMilli(),
                             r.latencyMs(),
-                            r.finalStatus(),
-                            r.completedAt().toEpochMilli()
+                            r.finalStatus()
                     })
                     .toList();
             clickHouseJdbcTemplate.batchUpdate(INSERT_SAGA_LATENCY, batchArgs);

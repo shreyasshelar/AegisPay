@@ -13,6 +13,9 @@ import java.util.UUID;
 public class UserRegisteredEvent extends BaseEvent {
 
     private UUID userId;
+    /** Full deliverable email address — stored by notification-service for email delivery. */
+    private String email;
+    /** Display-only masked version (e.g. j***@gmail.com) — never used for delivery. */
     private String maskedEmail;
     private String phoneNumber;
     private String role;
