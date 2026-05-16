@@ -146,6 +146,12 @@ set DB_HOST=localhost
 set DB_PORT=5433
 set DB_USERNAME=aegispay
 set DB_PASSWORD=aegispay_dev
+REM Spring-native overrides — bypass ${VAR:default} placeholder resolution
+REM These are honoured unconditionally by Spring Boot's property binder,
+REM even when child Java processes are launched via "start cmd /c".
+set SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5433/aegispay
+set SPRING_DATASOURCE_USERNAME=aegispay
+set SPRING_DATASOURCE_PASSWORD=aegispay_dev
 
 REM ── Redis ─────────────────────────────────────────────────────────────────
 set REDIS_HOST=localhost
