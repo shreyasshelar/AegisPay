@@ -61,6 +61,13 @@ management:
     tags:
       service: ${spring.application.name}
 
+keycloak:
+  auth-server-url: ${KEYCLOAK_URL:http://localhost:8180}
+  realm:           ${KEYCLOAK_REALM:aegispay}
+  admin:
+    client-id:     ${KEYCLOAK_ADMIN_CLIENT_ID:aegispay-backend}
+    client-secret: ${KEYCLOAK_ADMIN_CLIENT_SECRET:aegispay-backend-dev-secret}
+
 aegispay:
   outbox:
     batch-size: 100

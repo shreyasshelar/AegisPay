@@ -17,6 +17,7 @@ import com.aegispay.android.ui.profile.ProfileScreen
 import com.aegispay.android.ui.sendmoney.SendMoneyScreen
 import com.aegispay.android.ui.transactions.TransactionDetailScreen
 import com.aegispay.android.ui.transactions.TransactionListScreen
+import com.aegispay.android.ui.wallet.WalletScreen
 
 // ── Route constants ───────────────────────────────────────────────────────────
 
@@ -30,6 +31,7 @@ object Route {
     const val NOTIFICATIONS      = "notifications"
     const val PROFILE            = "profile"
     const val BACK_OFFICE        = "backoffice"
+    const val WALLET             = "wallet"
 
     fun transactionDetail(id: String) = "transactions/$id"
 }
@@ -111,6 +113,16 @@ fun AegisNavHost(
                 onNavigateToNotifications = { navController.navigate(Route.NOTIFICATIONS) },
                 onNavigateToProfile       = { navController.navigate(Route.PROFILE) },
                 onNavigateToBackOffice    = { navController.navigate(Route.BACK_OFFICE) },
+                onNavigateToWallet        = { navController.navigate(Route.WALLET) },
+            )
+        }
+
+        composable(Route.WALLET) {
+            // PaymentSheet is created via rememberPaymentSheet inside WalletScreen.
+            // No Activity-level wiring needed — the Compose API handles it.
+            WalletScreen(
+                viewModel    = hiltViewModel(),
+                onNavigateUp = { navController.navigateUp() },
             )
         }
 
@@ -125,6 +137,12 @@ fun AegisNavHost(
         composable(
             route     = Route.TRANSACTION_DETAIL,
             arguments = listOf(navArgument("transactionId") { type = NavType.StringType }),
+            deepLinks = listOf(
+                // Custom scheme:  aegispay://app/transactions/{id}
+                navDeepLink { uriPattern = "aegispay://app/transactions/{transactionId}" },
+                // App Link (HTTPS): https://api.aegispay.shreyasshelar.uk/transactions/{id}
+                navDeepLink { uriPattern = "https://api.aegispay.shreyasshelar.uk/transactions/{transactionId}" },
+            ),
         ) { back ->
             val txId = back.arguments!!.getString("transactionId")!!
             TransactionDetailScreen(
@@ -134,7 +152,13 @@ fun AegisNavHost(
             )
         }
 
-        composable(Route.SEND_MONEY) {
+        composable(
+            route     = Route.SEND_MONEY,
+            deepLinks = listOf(
+                navDeepLink { uriPattern = "aegispay://app/send" },
+                navDeepLink { uriPattern = "https://api.aegispay.shreyasshelar.uk/send" },
+            ),
+        ) { _ ->
             SendMoneyScreen(
                 viewModel           = hiltViewModel(),
                 onNavigateUp        = { navController.navigateUp() },

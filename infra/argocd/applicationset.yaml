@@ -9,23 +9,9 @@ spec:
   generators:
     - list:
         elements:
-          # ── On-prem / self-hosted k3s (dev branch) ─────────────────────────
-          # Separate Application (app-onprem.yaml) handles this environment.
-          # Listed here for documentation completeness only — the template below
-          # targets AWS (main branch); on-prem has its own app-onprem.yaml.
+          # ── Prod (AWS / GKE — manual approval gate) ─────────────────────────
+          # On-prem (k3s) is managed by the standalone app-onprem.yaml Application.
           # -------------------------------------------------------------------
-
-          - env: dev
-            namespace: aegispay-dev
-            revision: main
-            syncPolicy: automated   # dev auto-syncs on every push to main
-            valueFile: values-dev.yaml
-
-          - env: staging
-            namespace: aegispay-staging
-            revision: main
-            syncPolicy: manual      # staging requires manual approval
-            valueFile: values-staging.yaml
 
           - env: prod
             namespace: aegispay-prod

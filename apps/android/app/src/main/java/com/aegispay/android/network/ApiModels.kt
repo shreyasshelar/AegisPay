@@ -65,6 +65,27 @@ data class Account(
     @Json(name = "reservedBalance")  val reservedBalance:  Double,
 )
 
+// ── Wallet top-up ─────────────────────────────────────────────────────────────
+
+@JsonClass(generateAdapter = true)
+data class TopUpIntentRequest(
+    @Json(name = "amount")   val amount:   Double,
+    @Json(name = "currency") val currency: String,
+)
+
+@JsonClass(generateAdapter = true)
+data class TopUpIntentResponse(
+    @Json(name = "paymentIntentId") val paymentIntentId: String,
+    @Json(name = "clientSecret")    val clientSecret:    String,
+    @Json(name = "amount")          val amount:          Double,
+    @Json(name = "currency")        val currency:        String,
+)
+
+@JsonClass(generateAdapter = true)
+data class TopUpConfirmRequest(
+    @Json(name = "paymentIntentId") val paymentIntentId: String,
+)
+
 // ── User / KYC ────────────────────────────────────────────────────────────────
 
 enum class KycStatus {

@@ -60,6 +60,18 @@
     <key>NSFaceIDUsageDescription</key>
     <string>AegisPay uses biometric authentication to protect your account.</string>
 
+    <!--
+        Universal Links (Associated Domains) — handled in Xcode project capabilities.
+        The AASA file is served at:
+          https://api.aegispay.shreyasshelar.uk/.well-known/apple-app-site-association
+        Domain format: applinks:<host>   (no scheme prefix, no path)
+    -->
+    <key>com.apple.developer.associated-domains</key>
+    <array>
+        <string>applinks:api.aegispay.shreyasshelar.uk</string>
+        <string>webcredentials:api.aegispay.shreyasshelar.uk</string>
+    </array>
+
     <!-- Supported interface orientations -->
     <key>UISupportedInterfaceOrientations</key>
     <array>

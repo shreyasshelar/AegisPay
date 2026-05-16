@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react'
 import Link          from 'next/link'
-import { Plus, ShieldAlert, ArrowRight } from 'lucide-react'
+import { Plus, ShieldAlert, ArrowRight, Loader2 } from 'lucide-react'
 import { useSession } from 'next-auth/react'
 import { useSendMoneyStore } from '@/lib/useSendMoneyStore'
 import { useAuthGuard } from '@/lib/useAuthGuard'
@@ -109,11 +109,17 @@ export function SendMoneyClient() {
 
   if (blocking) return null
 
-  // Wait for KYC status to load (avoid flash of "blocked" on fast connections)
-  if (userLoading) return null
+  // Wait for KYC status to load — show spinner so layout doesn't flash
+  if (userLoading) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <Loader2 className="h-7 w-7 animate-spin text-slate-300" />
+      </div>
+    )
+  }
 
-  // Block send flow if KYC not approved
-  if (user && user.kycStatus !== 'APPROVED') return <KycGuardBanner />
+  // Block send flow if KYC not approved (or if user fetch failed — safe default)
+  if (!user || user.kycStatus !== 'APPROVED') return <KycGuardBanner />
 
   return (
     <>

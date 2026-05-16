@@ -1,8 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useSession } from 'next-auth/react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
   Users2,
@@ -17,10 +16,10 @@ import {
   RefreshCw,
   Eye,
 } from 'lucide-react'
-import { useApiClient } from '@aegispay/api-client'
+import { useApiClient, useUserList, userKeys } from '@aegispay/api-client'
 import { Header } from '@/components/header'
 import { cn } from '@/lib/utils'
-import type { KycStatus } from '@aegispay/shared-types'
+import type { KycStatus, User } from '@aegispay/shared-types'
 
 // ── KYC status config ─────────────────────────────────────────────────────────
 
@@ -43,24 +42,8 @@ const KYC_FILTERS: { value: string; label: string }[] = [
   { value: 'MANUAL_REVIEW',     label: 'Manual Review'  },
 ]
 
-// ── Types ────────────────────────────────────────────────────────────────────
-
-interface UserSummary {
-  id:         string
-  name:       string
-  email:      string
-  role:       string
-  kycStatus:  KycStatus
-  active:     boolean
-  createdAt:  string
-}
-
-interface PagedUsers {
-  content:       UserSummary[]
-  totalElements: number
-  totalPages:    number
-  last:          boolean
-}
+// Use the shared User type directly (UserSummary kept as alias for clarity)
+type UserSummary = User
 
 // ── KYC status chip ───────────────────────────────────────────────────────────
 
@@ -79,7 +62,6 @@ function KycChip({ status }: { status: KycStatus }) {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function UsersClient() {
-  const { data: session }  = useSession()
   const qc                 = useQueryClient()
   const { users: usersApi } = useApiClient()
 
@@ -90,12 +72,12 @@ export function UsersClient() {
 
   const PAGE_SIZE = 50
 
-  // ── Fetch ────────────────────────────────────────────────────────────────────
+  // ── Fetch via shared hook ────────────────────────────────────────────────────
 
-  const { data, isLoading, isFetching } = useQuery<PagedUsers>({
-    queryKey: ['back-office', 'users', page, kycFilter],
-    queryFn:  () => usersApi.list({ page, size: PAGE_SIZE, kycStatus: kycFilter || undefined }),
-    placeholderData: (prev) => prev,
+  const { data, isLoading, isFetching } = useUserList({
+    page,
+    size:      PAGE_SIZE,
+    kycStatus: kycFilter || undefined,
   })
 
   // ── Admin KYC approve / reject / manual-review ───────────────────────────────
@@ -103,9 +85,9 @@ export function UsersClient() {
   const updateKyc = useMutation({
     mutationFn: ({ userId, status }: { userId: string; status: string }) =>
       usersApi.updateKycStatus(userId, status),
-    onSuccess: (_, { userId, status }) => {
+    onSuccess: (_data, { status }) => {
       toast.success(`KYC status updated to ${status}`)
-      qc.invalidateQueries({ queryKey: ['back-office', 'users'] })
+      qc.invalidateQueries({ queryKey: userKeys.list({}) })
       setActionUser(null)
     },
     onError: (err) =>
@@ -116,7 +98,7 @@ export function UsersClient() {
 
   const filtered = (data?.content ?? []).filter(u =>
     search.trim() === '' ||
-    u.name.toLowerCase().includes(search.toLowerCase()) ||
+    (u.name ?? '').toLowerCase().includes(search.toLowerCase()) ||
     u.email.toLowerCase().includes(search.toLowerCase()),
   )
 
@@ -165,7 +147,7 @@ export function UsersClient() {
 
           {/* Refresh */}
           <button
-            onClick={() => qc.invalidateQueries({ queryKey: ['back-office', 'users'] })}
+            onClick={() => qc.invalidateQueries({ queryKey: ['users'] })}
             className="ml-auto flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 hover:border-slate-300 hover:text-slate-800"
           >
             <RefreshCw className={cn('h-3.5 w-3.5', isFetching && 'animate-spin')} />
@@ -202,10 +184,10 @@ export function UsersClient() {
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-3">
                         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-100 text-xs font-bold uppercase text-primary-700">
-                          {user.name.charAt(0)}
+                          {(user.name ?? user.email).charAt(0)}
                         </div>
                         <div className="min-w-0">
-                          <p className="truncate font-medium text-slate-900">{user.name}</p>
+                          <p className="truncate font-medium text-slate-900">{user.name ?? user.email}</p>
                           <p className="truncate text-xs text-slate-400">{user.email}</p>
                         </div>
                       </div>

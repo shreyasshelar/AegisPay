@@ -4,6 +4,7 @@
   "displayName": "AegisPay",
   "accessTokenLifespan": 3600,
   "ssoSessionMaxLifespan": 86400,
+
   "clients": [
     {
       "clientId": "aegispay-web",
@@ -24,16 +25,9 @@
         "pkce.code.challenge.method": "S256"
       },
       "defaultClientScopes": [
-        "openid",
-        "profile",
-        "email",
-        "roles",
-        "web-origins"
+        "openid", "profile", "email", "roles", "web-origins", "aegispay-claims"
       ],
-      "optionalClientScopes": [
-        "offline_access",
-        "aegispay-claims"
-      ]
+      "optionalClientScopes": ["offline_access"]
     },
     {
       "clientId": "aegispay-mobile",
@@ -44,21 +38,14 @@
       "directAccessGrantsEnabled": true,
       "redirectUris": [
         "com.aegispay.app://callback",
+        "com.aegispay.android://oauth/callback",
         "exp://localhost:8081"
       ],
-      "webOrigins": [
-        "*"
-      ],
+      "webOrigins": ["*"],
       "defaultClientScopes": [
-        "openid",
-        "profile",
-        "email",
-        "roles"
+        "openid", "profile", "email", "roles", "aegispay-claims"
       ],
-      "optionalClientScopes": [
-        "offline_access",
-        "aegispay-claims"
-      ]
+      "optionalClientScopes": ["offline_access"]
     },
     {
       "clientId": "aegispay-backend",
@@ -71,86 +58,47 @@
       "standardFlowEnabled": false
     }
   ],
+
   "roles": {
     "realm": [
-      {
-        "name": "CUSTOMER",
-        "description": "End user customer"
-      },
-      {
-        "name": "MERCHANT_OPS",
-        "description": "Merchant operations"
-      },
-      {
-        "name": "BACK_OFFICE",
-        "description": "Back-office agent"
-      },
-      {
-        "name": "ADMIN",
-        "description": "System administrator"
-      },
-      {
-        "name": "PARTNER",
-        "description": "External partner"
-      }
+      { "name": "CUSTOMER",    "description": "End user customer" },
+      { "name": "MERCHANT_OPS","description": "Merchant operations" },
+      { "name": "BACK_OFFICE", "description": "Back-office agent" },
+      { "name": "ADMIN",       "description": "System administrator" },
+      { "name": "PARTNER",     "description": "External partner" }
     ]
   },
+
   "users": [
     {
+      "id": "59295e61-a284-40ed-8d3b-9e15bedeb040",
       "username": "customer@aegispay.local",
       "email": "customer@aegispay.local",
       "firstName": "Test",
       "lastName": "Customer",
       "enabled": true,
       "emailVerified": true,
-      "credentials": [
-        {
-          "type": "password",
-          "value": "Test@1234",
-          "temporary": false
-        }
-      ],
-      "realmRoles": [
-        "CUSTOMER",
-        "offline_access"
-      ],
+      "credentials": [{ "type": "password", "value": "Test@1234", "temporary": false }],
+      "realmRoles": ["CUSTOMER", "offline_access"],
       "attributes": {
-        "aegispay_role": [
-          "CUSTOMER"
-        ],
-        "aegispay_tenant_id": [
-          "default"
-        ]
-      },
-      "id": "59295e61-a284-40ed-8d3b-9e15bedeb040"
+        "aegispay_role":      ["CUSTOMER"],
+        "aegispay_tenant_id": ["default"]
+      }
     },
     {
+      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
       "username": "admin@aegispay.local",
       "email": "admin@aegispay.local",
       "firstName": "Test",
       "lastName": "Admin",
       "enabled": true,
       "emailVerified": true,
-      "credentials": [
-        {
-          "type": "password",
-          "value": "Admin@1234",
-          "temporary": false
-        }
-      ],
-      "realmRoles": [
-        "ADMIN",
-        "offline_access"
-      ],
+      "credentials": [{ "type": "password", "value": "Admin@1234", "temporary": false }],
+      "realmRoles": ["ADMIN", "offline_access"],
       "attributes": {
-        "aegispay_role": [
-          "ADMIN"
-        ],
-        "aegispay_tenant_id": [
-          "default"
-        ]
-      },
-      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        "aegispay_role":      ["ADMIN"],
+        "aegispay_tenant_id": ["default"]
+      }
     },
     {
       "id": "3bf3e523-9de8-4254-9cc9-d5fa50ff8d4a",
@@ -160,76 +108,48 @@
       "lastName": "Payee",
       "enabled": true,
       "emailVerified": true,
-      "credentials": [
-        {
-          "type": "password",
-          "value": "Test@1234",
-          "temporary": false
-        }
-      ],
-      "realmRoles": [
-        "CUSTOMER",
-        "offline_access"
-      ]
+      "credentials": [{ "type": "password", "value": "Test@1234", "temporary": false }],
+      "realmRoles": ["CUSTOMER", "offline_access"],
+      "attributes": {
+        "aegispay_role":      ["CUSTOMER"],
+        "aegispay_tenant_id": ["default"]
+      }
     }
   ],
+
   "clientScopes": [
-    {
-      "name": "openid",
-      "protocol": "openid-connect"
-    },
+    { "name": "openid",         "protocol": "openid-connect" },
+    { "name": "offline_access", "protocol": "openid-connect" },
     {
       "name": "profile",
       "protocol": "openid-connect",
       "protocolMappers": [
         {
           "name": "username",
-          "protocol": "openid-connect",
           "protocolMapper": "oidc-usermodel-property-mapper",
-          "config": {
-            "user.attribute": "username",
-            "claim.name": "preferred_username",
-            "jsonType.label": "String",
-            "id.token.claim": "true",
-            "access.token.claim": "true",
-            "userinfo.token.claim": "true"
-          }
+          "config": { "user.attribute": "username", "claim.name": "preferred_username",
+            "jsonType.label": "String", "id.token.claim": "true",
+            "access.token.claim": "true", "userinfo.token.claim": "true" }
         },
         {
           "name": "full name",
-          "protocol": "openid-connect",
           "protocolMapper": "oidc-full-name-mapper",
-          "config": {
-            "id.token.claim": "true",
-            "access.token.claim": "true",
-            "userinfo.token.claim": "true"
-          }
+          "config": { "id.token.claim": "true", "access.token.claim": "true",
+            "userinfo.token.claim": "true" }
         },
         {
           "name": "given name",
-          "protocol": "openid-connect",
           "protocolMapper": "oidc-usermodel-property-mapper",
-          "config": {
-            "user.attribute": "firstName",
-            "claim.name": "given_name",
-            "jsonType.label": "String",
-            "id.token.claim": "true",
-            "access.token.claim": "true",
-            "userinfo.token.claim": "true"
-          }
+          "config": { "user.attribute": "firstName", "claim.name": "given_name",
+            "jsonType.label": "String", "id.token.claim": "true",
+            "access.token.claim": "true", "userinfo.token.claim": "true" }
         },
         {
           "name": "family name",
-          "protocol": "openid-connect",
           "protocolMapper": "oidc-usermodel-property-mapper",
-          "config": {
-            "user.attribute": "lastName",
-            "claim.name": "family_name",
-            "jsonType.label": "String",
-            "id.token.claim": "true",
-            "access.token.claim": "true",
-            "userinfo.token.claim": "true"
-          }
+          "config": { "user.attribute": "lastName", "claim.name": "family_name",
+            "jsonType.label": "String", "id.token.claim": "true",
+            "access.token.claim": "true", "userinfo.token.claim": "true" }
         }
       ]
     },
@@ -239,29 +159,17 @@
       "protocolMappers": [
         {
           "name": "email",
-          "protocol": "openid-connect",
           "protocolMapper": "oidc-usermodel-property-mapper",
-          "config": {
-            "user.attribute": "email",
-            "claim.name": "email",
-            "jsonType.label": "String",
-            "id.token.claim": "true",
-            "access.token.claim": "true",
-            "userinfo.token.claim": "true"
-          }
+          "config": { "user.attribute": "email", "claim.name": "email",
+            "jsonType.label": "String", "id.token.claim": "true",
+            "access.token.claim": "true", "userinfo.token.claim": "true" }
         },
         {
           "name": "email verified",
-          "protocol": "openid-connect",
           "protocolMapper": "oidc-usermodel-property-mapper",
-          "config": {
-            "user.attribute": "emailVerified",
-            "claim.name": "email_verified",
-            "jsonType.label": "boolean",
-            "id.token.claim": "true",
-            "access.token.claim": "true",
-            "userinfo.token.claim": "true"
-          }
+          "config": { "user.attribute": "emailVerified", "claim.name": "email_verified",
+            "jsonType.label": "boolean", "id.token.claim": "true",
+            "access.token.claim": "true", "userinfo.token.claim": "true" }
         }
       ]
     },
@@ -271,30 +179,10 @@
       "protocolMappers": [
         {
           "name": "realm roles",
-          "protocol": "openid-connect",
           "protocolMapper": "oidc-usermodel-realm-role-mapper",
-          "config": {
-            "claim.name": "realm_access.roles",
-            "jsonType.label": "String",
-            "multivalued": "true",
-            "id.token.claim": "false",
-            "access.token.claim": "true",
-            "userinfo.token.claim": "false"
-          }
-        },
-        {
-          "name": "aegispay-role-flat-claim",
-          "protocol": "openid-connect",
-          "protocolMapper": "oidc-usermodel-realm-role-mapper",
-          "consentRequired": false,
-          "config": {
-            "multivalued": "true",
-            "userinfo.token.claim": "true",
-            "id.token.claim": "true",
-            "access.token.claim": "true",
-            "claim.name": "aegispay_role",
-            "jsonType.label": "String"
-          }
+          "config": { "claim.name": "realm_access.roles", "jsonType.label": "String",
+            "multivalued": "true", "id.token.claim": "false",
+            "access.token.claim": "true", "userinfo.token.claim": "false" }
         }
       ]
     },
@@ -304,15 +192,10 @@
       "protocolMappers": [
         {
           "name": "allowed web origins",
-          "protocol": "openid-connect",
           "protocolMapper": "oidc-allowed-origins-mapper",
           "config": {}
         }
       ]
-    },
-    {
-      "name": "offline_access",
-      "protocol": "openid-connect"
     },
     {
       "name": "aegispay-claims",
@@ -320,42 +203,147 @@
       "protocolMappers": [
         {
           "name": "aegispay_role",
-          "protocol": "openid-connect",
           "protocolMapper": "oidc-usermodel-attribute-mapper",
-          "config": {
-            "user.attribute": "aegispay_role",
-            "claim.name": "aegispay_role",
-            "jsonType.label": "String",
-            "id.token.claim": "true",
-            "access.token.claim": "true",
-            "userinfo.token.claim": "true"
-          }
+          "config": { "user.attribute": "aegispay_role", "claim.name": "aegispay_role",
+            "jsonType.label": "String", "id.token.claim": "true",
+            "access.token.claim": "true", "userinfo.token.claim": "true" }
         },
         {
           "name": "aegispay_tenant_id",
-          "protocol": "openid-connect",
           "protocolMapper": "oidc-usermodel-attribute-mapper",
-          "config": {
-            "user.attribute": "aegispay_tenant_id",
-            "claim.name": "aegispay_tenant_id",
-            "jsonType.label": "String",
-            "id.token.claim": "true",
-            "access.token.claim": "true",
-            "userinfo.token.claim": "true"
-          }
+          "config": { "user.attribute": "aegispay_tenant_id", "claim.name": "aegispay_tenant_id",
+            "jsonType.label": "String", "id.token.claim": "true",
+            "access.token.claim": "true", "userinfo.token.claim": "true" }
+        },
+        {
+          "name": "aegispay_user_id",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "config": { "user.attribute": "aegispay_user_id", "claim.name": "aegispay_user_id",
+            "jsonType.label": "String", "id.token.claim": "true",
+            "access.token.claim": "true", "userinfo.token.claim": "true" }
         }
       ]
     }
   ],
+
   "defaultDefaultClientScopes": [
-    "openid",
-    "profile",
-    "email",
-    "roles",
-    "web-origins"
+    "openid", "profile", "email", "roles", "web-origins", "aegispay-claims"
   ],
   "defaultOptionalClientScopes": [
-    "offline_access",
-    "aegispay-claims"
+    "offline_access"
+  ],
+
+  "identityProviders": [
+    {
+      "alias": "google",
+      "displayName": "Google",
+      "providerId": "google",
+      "enabled": true,
+      "trustEmail": true,
+      "firstBrokerLoginFlowAlias": "aegispay-social-first-login",
+      "config": {
+        "clientId":     "${GOOGLE_CLIENT_ID}",
+        "clientSecret": "${GOOGLE_CLIENT_SECRET}",
+        "hostedDomain": "",
+        "syncMode":     "IMPORT"
+      }
+    },
+    {
+      "alias": "microsoft",
+      "displayName": "Microsoft",
+      "providerId": "microsoft",
+      "enabled": true,
+      "trustEmail": true,
+      "firstBrokerLoginFlowAlias": "aegispay-social-first-login",
+      "config": {
+        "clientId":     "${MICROSOFT_CLIENT_ID}",
+        "clientSecret": "${MICROSOFT_CLIENT_SECRET}",
+        "tenant":       "common",
+        "syncMode":     "IMPORT"
+      }
+    }
+  ],
+
+  "identityProviderMappers": [
+    {
+      "name":                     "google-set-tenant",
+      "identityProviderAlias":    "google",
+      "identityProviderMapper":   "hardcoded-attribute-idp-mapper",
+      "config": { "attribute": "aegispay_tenant_id", "attribute.value": "default",
+        "syncMode": "INHERIT" }
+    },
+    {
+      "name":                     "google-set-role",
+      "identityProviderAlias":    "google",
+      "identityProviderMapper":   "hardcoded-attribute-idp-mapper",
+      "config": { "attribute": "aegispay_role", "attribute.value": "CUSTOMER",
+        "syncMode": "INHERIT" }
+    },
+    {
+      "name":                     "google-assign-realm-role",
+      "identityProviderAlias":    "google",
+      "identityProviderMapper":   "hardcoded-role-idp-mapper",
+      "config": { "role": "CUSTOMER", "syncMode": "INHERIT" }
+    },
+    {
+      "name":                     "microsoft-set-tenant",
+      "identityProviderAlias":    "microsoft",
+      "identityProviderMapper":   "hardcoded-attribute-idp-mapper",
+      "config": { "attribute": "aegispay_tenant_id", "attribute.value": "default",
+        "syncMode": "INHERIT" }
+    },
+    {
+      "name":                     "microsoft-set-role",
+      "identityProviderAlias":    "microsoft",
+      "identityProviderMapper":   "hardcoded-attribute-idp-mapper",
+      "config": { "attribute": "aegispay_role", "attribute.value": "CUSTOMER",
+        "syncMode": "INHERIT" }
+    },
+    {
+      "name":                     "microsoft-assign-realm-role",
+      "identityProviderAlias":    "microsoft",
+      "identityProviderMapper":   "hardcoded-role-idp-mapper",
+      "config": { "role": "CUSTOMER", "syncMode": "INHERIT" }
+    }
+  ],
+
+  "authenticationFlows": [
+    {
+      "alias": "aegispay-social-first-login",
+      "description": "First-broker-login for social IdPs — skips manual profile review, auto-links on email match",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticatorFlow": true,
+          "requirement": "ALTERNATIVE",
+          "flowAlias": "aegispay-social-review-profile",
+          "userSetupAllowed": false
+        }
+      ]
+    },
+    {
+      "alias": "aegispay-social-review-profile",
+      "description": "Auto-confirm profile, then check for existing account by email",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "idp-review-profile",
+          "requirement": "REQUIRED",
+          "config": { "update.profile.on.first.login": "missing" }
+        },
+        {
+          "authenticator": "idp-auto-link",
+          "requirement": "ALTERNATIVE"
+        },
+        {
+          "authenticator": "idp-create-user-if-unique",
+          "requirement": "ALTERNATIVE"
+        }
+      ]
+    }
   ]
 }

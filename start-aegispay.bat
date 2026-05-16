@@ -4,14 +4,26 @@ title AegisPay Windows Bootstrap
 
 REM =========================================================
 REM AegisPay — Windows Bootstrap Script
-REM Starts Docker infra, builds all JARs, launches all services
-REM and the Next.js frontend.
+REM Starts Docker infra, builds all JARs, launches all services,
+REM the Next.js frontend, and optionally the Android emulator.
 REM
-REM Prerequisites:
+REM Usage:
+REM   start-aegispay.bat                   — backend + web only
+REM   start-aegispay.bat android           — + Android emulator (10.0.2.2)
+REM   start-aegispay.bat android <host-ip> — + Android on physical device
+REM   start-aegispay.bat ios               — prints iOS/macOS instructions
+REM
+REM Prerequisites (all targets):
 REM   - Docker Desktop (WSL 2 backend enabled)
 REM   - Java 21 (JAVA_HOME set, or java.exe on PATH)
 REM   - Maven 3.9+ (mvn.cmd on PATH)
 REM   - Node 20 + pnpm 9 (node.exe on PATH)
+REM
+REM Prerequisites (android target):
+REM   - Android Studio with SDK installed
+REM   - ANDROID_HOME set to SDK root (e.g. %LOCALAPPDATA%\Android\Sdk)
+REM   - At least one AVD created in Android Studio > Device Manager
+REM   - adb.exe on PATH or reachable via %ANDROID_HOME%\platform-tools
 REM =========================================================
 
 echo =========================================================
@@ -19,14 +31,69 @@ echo   AegisPay Bootstrap  (Windows)
 echo =========================================================
 
 REM =========================================================
+REM PARSE ARGUMENTS
+REM   %1 = "android" | "ios" | (empty)
+REM   %2 = optional host IP for physical device testing
+REM =========================================================
+
+set LAUNCH_ANDROID=0
+set LAUNCH_IOS_NOTE=0
+set PHYSICAL_DEVICE=0
+set DEVICE_IP=10.0.2.2
+
+IF /I "%1"=="android" (
+    set LAUNCH_ANDROID=1
+    IF NOT "%2"=="" (
+        set PHYSICAL_DEVICE=1
+        set DEVICE_IP=%2
+    )
+)
+IF /I "%1"=="ios" set LAUNCH_IOS_NOTE=1
+
+REM Derive Android URLs from DEVICE_IP (set once, used throughout)
+set API_BASE_URL_ANDROID=http://!DEVICE_IP!:8080
+set KEYCLOAK_URL_ANDROID=http://!DEVICE_IP!:8180/realms/aegispay
+set WS_BASE_URL_ANDROID=ws://!DEVICE_IP!:8090
+
+REM =========================================================
+REM iOS note (Windows can't run the iOS Simulator)
+REM =========================================================
+
+IF "!LAUNCH_IOS_NOTE!"=="1" (
+    echo.
+    echo =========================================================
+    echo   iOS Simulator — macOS only
+    echo =========================================================
+    echo.
+    echo   iOS development requires a Mac with Xcode installed.
+    echo   On your Mac run:
+    echo.
+    echo     ./start-local.sh --ios
+    echo.
+    echo   The script will:
+    echo     1. Write apps/ios/LocalDev.xcconfig with all API URLs
+    echo     2. Boot the default iPhone simulator
+    echo     3. Open Xcode — press Run (Cmd+R) to build and install
+    echo.
+    echo   Networking on the iOS Simulator:
+    echo     "localhost" inside the simulator == your Mac's localhost
+    echo     So the default API_BASE_URL=http://localhost:8080 works as-is.
+    echo.
+    echo   On a physical iPhone (same LAN):
+    echo     ./start-local.sh --ios --device-ip ^<your-mac-lan-ip^>
+    echo =========================================================
+    echo.
+    goto :after_ios_note
+)
+:after_ios_note
+
+REM =========================================================
 REM AUTO-DETECT MAVEN
-REM  Looks for mvn.cmd on PATH first, then common install dirs.
 REM =========================================================
 
 set MVN_CMD=mvn
 where mvn >nul 2>&1
 IF %ERRORLEVEL% NEQ 0 (
-    REM Try common install locations
     for %%d in (
         "C:\Program Files\Apache\maven\bin\mvn.cmd"
         "C:\tools\maven\bin\mvn.cmd"
@@ -81,6 +148,7 @@ set AI_PLATFORM_URI=http://localhost:8091
 
 REM Optional — override if you have real keys
 IF "%STRIPE_SECRET_KEY%"=="" set STRIPE_SECRET_KEY=sk_test_51TTkk2CyjRW67i1DP4dcrEgzhOm9dUe61k9U5kPNoDST6Deuy9rAvgJY0ZL93kKbDmdP7SEAUXUM6M4TMMtxkWNb00eKgRIql5
+IF "%STRIPE_PUBLISHABLE_KEY%"=="" set STRIPE_PUBLISHABLE_KEY=pk_test_placeholder_local_dev
 IF "%SMTP_PASSWORD%"=="" set SMTP_PASSWORD=mcinrqrbfqayklee
 IF "%SLACK_WEBHOOK_URL%"=="" set SLACK_WEBHOOK_URL=https://hooks.slack.com/services/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
 IF "%FAST2SMS_API_KEY%"=="" set FAST2SMS_API_KEY=ZNd8Xx4lqrERbj67Unwi1LHvB0smOFDayTCkgczIYKM9oPAfV2jDTskbhao0QZ3luvA7VfiLdWM2KNOe
@@ -159,7 +227,7 @@ reconciliation-service
 echo All service JARs built
 
 REM =========================================================
-REM CLEAN INFRA (fresh volumes every start — ensures Keycloak bootstrap fires)
+REM CLEAN INFRA (fresh volumes every start)
 REM =========================================================
 
 echo.
@@ -360,6 +428,139 @@ call pnpm install --silent
 start "web-app" /MIN cmd /c "pnpm --filter @aegispay/web dev > logs\web.log 2>&1"
 
 REM =========================================================
+REM ANDROID EMULATOR  (only when "android" argument given)
+REM =========================================================
+
+IF "!LAUNCH_ANDROID!"=="0" goto :android_done
+
+echo.
+echo =========================================================
+echo   Android Setup
+echo =========================================================
+
+REM ── Verify ANDROID_HOME ───────────────────────────────────
+IF "!ANDROID_HOME!"=="" (
+    echo.
+    echo ERROR: ANDROID_HOME is not set.
+    echo        Install Android Studio then add to your system env:
+    echo          ANDROID_HOME = %LOCALAPPDATA%\Android\Sdk
+    echo        Also add to PATH:
+    echo          %LOCALAPPDATA%\Android\Sdk\platform-tools
+    echo          %LOCALAPPDATA%\Android\Sdk\emulator
+    echo.
+    goto :android_done
+)
+
+REM ── Verify adb ────────────────────────────────────────────
+set ADB_EXE="%ANDROID_HOME%\platform-tools\adb.exe"
+IF NOT EXIST %ADB_EXE% set ADB_EXE=adb
+
+REM ── Inject STRIPE_PUBLISHABLE_KEY into gradle.properties ──
+set GRADLE_PROPS=apps\android\gradle.properties
+IF EXIST "%GRADLE_PROPS%" (
+    findstr /C:"STRIPE_PUBLISHABLE_KEY" "%GRADLE_PROPS%" >nul 2>&1
+    IF !ERRORLEVEL! NEQ 0 (
+        echo STRIPE_PUBLISHABLE_KEY=!STRIPE_PUBLISHABLE_KEY!>> "%GRADLE_PROPS%"
+        echo   Injected STRIPE_PUBLISHABLE_KEY into gradle.properties
+    ) ELSE (
+        powershell -NoProfile -Command ^
+          "(Get-Content '%GRADLE_PROPS%') -replace 'STRIPE_PUBLISHABLE_KEY=.*', 'STRIPE_PUBLISHABLE_KEY=!STRIPE_PUBLISHABLE_KEY!' | Set-Content '%GRADLE_PROPS%'"
+        echo   Updated STRIPE_PUBLISHABLE_KEY in gradle.properties
+    )
+) ELSE (
+    echo STRIPE_PUBLISHABLE_KEY=!STRIPE_PUBLISHABLE_KEY!> "%GRADLE_PROPS%"
+    echo   Created gradle.properties with STRIPE_PUBLISHABLE_KEY
+)
+
+REM ── Physical device vs emulator ───────────────────────────
+IF "!PHYSICAL_DEVICE!"=="1" (
+    echo.
+    echo Physical device mode — API URLs will use !DEVICE_IP!
+    echo Make sure your Android device is connected via USB
+    echo   ^(or paired for wireless debugging on the same LAN^)
+    echo.
+    set ADB_TARGET=-d
+    goto :android_build
+)
+
+REM ── Find AVD ──────────────────────────────────────────────
+set AVD_NAME=
+IF NOT "!ANDROID_AVD_NAME!"=="" (
+    set AVD_NAME=!ANDROID_AVD_NAME!
+    echo   Using AVD from env: !AVD_NAME!
+) ELSE (
+    REM List AVDs and pick the first one
+    for /f "usebackq tokens=*" %%a in (`"%ANDROID_HOME%\emulator\emulator.exe" -list-avds 2^>nul`) do (
+        IF "!AVD_NAME!"=="" set AVD_NAME=%%a
+    )
+    IF "!AVD_NAME!"=="" (
+        echo.
+        echo ERROR: No Android Virtual Device ^(AVD^) found.
+        echo        Create one in Android Studio: Tools ^> Device Manager ^> + ^> Virtual
+        echo        Then re-run this script.
+        echo        Or set ANDROID_AVD_NAME=^<your-avd-name^> before running.
+        echo.
+        goto :android_done
+    )
+    echo   Found AVD: !AVD_NAME!
+)
+
+REM ── Start emulator ────────────────────────────────────────
+echo   Starting emulator '!AVD_NAME!'...
+start "android-emulator" /MIN ^
+    "%ANDROID_HOME%\emulator\emulator.exe" -avd "!AVD_NAME!" -no-snapshot-save -gpu auto
+
+REM Wait for adb to see the emulator
+echo   Waiting for emulator to come online (this may take ~60 s)...
+%ADB_EXE% -e wait-for-device >nul 2>&1
+
+REM Poll sys.boot_completed
+set ADB_TARGET=-e
+:wait_android_boot
+set BOOT_VAL=0
+for /f "usebackq tokens=*" %%b in (`%ADB_EXE% !ADB_TARGET! shell getprop sys.boot_completed 2^>nul`) do set BOOT_VAL=%%b
+IF "!BOOT_VAL!"=="1" goto :android_booted
+timeout /t 4 >nul
+goto :wait_android_boot
+:android_booted
+echo   Emulator fully booted
+
+:android_build
+REM ── Build and install APK ─────────────────────────────────
+echo.
+echo   Building and installing Android APK...
+echo     API URL  : !API_BASE_URL_ANDROID!
+echo     Keycloak : !KEYCLOAK_URL_ANDROID!
+echo     WS       : !WS_BASE_URL_ANDROID!
+echo.
+
+pushd apps\android
+call gradlew.bat installDebug ^
+  -PAPI_BASE_URL=!API_BASE_URL_ANDROID! ^
+  -PKEYCLOAK_ISSUER=!KEYCLOAK_URL_ANDROID! ^
+  -PWS_BASE_URL=!WS_BASE_URL_ANDROID! ^
+  -PSTRIPE_PUBLISHABLE_KEY=!STRIPE_PUBLISHABLE_KEY! ^
+  --no-daemon
+set GRADLE_EXIT=!ERRORLEVEL!
+popd
+
+IF !GRADLE_EXIT! NEQ 0 (
+    echo.
+    echo ERROR: Android build/install failed ^(exit code !GRADLE_EXIT!^)
+    echo        Check logs above for details.
+    echo.
+    goto :android_done
+)
+
+echo   APK installed on device
+
+REM ── Launch app ────────────────────────────────────────────
+%ADB_EXE% !ADB_TARGET! shell am start -n com.aegispay.android/.MainActivity >nul 2>&1
+echo   AegisPay launched on Android ^(!ADB_TARGET! target^)
+
+:android_done
+
+REM =========================================================
 REM SUMMARY
 REM =========================================================
 
@@ -381,12 +582,40 @@ echo     Sender : customer@aegispay.local / Test@1234  (INR 50000)
 echo     Payee  : payee@aegispay.local    / Test@1234  (INR 25000)
 echo     Payee UUID: %PAYEE_KC_UUID%
 echo.
-echo   Logs: logs\
+
+IF "!LAUNCH_ANDROID!"=="1" (
+    echo   Android
+    echo   -------
+    IF "!PHYSICAL_DEVICE!"=="1" (
+        echo     Mode           : Physical device  ^(!DEVICE_IP!^)
+        echo     API URL        : !API_BASE_URL_ANDROID!
+        echo     Note           : Device must share the same LAN as this machine.
+    ) ELSE (
+        echo     Mode           : Emulator  ^(AVD: !AVD_NAME!^)
+        echo     API URL        : !API_BASE_URL_ANDROID!
+        echo     10.0.2.2 maps to this machine's localhost inside the emulator.
+    )
+    echo     Stripe key     : !STRIPE_PUBLISHABLE_KEY!
+    echo     To rebuild only: cd apps\android ^&^& gradlew.bat installDebug
+    echo     App logs       : %ADB_EXE% !ADB_TARGET! logcat -s AegisPay
+    echo.
+)
+
+echo   iOS (macOS only)
+echo   ----------------
+echo     Run on a Mac: ./start-local.sh --ios
+echo     The iOS Simulator uses "localhost" which maps to the Mac's localhost.
+echo     For a physical iPhone add: --device-ip ^<mac-lan-ip^>
+echo.
+echo   Logs (backend+web): logs\
 echo.
 echo   Stop everything:
 echo     docker compose down
 echo     taskkill /F /IM java.exe
 echo     taskkill /F /IM node.exe
+IF "!LAUNCH_ANDROID!"=="1" (
+    echo     taskkill /F /IM "qemu-system-x86_64.exe"   ^(emulator process^)
+)
 echo.
 echo =========================================================
 pause

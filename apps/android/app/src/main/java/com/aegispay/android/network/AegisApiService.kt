@@ -31,6 +31,19 @@ interface AegisApiService {
     @GET("api/v1/ledger/accounts/{userId}")
     suspend fun getAccount(@Path("userId") userId: String): Account
 
+    @GET("api/v1/ledger/accounts/me")
+    suspend fun getMyAccount(): List<Account>
+
+    // ── Wallet top-up ─────────────────────────────────────────────────────────
+
+    /** Step 1: create a Stripe PaymentIntent — returns clientSecret for SDK confirmation. */
+    @POST("api/v1/ledger/topup/intent")
+    suspend fun createTopUpIntent(@Body request: TopUpIntentRequest): TopUpIntentResponse
+
+    /** Step 2: notify backend that payment succeeded — credits the ledger balance. */
+    @POST("api/v1/ledger/topup/confirm")
+    suspend fun confirmTopUp(@Body request: TopUpConfirmRequest): Unit
+
     // ── Users ─────────────────────────────────────────────────────────────────
 
     @GET("api/v1/users/{id}")

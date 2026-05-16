@@ -38,6 +38,7 @@ public class UserService {
     private final IdempotencyService idempotencyService;
     private final UserEventProducer eventProducer;
     private final AiPlatformClient aiPlatformClient;
+    private final KeycloakAdminService keycloakAdminService;
 
     @Transactional
     public UserResponse register(UserRegistrationRequest request,
@@ -84,6 +85,10 @@ public class UserService {
 
         OutboxEntry outboxEntry = eventProducer.buildUserRegisteredEntry(user);
         outboxEntryRepository.save(outboxEntry);
+
+        // Write aegispay_user_id + aegispay_tenant_id back to Keycloak asynchronously
+        // so subsequent JWTs carry the domain UUID and tenant claim.
+        keycloakAdminService.writeUserAttributes(externalId, user.getId(), user.getTenantId());
 
         log.info("User registered: userId={} externalId={}", user.getId(), externalId);
         return userMapper.toResponse(user);

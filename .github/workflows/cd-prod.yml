@@ -114,7 +114,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    # Optional: gate on a GitHub Environment for manual approval on prod
     environment:
       name: production
       url: https://argocd.aegispay.io/applications/aegispay-prod
@@ -148,12 +147,6 @@ jobs:
           done
           echo "Updated ${{ env.HELM_VALUES_FILE }} with SHA=${SHA}"
 
-      - name: Update ArgoCD targetRevision
-        env:
-          SHA: ${{ needs.guard.outputs.deploy_sha }}
-        run: |
-          yq e ".spec.source.targetRevision = \"${SHA}\"" -i ${{ env.ARGOCD_APP_FILE }}
-
       - name: Show diff
         run: git diff
 
@@ -162,7 +155,7 @@ jobs:
         env:
           SHA: ${{ needs.guard.outputs.deploy_sha }}
         run: |
-          git add ${{ env.HELM_VALUES_FILE }} ${{ env.ARGOCD_APP_FILE }}
+          git add ${{ env.HELM_VALUES_FILE }}
           git diff --staged --quiet && echo "Nothing changed — already deployed" && exit 0
           git commit -m "chore(cd/prod): deploy ${SHA:0:12} to production [skip ci]"
           git push origin main

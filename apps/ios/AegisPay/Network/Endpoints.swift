@@ -72,6 +72,24 @@ struct Account: Codable, Identifiable {
     let reservedBalance:  Decimal
 }
 
+// MARK: — Wallet top-up
+
+struct TopUpIntentRequest: Encodable {
+    let amount:   Decimal
+    let currency: String
+}
+
+struct TopUpIntentResponse: Codable {
+    let paymentIntentId: String
+    let clientSecret:    String
+    let amount:          Decimal
+    let currency:        String
+}
+
+struct TopUpConfirmRequest: Encodable {
+    let paymentIntentId: String
+}
+
 // MARK: — User / KYC
 
 enum KycStatus: String, Codable {

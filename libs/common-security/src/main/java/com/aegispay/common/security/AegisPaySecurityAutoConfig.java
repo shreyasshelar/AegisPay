@@ -1,9 +1,12 @@
 package com.aegispay.common.security;
 
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.EnableAspectJAutoProxy;
 import org.springframework.context.annotation.Import;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  * Auto-configuration loaded by all non-gateway services via
@@ -14,6 +17,7 @@ import org.springframework.context.annotation.Import;
  */
 @AutoConfiguration
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
+@EnableAspectJAutoProxy
 @Import(JwtClaimsExtractor.class)
 public class AegisPaySecurityAutoConfig {
 
@@ -25,5 +29,17 @@ public class AegisPaySecurityAutoConfig {
     @Bean
     public SecurityHeaderFilter securityHeaderFilter() {
         return new SecurityHeaderFilter();
+    }
+
+    /**
+     * Wires up the RLS tenant interceptor only when a {@link JdbcTemplate} is on
+     * the classpath and configured — i.e. in services that talk to PostgreSQL.
+     * Gateway and pure-messaging services don't expose a JdbcTemplate and are
+     * therefore unaffected.
+     */
+    @Bean
+    @ConditionalOnBean(JdbcTemplate.class)
+    public TenantTransactionInterceptor tenantTransactionInterceptor(JdbcTemplate jdbcTemplate) {
+        return new TenantTransactionInterceptor(jdbcTemplate);
     }
 }
