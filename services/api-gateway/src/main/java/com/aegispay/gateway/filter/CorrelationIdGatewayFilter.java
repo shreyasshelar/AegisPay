@@ -7,7 +7,6 @@ import org.springframework.core.Ordered;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.http.server.reactive.ServerHttpRequestDecorator;
-import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
@@ -56,16 +55,14 @@ public class CorrelationIdGatewayFilter implements GatewayFilter, Ordered {
             }
         };
 
-        // Echo the ID back to the caller via the response header
-        ServerHttpResponse response = exchange.getResponse();
-        response.beforeCommit(() -> {
-            try {
-                response.getHeaders().set(CORRELATION_ID_HEADER, finalCorrelationId);
-            } catch (UnsupportedOperationException ignored) {
-                // Headers already committed (e.g. circuit-breaker fallback) — skip
-            }
-            return Mono.empty();
-        });
+        // Echo the ID back to the caller via the response header.
+        // Set directly (not via beforeCommit) so it is visible in tests and
+        // in any downstream filter that reads the response headers before body write.
+        try {
+            exchange.getResponse().getHeaders().set(CORRELATION_ID_HEADER, finalCorrelationId);
+        } catch (UnsupportedOperationException ignored) {
+            // Headers already committed (e.g. circuit-breaker fallback) — skip
+        }
 
         log.debug("correlationId={} path={}", finalCorrelationId,
                   exchange.getRequest().getPath().value());

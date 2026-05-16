@@ -61,7 +61,8 @@ class LedgerServiceIT {
     @Autowired OutboxEntryRepository outboxEntryRepository;
 
     UUID accountId;
-    UUID txnId = UUID.randomUUID();
+    UUID accountUserId;   // the userId stored inside the Account entity
+    UUID txnId  = UUID.randomUUID();
     UUID sagaId = UUID.randomUUID();
 
     @BeforeEach
@@ -71,8 +72,9 @@ class LedgerServiceIT {
         ledgerEntryRepository.deleteAll();
         accountRepository.deleteAll();
 
+        accountUserId = UUID.randomUUID();
         Account account = Account.builder()
-                .userId(UUID.randomUUID())
+                .userId(accountUserId)
                 .currency("USD")
                 .availableBalance(new BigDecimal("500.00"))
                 .reservedBalance(BigDecimal.ZERO)
@@ -88,7 +90,7 @@ class LedgerServiceIT {
                 .schemaVersion(1)
                 .transactionId(txnId)
                 .sagaId(sagaId)
-                .accountId(accountId)
+                .userId(accountUserId)   // BalanceReserveRequestedEvent uses userId (account owner)
                 .amount(new BigDecimal("100.00"))
                 .currency("USD")
                 .build();
@@ -114,7 +116,7 @@ class LedgerServiceIT {
                 .schemaVersion(1)
                 .transactionId(txnId)
                 .sagaId(sagaId)
-                .accountId(accountId)
+                .userId(accountUserId)   // BalanceReserveRequestedEvent uses userId (account owner)
                 .amount(new BigDecimal("9999.00"))
                 .currency("USD")
                 .build();

@@ -41,3 +41,5 @@ Stripe SDK integration note: Both Android and iOS have a clearly marked TODO com
 for multitenant how will be the records in db how will we bifucate users records etc 
 
 fix test cases at last
+
+how stripe actually send money like in my project based on email and all 

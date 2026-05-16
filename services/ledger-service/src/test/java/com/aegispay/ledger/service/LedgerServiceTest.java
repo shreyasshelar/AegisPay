@@ -27,12 +27,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -42,12 +44,14 @@ class LedgerServiceTest {
     @Mock LedgerEntryRepository ledgerEntryRepository;
     @Mock BalanceLockRepository balanceLockRepository;
     @Mock OutboxEntryRepository outboxEntryRepository;
+    @Mock ExchangeRateService exchangeRateService;
 
     LedgerService ledgerService;
 
     UUID accountId = UUID.randomUUID();
-    UUID txnId = UUID.randomUUID();
-    UUID sagaId = UUID.randomUUID();
+    UUID userId    = UUID.randomUUID();   // the account owner's user ID
+    UUID txnId     = UUID.randomUUID();
+    UUID sagaId    = UUID.randomUUID();
 
     @BeforeEach
     void setUp() {
@@ -60,13 +64,18 @@ class LedgerServiceTest {
 
         ledgerService = new LedgerService(
                 accountRepository, ledgerEntryRepository, balanceLockRepository,
-                outboxEntryRepository, Mappers.getMapper(LedgerMapper.class), objectMapper, props);
+                outboxEntryRepository, Mappers.getMapper(LedgerMapper.class),
+                objectMapper, props, exchangeRateService);
     }
 
     @Test
     void reserveBalance_happy_path() {
         Account account = accountWithBalance("100.00", "0.00");
+        when(accountRepository.findByUserId(userId)).thenReturn(List.of(account));
         when(accountRepository.findByIdForUpdate(accountId)).thenReturn(Optional.of(account));
+        // Same currency — converter passes the amount through unchanged
+        when(exchangeRateService.convert(any(BigDecimal.class), anyString(), anyString()))
+                .thenAnswer(inv -> inv.getArgument(0));
         when(ledgerEntryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(balanceLockRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(outboxEntryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -88,7 +97,10 @@ class LedgerServiceTest {
     @Test
     void reserveBalance_insufficient_funds_writes_failed_event() {
         Account account = accountWithBalance("10.00", "0.00");
+        when(accountRepository.findByUserId(userId)).thenReturn(List.of(account));
         when(accountRepository.findByIdForUpdate(accountId)).thenReturn(Optional.of(account));
+        when(exchangeRateService.convert(any(BigDecimal.class), anyString(), anyString()))
+                .thenAnswer(inv -> inv.getArgument(0));
         when(outboxEntryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         ledgerService.reserveBalance(reserveEvent(new BigDecimal("50.00")));
@@ -100,11 +112,17 @@ class LedgerServiceTest {
     }
 
     @Test
-    void reserveBalance_account_not_found_throws() {
-        when(accountRepository.findByIdForUpdate(accountId)).thenReturn(Optional.empty());
+    void reserveBalance_account_not_found_writes_failed_event() {
+        // No account for the given userId — service writes a BalanceReserveFailedEvent
+        // and returns without throwing (see LedgerService.reserveBalance for design rationale).
+        when(accountRepository.findByUserId(userId)).thenReturn(List.of());
+        when(outboxEntryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        assertThatThrownBy(() -> ledgerService.reserveBalance(reserveEvent(new BigDecimal("10.00"))))
-                .isInstanceOf(AccountNotFoundException.class);
+        ledgerService.reserveBalance(reserveEvent(new BigDecimal("10.00")));
+
+        verify(ledgerEntryRepository, never()).save(any());
+        verify(outboxEntryRepository).save(argThat(e ->
+                ((OutboxEntry) e).getEventType().equals("BalanceReserveFailedEvent")));
     }
 
     @Test
@@ -141,7 +159,7 @@ class LedgerServiceTest {
     private Account accountWithBalance(String available, String reserved) {
         return Account.builder()
                 .id(accountId)
-                .userId(UUID.randomUUID())
+                .userId(userId)
                 .currency("USD")
                 .availableBalance(new BigDecimal(available))
                 .reservedBalance(new BigDecimal(reserved))
@@ -156,7 +174,7 @@ class LedgerServiceTest {
                 .schemaVersion(1)
                 .transactionId(txnId)
                 .sagaId(sagaId)
-                .accountId(accountId)
+                .userId(userId)       // BalanceReserveRequestedEvent uses userId (account owner)
                 .amount(amount)
                 .currency("USD")
                 .build();

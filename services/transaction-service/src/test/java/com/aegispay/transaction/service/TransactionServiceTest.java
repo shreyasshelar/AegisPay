@@ -14,6 +14,7 @@ import com.aegispay.transaction.readmodel.TransactionView;
 import com.aegispay.transaction.readmodel.TransactionViewRepository;
 import com.aegispay.transaction.repository.OutboxEntryRepository;
 import com.aegispay.transaction.repository.TransactionRepository;
+import org.springframework.data.mongodb.core.MongoTemplate;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -40,6 +41,7 @@ class TransactionServiceTest {
     @Spy  private TransactionMapperImpl transactionMapper;
     @Mock private IdempotencyService idempotencyService;
     @Mock private TransactionEventProducer eventProducer;
+    @Mock private MongoTemplate mongoTemplate;
 
     @InjectMocks
     private TransactionService transactionService;
