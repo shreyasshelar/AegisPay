@@ -1,6 +1,7 @@
 package com.aegispay.user.controller;
 
 import com.aegispay.common.domain.enums.KycStatus;
+import com.aegispay.user.config.SecurityConfig;
 import com.aegispay.user.domain.dto.UserRegistrationRequest;
 import com.aegispay.user.domain.dto.UserResponse;
 import com.aegispay.user.service.UserService;
@@ -9,9 +10,11 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
@@ -26,7 +29,12 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(UserController.class)
+@Import(SecurityConfig.class)
 class UserControllerTest {
+
+    // Provide a JwtDecoder mock so Spring Security can initialise the resource-server
+    // filter chain in the @WebMvcTest slice (no issuer-uri available in test context).
+    @MockBean JwtDecoder jwtDecoder;
 
     @Autowired private MockMvc mockMvc;
     @Autowired private ObjectMapper objectMapper;
