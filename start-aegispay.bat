@@ -59,32 +59,30 @@ REM =========================================================
 REM iOS note (Windows can't run the iOS Simulator)
 REM =========================================================
 
-IF "!LAUNCH_IOS_NOTE!"=="1" (
-    echo.
-    echo =========================================================
-    echo   iOS Simulator — macOS only
-    echo =========================================================
-    echo.
-    echo   iOS development requires a Mac with Xcode installed.
-    echo   On your Mac run:
-    echo.
-    echo     ./start-local.sh --ios
-    echo.
-    echo   The script will:
-    echo     1. Write apps/ios/LocalDev.xcconfig with all API URLs
-    echo     2. Boot the default iPhone simulator
-    echo     3. Open Xcode — press Run (Cmd+R) to build and install
-    echo.
-    echo   Networking on the iOS Simulator:
-    echo     "localhost" inside the simulator == your Mac's localhost
-    echo     So the default API_BASE_URL=http://localhost:8080 works as-is.
-    echo.
-    echo   On a physical iPhone (same LAN):
-    echo     ./start-local.sh --ios --device-ip ^<your-mac-lan-ip^>
-    echo =========================================================
-    echo.
-    goto :after_ios_note
-)
+IF NOT "!LAUNCH_IOS_NOTE!"=="1" goto :after_ios_note
+echo.
+echo =========================================================
+echo   iOS Simulator - macOS only
+echo =========================================================
+echo.
+echo   iOS development requires a Mac with Xcode installed.
+echo   On your Mac run:
+echo.
+echo     ./start-local.sh --ios
+echo.
+echo   The script will:
+echo     1. Write apps/ios/LocalDev.xcconfig with all API URLs
+echo     2. Boot the default iPhone simulator
+echo     3. Open Xcode - press Run Cmd+R to build and install
+echo.
+echo   Networking on the iOS Simulator:
+echo     localhost inside the simulator == your Mac's localhost
+echo     So the default API_BASE_URL=http://localhost:8080 works as-is.
+echo.
+echo   On a physical iPhone (same LAN):
+echo     ./start-local.sh --ios --device-ip ^<your-mac-lan-ip^>
+echo =========================================================
+echo.
 :after_ios_note
 
 REM =========================================================
@@ -474,7 +472,7 @@ IF EXIST "%GRADLE_PROPS%" (
 REM ── Physical device vs emulator ───────────────────────────
 IF "!PHYSICAL_DEVICE!"=="1" (
     echo.
-    echo Physical device mode — API URLs will use !DEVICE_IP!
+    echo Physical device mode - API URLs will use !DEVICE_IP!
     echo Make sure your Android device is connected via USB
     echo   ^(or paired for wireless debugging on the same LAN^)
     echo.
