@@ -199,3 +199,25 @@ keycloak:
     enabled: true
     serviceMonitor:
       enabled: true
+
+  # Secret rotation configuration (used by keycloak-secret-rotation-job.yaml)
+  secretRotation:
+    enabled: true
+  adminUrl: "http://keycloak:8080"
+  adminUsername: "admin"
+  clientId: "aegispay-backend"
+  realm: "aegispay"
+
+# ── Vault ─────────────────────────────────────────────────────────────────────
+vault:
+  addr: "http://vault:8200"
+
+# ── ClickHouse ────────────────────────────────────────────────────────────────
+# On-prem: single shard, single replica (HA disabled — not enough nodes).
+# The HA templates are guarded by .Values.clickhouse.enabled; set to false here
+# and run ClickHouse standalone via the official chart or a separate deployment.
+clickhouse:
+  enabled: false   # Override to true + set ha.enabled once you have ≥4 nodes
+
+# ── Namespace ────────────────────────────────────────────────────────────────
+namespace: "aegispay"

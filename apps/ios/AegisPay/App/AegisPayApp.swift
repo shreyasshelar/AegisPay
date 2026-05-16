@@ -1,4 +1,5 @@
 import SwiftUI
+import StripePaymentSheet
 
 // MARK: — AppDelegate (APNs callbacks)
 
@@ -8,6 +9,11 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
+        // Initialize Stripe with the publishable key before any PaymentSheet usage.
+        // pk_live_* is injected by CI via STRIPE_PUBLISHABLE_KEY in Info.plist.
+        StripeAPI.defaultPublishableKey = AppConfig.stripePublishableKey
+        STPAPIClient.shared.publishableKey = AppConfig.stripePublishableKey
+
         PushNotificationHandler.shared.requestPermissionAndRegister()
         return true
     }
@@ -48,7 +54,15 @@ struct AegisPayApp: App {
                 .environmentObject(authStore)
                 .environmentObject(apiClient)
                 .onOpenURL { url in
-                    authStore.handleRedirectURL(url)
+                    // Handle both OAuth redirect URIs (aegispay://) and
+                    // Universal Links (https://api.aegispay.shreyasshelar.uk/...)
+                    if url.scheme == "aegispay" && url.host != "app" {
+                        // OAuth redirect callback
+                        authStore.handleRedirectURL(url)
+                    } else {
+                        // Deep link (universal link or custom scheme deep link)
+                        DeepLinkRouter.shared.handle(url: url)
+                    }
                 }
         }
     }

@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useAuthGuard } from '@/lib/useAuthGuard'
 import {
   ArrowUpRight,
@@ -74,6 +75,7 @@ interface DashboardClientProps {
 
 export function DashboardClient({ userId }: DashboardClientProps) {
   const blocking = useAuthGuard()
+  const router   = useRouter()
   const { data: account, isLoading: accountLoading } = useAccount(userId)
   const { data: txPage, isLoading: txLoading } = useTransactionList(
     { page: 0, size: 10 },
@@ -195,9 +197,7 @@ export function DashboardClient({ userId }: DashboardClientProps) {
                   key={tx.transactionId}
                   transaction={tx}
                   currentUserId={userId}
-                  onClick={() => {
-                    window.location.href = `/transactions/${tx.transactionId}`
-                  }}
+                  onClick={() => router.push(`/transactions/${tx.transactionId}`)}
                 />
               ))}
             </div>

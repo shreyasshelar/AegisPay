@@ -18,6 +18,11 @@ let package = Package(
             url: "https://github.com/kishikawakatsumi/KeychainAccess.git",
             from: "4.2.2"
         ),
+        // Stripe iOS SDK — PaymentSheet for wallet top-up
+        .package(
+            url: "https://github.com/stripe/stripe-ios-spm.git",
+            from: "23.31.0"
+        ),
     ],
     targets: [
         .target(
@@ -25,6 +30,7 @@ let package = Package(
             dependencies: [
                 .product(name: "AppAuth", package: "AppAuth-iOS"),
                 "KeychainAccess",
+                .product(name: "StripePaymentSheet", package: "stripe-ios-spm"),
             ],
             path: "AegisPay",
             swiftSettings: [

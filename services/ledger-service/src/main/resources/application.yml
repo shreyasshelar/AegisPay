@@ -65,6 +65,9 @@ management:
     tags:
       service: ${spring.application.name}
 
+stripe:
+  secret-key: ${STRIPE_SECRET_KEY:sk_test_placeholder_local_dev}
+
 aegispay:
   ledger:
     balance-lock-expiry-minutes: 30

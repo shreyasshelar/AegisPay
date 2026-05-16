@@ -1,0 +1,186 @@
+{{- if .Values.clickhouse.enabled }}
+# ─────────────────────────────────────────────────────────────────────────────
+# ClickHouse Keeper — 3-node quorum (replaces ZooKeeper)
+#
+# Keeper is the built-in coordination service for ClickHouse Replication
+# (Raft-based, no external ZooKeeper dependency).
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: clickhouse-keeper
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: clickhouse-keeper
+spec:
+  serviceName: clickhouse-keeper-headless
+  replicas: 3
+  selector:
+    matchLabels:
+      app: clickhouse-keeper
+  podManagementPolicy: Parallel
+  template:
+    metadata:
+      labels:
+        app: clickhouse-keeper
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port:   "7000"
+    spec:
+      terminationGracePeriodSeconds: 30
+
+      initContainers:
+        # Generate keeper_config.xml with this pod's server-id from the ordinal
+        - name: keeper-config-gen
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              ORDINAL="${HOSTNAME##*-}"
+              SERVER_ID=$((ORDINAL + 1))
+              NAMESPACE="{{ .Values.namespace }}"
+              cat > /etc/clickhouse-keeper/keeper_config.xml <<EOF
+              <clickhouse>
+                <keeper_server>
+                  <tcp_port>2181</tcp_port>
+                  <server_id>${SERVER_ID}</server_id>
+                  <log_storage_path>/var/lib/clickhouse-keeper/log</log_storage_path>
+                  <snapshot_storage_path>/var/lib/clickhouse-keeper/snapshots</snapshot_storage_path>
+                  <coordination_settings>
+                    <operation_timeout_ms>10000</operation_timeout_ms>
+                    <session_timeout_ms>30000</session_timeout_ms>
+                    <raft_logs_level>information</raft_logs_level>
+                  </coordination_settings>
+                  <raft_configuration>
+                    <server>
+                      <id>1</id>
+                      <hostname>clickhouse-keeper-0.clickhouse-keeper-headless.${NAMESPACE}.svc.cluster.local</hostname>
+                      <port>9444</port>
+                    </server>
+                    <server>
+                      <id>2</id>
+                      <hostname>clickhouse-keeper-1.clickhouse-keeper-headless.${NAMESPACE}.svc.cluster.local</hostname>
+                      <port>9444</port>
+                    </server>
+                    <server>
+                      <id>3</id>
+                      <hostname>clickhouse-keeper-2.clickhouse-keeper-headless.${NAMESPACE}.svc.cluster.local</hostname>
+                      <port>9444</port>
+                    </server>
+                  </raft_configuration>
+                  <prometheus>
+                    <endpoint>/metrics</endpoint>
+                    <port>7000</port>
+                    <metrics>true</metrics>
+                    <events>true</events>
+                    <asynchronous_metrics>true</asynchronous_metrics>
+                  </prometheus>
+                </keeper_server>
+                <logger>
+                  <level>information</level>
+                  <console>1</console>
+                </logger>
+              </clickhouse>
+              EOF
+          env:
+            - name: HOSTNAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          volumeMounts:
+            - name: keeper-config-vol
+              mountPath: /etc/clickhouse-keeper
+
+      containers:
+        - name: clickhouse-keeper
+          image: clickhouse/clickhouse-keeper:{{ .Values.clickhouse.keeperVersion | default "24.3" }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: client
+              containerPort: 2181
+            - name: raft
+              containerPort: 9444
+            - name: metrics
+              containerPort: 7000
+          volumeMounts:
+            - name: keeper-config-vol
+              mountPath: /etc/clickhouse-keeper
+            - name: keeper-data
+              mountPath: /var/lib/clickhouse-keeper
+          resources:
+            requests:
+              cpu:    {{ .Values.clickhouse.keeper.resources.requests.cpu    | default "50m" }}
+              memory: {{ .Values.clickhouse.keeper.resources.requests.memory | default "128Mi" }}
+            limits:
+              cpu:    {{ .Values.clickhouse.keeper.resources.limits.cpu    | default "200m" }}
+              memory: {{ .Values.clickhouse.keeper.resources.limits.memory | default "256Mi" }}
+          livenessProbe:
+            exec:
+              command: ["clickhouse-keeper-client", "-h", "127.0.0.1", "-p", "2181", "-q", "ruok"]
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          readinessProbe:
+            exec:
+              command: ["clickhouse-keeper-client", "-h", "127.0.0.1", "-p", "2181", "-q", "mntr"]
+            initialDelaySeconds: 10
+            periodSeconds: 5
+
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: clickhouse-keeper
+
+      volumes:
+        - name: keeper-config-vol
+          emptyDir: {}
+
+  volumeClaimTemplates:
+    - metadata:
+        name: keeper-data
+      spec:
+        accessModes: [ReadWriteOnce]
+        storageClassName: {{ .Values.clickhouse.storageClass | default "local-path" }}
+        resources:
+          requests:
+            storage: {{ .Values.clickhouse.keeper.storage | default "5Gi" }}
+---
+# Headless service for Keeper Raft peer discovery
+apiVersion: v1
+kind: Service
+metadata:
+  name: clickhouse-keeper-headless
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: clickhouse-keeper
+spec:
+  clusterIP: None
+  selector:
+    app: clickhouse-keeper
+  ports:
+    - name: client
+      port: 2181
+    - name: raft
+      port: 9444
+    - name: metrics
+      port: 7000
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: clickhouse-keeper
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: clickhouse-keeper
+spec:
+  selector:
+    matchLabels:
+      app: clickhouse-keeper
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 30s
+{{- end }}

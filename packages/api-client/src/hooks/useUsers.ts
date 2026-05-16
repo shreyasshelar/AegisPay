@@ -1,10 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useApiClient } from './context'
 import type { KycUploadRequest } from '@aegispay/shared-types'
+import type { UserListParams } from '../client/users'
 
 export const userKeys = {
-  me:     () => ['user', 'me'] as const,
-  byId:   (id: string) => ['user', id] as const,
+  me:     ()                     => ['user', 'me']         as const,
+  byId:   (id: string)           => ['user', id]           as const,
+  list:   (p: UserListParams)    => ['users', 'list', p]   as const,
 }
 
 export function useMe() {
@@ -15,12 +17,23 @@ export function useMe() {
   })
 }
 
-export function useUser(id: string) {
+export function useUser(id: string, options?: { enabled?: boolean }) {
   const { users } = useApiClient()
   return useQuery({
     queryKey: userKeys.byId(id),
     queryFn:  () => users.getById(id),
-    enabled:  !!id,
+    enabled:  options?.enabled !== undefined ? options.enabled : !!id,
+  })
+}
+
+/** Back-office: paginated user list with optional KYC status filter. */
+export function useUserList(params: UserListParams = {}) {
+  const { users } = useApiClient()
+  return useQuery({
+    queryKey:        userKeys.list(params),
+    queryFn:         () => users.list(params),
+    placeholderData: (prev) => prev,
+    staleTime:       30_000,
   })
 }
 

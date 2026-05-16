@@ -29,6 +29,47 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!-- Custom scheme deep links: aegispay://transactions/... etc. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="aegispay" android:host="app" />
+            </intent-filter>
+
+            <!--
+                Android App Links (HTTPS deep links) — requires assetlinks.json hosted at:
+                https://api.aegispay.shreyasshelar.uk/.well-known/assetlinks.json
+                Replace TEAMID with the actual SHA-256 fingerprint in assetlinks.json.
+            -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="api.aegispay.shreyasshelar.uk"
+                    android:pathPrefix="/transactions" />
+            </intent-filter>
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="api.aegispay.shreyasshelar.uk"
+                    android:pathPattern="/send" />
+            </intent-filter>
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="api.aegispay.shreyasshelar.uk"
+                    android:pathPattern="/wallet" />
+            </intent-filter>
         </activity>
 
         <!-- AppAuth redirect receiver — custom scheme aegispay-android:// -->

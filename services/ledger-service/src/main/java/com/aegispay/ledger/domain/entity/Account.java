@@ -27,6 +27,11 @@ public class Account {
     @Column(nullable = false)
     private UUID userId;
 
+    /** Tenant scope — set from UserRegisteredEvent; used by RLS policy. */
+    @Column(nullable = false, length = 100)
+    @Builder.Default
+    private String tenantId = "default";
+
     @Column(nullable = false, length = 3)
     private String currency;
 

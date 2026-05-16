@@ -1,0 +1,89 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# AegisPay Android — Happy-path Maestro flow
+#
+# Flow: login → dashboard → send ₹100 → verify COMPLETED
+#
+# Run:
+#   maestro test tests/e2e/maestro/happy-path.yaml
+#
+# Env vars (override via --env):
+#   E2E_PAYER_EMAIL    — test payer email
+#   E2E_PAYER_PASSWORD — test payer password
+#   E2E_PAYEE_NAME     — display name of the payee
+# ─────────────────────────────────────────────────────────────────────────────
+appId: com.aegispay.android
+---
+- launchApp:
+    clearState: true
+
+# ── Login ──────────────────────────────────────────────────────────────────
+- assertVisible:
+    id: "login-screen"
+
+- tapOn:
+    id: "login-email-input"
+- inputText: "${E2E_PAYER_EMAIL:-loadtest_payer@aegispay.io}"
+
+- tapOn:
+    id: "login-password-input"
+- inputText: "${E2E_PAYER_PASSWORD:-LoadTest@123}"
+
+- tapOn:
+    id: "login-submit-button"
+
+# ── Dashboard ──────────────────────────────────────────────────────────────
+- waitForAnimationToEnd
+- assertVisible:
+    id: "dashboard-screen"
+
+- assertVisible:
+    id: "balance-amount"
+
+# ── Send Money ─────────────────────────────────────────────────────────────
+- tapOn:
+    id: "nav-send-money"
+
+- assertVisible:
+    id: "send-money-screen"
+
+- tapOn:
+    id: "payee-search-input"
+- inputText: "${E2E_PAYEE_NAME:-Load Test Payee}"
+
+- waitForAnimationToEnd
+- tapOn:
+    text: "${E2E_PAYEE_NAME:-Load Test Payee}"
+
+- tapOn:
+    id: "amount-input"
+- clearText
+- inputText: "100"
+
+- tapOn:
+    id: "send-money-submit-button"
+
+# ── Verify success ─────────────────────────────────────────────────────────
+- waitForAnimationToEnd
+- assertVisible:
+    id: "payment-success-view"
+    timeout: 15000
+
+# ── Transaction history ────────────────────────────────────────────────────
+- tapOn:
+    id: "nav-transactions"
+
+- assertVisible:
+    id: "transaction-list-screen"
+
+- waitForAnimationToEnd
+- assertVisible:
+    id: "transaction-row-0"
+
+- tapOn:
+    id: "transaction-row-0"
+
+- assertVisible:
+    id: "transaction-detail-screen"
+
+- assertVisible:
+    text: "Completed"

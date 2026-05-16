@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useApiClient } from './context'
 
 export const accountKeys = {
@@ -36,4 +36,39 @@ export function useAccountsByUser(userId: string) {
     staleTime: 15_000,
     enabled:  !!userId,
   })
+}
+
+/**
+ * Wallet top-up mutation.
+ *
+ * Step 1 — `createIntent(amount, currency)`: creates a Stripe PaymentIntent server-side
+ *   and returns `{ paymentIntentId, clientSecret }`.
+ * Step 2 — `confirm(paymentIntentId)`: backend verifies + credits the account.
+ *
+ * Usage:
+ * ```tsx
+ * const topUp = useTopUp()
+ * const intent = await topUp.createIntent.mutateAsync({ amount: 1000, currency: 'INR' })
+ * // ... stripe.confirmCardPayment(intent.clientSecret) ...
+ * await topUp.confirm.mutateAsync(intent.paymentIntentId)
+ * ```
+ */
+export function useTopUp() {
+  const { ledger } = useApiClient()
+  const qc = useQueryClient()
+
+  const createIntent = useMutation({
+    mutationFn: ({ amount, currency }: { amount: number; currency: string }) =>
+      ledger.createTopUpIntent(amount, currency),
+  })
+
+  const confirm = useMutation({
+    mutationFn: (paymentIntentId: string) => ledger.confirmTopUp(paymentIntentId),
+    onSuccess: () => {
+      // Invalidate account balance so the dashboard reflects the new funds
+      qc.invalidateQueries({ queryKey: accountKeys.me() })
+    },
+  })
+
+  return { createIntent, confirm }
 }

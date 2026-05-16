@@ -1,6 +1,6 @@
-name: CD — Deploy to On-Prem (dev branch)
+name: CD — Deploy to On-Prem (on-prem branch)
 
-# Triggers when CI passes on the dev branch.
+# Triggers when CI passes on the on-prem branch.
 # Builds Docker images → pushes to GHCR → patches image tags in values-onprem.yaml
 # → commits → ArgoCD detects the change and rolls out the new version.
 
@@ -8,7 +8,7 @@ on:
   workflow_run:
     workflows: ["CI — Build & Test"]
     types: [completed]
-    branches: [dev]
+    branches: [on-prem]
 
 env:
   REGISTRY: ghcr.io
@@ -43,7 +43,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: dev
+          ref: on-prem
 
       - name: Set up Java 21
         uses: actions/setup-java@v4
@@ -75,8 +75,8 @@ jobs:
           context: services/${{ matrix.service }}
           push: true
           tags: |
-            ${{ env.IMAGE_PREFIX }}/${{ matrix.service }}:dev-latest
-            ${{ env.IMAGE_PREFIX }}/${{ matrix.service }}:dev-${{ github.event.workflow_run.head_sha }}
+            ${{ env.IMAGE_PREFIX }}/${{ matrix.service }}:onprem-latest
+            ${{ env.IMAGE_PREFIX }}/${{ matrix.service }}:onprem-${{ github.event.workflow_run.head_sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
@@ -95,7 +95,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: dev
+          ref: on-prem
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -110,8 +110,8 @@ jobs:
           context: apps/web
           push: true
           tags: |
-            ${{ env.IMAGE_PREFIX }}/web:dev-latest
-            ${{ env.IMAGE_PREFIX }}/web:dev-${{ github.event.workflow_run.head_sha }}
+            ${{ env.IMAGE_PREFIX }}/web:onprem-latest
+            ${{ env.IMAGE_PREFIX }}/web:onprem-${{ github.event.workflow_run.head_sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -127,7 +127,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: dev
+          ref: on-prem
           token: ${{ secrets.GIT_DEPLOY_TOKEN }}
           fetch-depth: 0
 
@@ -156,7 +156,7 @@ jobs:
           for i in "${!SERVICES[@]}"; do
             svc="${SERVICES[$i]}"
             img="${IMAGES[$i]}"
-            yq e ".services.${svc}.image.tag = \"dev-${SHA}\"" -i "${{ env.HELM_VALUES_FILE }}"
+            yq e ".services.${svc}.image.tag = \"onprem-${SHA}\"" -i "${{ env.HELM_VALUES_FILE }}"
           done
 
       - name: Commit and push
@@ -166,7 +166,7 @@ jobs:
           git add "${{ env.HELM_VALUES_FILE }}"
           git diff --staged --quiet && echo "No tag changes" && exit 0
           git commit -m "chore(cd-onprem): deploy sha=${SHA:0:12} to on-prem"
-          git push origin dev
+          git push origin on-prem
 
-      # ArgoCD watches the dev branch and auto-syncs when values-onprem.yaml changes.
+      # ArgoCD watches main and auto-syncs when values-onprem.yaml changes.
       # The app-onprem.yaml Application has automated syncPolicy, so no manual trigger needed.

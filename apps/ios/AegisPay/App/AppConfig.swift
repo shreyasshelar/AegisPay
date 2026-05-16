@@ -34,6 +34,12 @@ enum AppConfig {
         Bundle.main.object(forInfoDictionaryKey: "WS_BASE_URL") as? String
         ?? "ws://localhost:8090"
 
+    // ── Stripe ────────────────────────────────────────────────────────────────
+    /// Stripe publishable key — pk_test_* for development, pk_live_* injected by CI via Info.plist.
+    static let stripePublishableKey: String =
+        Bundle.main.object(forInfoDictionaryKey: "STRIPE_PUBLISHABLE_KEY") as? String
+        ?? "pk_test_placeholder_local_dev"
+
     // ── Keychain ──────────────────────────────────────────────────────────────
     static let keychainService = "io.aegispay.app"
 

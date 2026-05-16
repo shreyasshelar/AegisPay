@@ -1,0 +1,19 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "TEAMID.io.aegispay.app",
+        "paths": [
+          "/transactions/*",
+          "/send",
+          "/profile",
+          "/wallet"
+        ]
+      }
+    ]
+  },
+  "webcredentials": {
+    "apps": ["TEAMID.io.aegispay.app"]
+  }
+}
