@@ -242,6 +242,51 @@ public class PaymentSagaOrchestrator {
         publishTransactionFailed(saga, failureCode, saga.getFailureReason());
     }
 
+    /**
+     * Called by {@link com.aegispay.orchestrator.controller.StripeWebhookController}
+     * when Stripe Radar issues a {@code radar.early_fraud_warning.created} webhook.
+     *
+     * <p>Strategy: publish a risk metadata event so the Risk Engine can escalate the
+     * transaction to MANUAL_REVIEW (or auto-reject if configured). The saga itself is
+     * NOT failed here — the risk-engine decision drives the next step.
+     */
+    @Transactional
+    public void onStripeRadarEarlyFraudWarning(UUID transactionId, String paymentIntentId,
+                                               String fraudType, Boolean actionable) {
+        Saga saga = sagaRepository.findByTransactionIdForUpdate(transactionId).orElse(null);
+        if (saga == null) {
+            log.warn("onStripeRadarEarlyFraudWarning: no saga for txn={}", transactionId);
+            return;
+        }
+
+        log.warn("Stripe Radar EFW: txn={} pi={} fraudType={} actionable={}",
+                transactionId, paymentIntentId, fraudType, actionable);
+
+        // Publish an outbox event so the Risk Engine receives the EFW signal and can
+        // escalate the transaction to MANUAL_REVIEW. If risk engine is configured with
+        // autoRejectOnEfw=true (via rule_config), it will auto-reject.
+        try {
+            String payload = objectMapper.writeValueAsString(java.util.Map.of(
+                    "transactionId",   transactionId.toString(),
+                    "paymentIntentId", paymentIntentId,
+                    "fraudType",       fraudType != null ? fraudType : "unknown",
+                    "actionable",      actionable != null && actionable,
+                    "source",          "stripe_radar_efw"
+            ));
+            outboxRepository.save(OutboxEntry.builder()
+                    .aggregateId(transactionId.toString())
+                    .aggregateType("Transaction")
+                    .eventType("STRIPE_RADAR_EFW")
+                    .topic("risk.stripe-radar-efw")
+                    .messageKey(transactionId.toString())
+                    .payload(payload)
+                    .status("PENDING")
+                    .build());
+        } catch (JsonProcessingException e) {
+            log.error("Failed to serialize EFW outbox event for txn={}: {}", transactionId, e.getMessage(), e);
+        }
+    }
+
     // ---- helpers ----
 
     private Saga requireSagaForUpdate(UUID transactionId) {

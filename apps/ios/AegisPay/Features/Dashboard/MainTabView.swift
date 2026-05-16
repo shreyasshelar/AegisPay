@@ -36,18 +36,24 @@ struct MainTabView: View {
                 }
                 .tag(2)
 
+            WalletView()
+                .tabItem {
+                    Label("Wallet", systemImage: selectedTab == 3 ? "wallet.pass.fill" : "wallet.pass")
+                }
+                .tag(3)
+
             NotificationsView()
                 .tabItem {
-                    Label("Alerts", systemImage: selectedTab == 3 ? "bell.fill" : "bell")
+                    Label("Alerts", systemImage: selectedTab == 4 ? "bell.fill" : "bell")
                 }
                 .badge(unreadCount > 0 ? unreadCount : 0)
-                .tag(3)
+                .tag(4)
 
             ProfileView()
                 .tabItem {
-                    Label("Profile", systemImage: selectedTab == 4 ? "person.fill" : "person")
+                    Label("Profile", systemImage: selectedTab == 5 ? "person.fill" : "person")
                 }
-                .tag(4)
+                .tag(5)
 
             // ── Back-office tab (role-gated) ───────────────────────────────────
             if isBackOfficeUser {
@@ -55,22 +61,22 @@ struct MainTabView: View {
                     .tabItem {
                         Label(
                             "Admin",
-                            systemImage: selectedTab == 5
+                            systemImage: selectedTab == 6
                                 ? "shield.lefthalf.filled"
                                 : "shield.lefthalf.fill"
                         )
                     }
-                    .tag(5)
+                    .tag(6)
             }
         }
         .tint(Color.aegisPrimary)
         // Clear badge when Notifications tab selected
         .onChange(of: selectedTab) { _, newTab in
-            if newTab == 3 { unreadCount = 0 }
+            if newTab == 4 { unreadCount = 0 }   // tab 4 = Alerts
         }
         // Listen for incoming notifications via NotificationCenter (from PushNotificationHandler)
         .onReceive(NotificationCenter.default.publisher(for: .aegisNewNotification)) { _ in
-            if selectedTab != 3 { unreadCount += 1 }
+            if selectedTab != 4 { unreadCount += 1 }
         }
     }
 }

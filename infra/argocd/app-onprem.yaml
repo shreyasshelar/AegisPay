@@ -16,8 +16,8 @@ spec:
 
   source:
     repoURL: https://github.com/shreyasshelar/AegisPay.git
-    # Watches the dev branch — on-prem is the dev environment
-    targetRevision: dev
+    # Watches on-prem branch — isolated from prod main
+    targetRevision: on-prem
     path: infra/helm/aegispay
     helm:
       valueFiles:

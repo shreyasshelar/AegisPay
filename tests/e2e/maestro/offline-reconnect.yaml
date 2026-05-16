@@ -1,0 +1,81 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# AegisPay Android — Offline queue + reconnect Maestro flow
+#
+# Flow:
+#   1. Login
+#   2. Enable airplane mode (adb script)
+#   3. Initiate ₹200 payment → offline banner visible
+#   4. Disable airplane mode
+#   5. WorkManager sync fires → payment completes
+#   6. Verify in transaction history
+#
+# Run:
+#   maestro test tests/e2e/maestro/offline-reconnect.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+appId: com.aegispay.android
+---
+- launchApp:
+    clearState: true
+
+# ── Login ──────────────────────────────────────────────────────────────────
+- tapOn:
+    id: "login-email-input"
+- inputText: "${E2E_PAYER_EMAIL:-loadtest_payer@aegispay.io}"
+- tapOn:
+    id: "login-password-input"
+- inputText: "${E2E_PAYER_PASSWORD:-LoadTest@123}"
+- tapOn:
+    id: "login-submit-button"
+- waitForAnimationToEnd
+- assertVisible:
+    id: "dashboard-screen"
+
+# ── Enable airplane mode ───────────────────────────────────────────────────
+- runScript:
+    file: ../scripts/android-airplane-on.js
+
+# ── Initiate payment while offline ────────────────────────────────────────
+- tapOn:
+    id: "nav-send-money"
+- tapOn:
+    id: "payee-search-input"
+- inputText: "${E2E_PAYEE_NAME:-Load Test Payee}"
+- waitForAnimationToEnd
+- tapOn:
+    text: "${E2E_PAYEE_NAME:-Load Test Payee}"
+- tapOn:
+    id: "amount-input"
+- clearText
+- inputText: "200"
+- tapOn:
+    id: "send-money-submit-button"
+
+# Offline queue banner must appear (NOT an error)
+- assertVisible:
+    id: "payment-queued-offline-banner"
+    timeout: 5000
+
+# ── Restore network ────────────────────────────────────────────────────────
+- runScript:
+    file: ../scripts/android-airplane-off.js
+
+# WorkManager fires when network is restored
+- waitForAnimationToEnd
+
+# ── Verify in transaction history ──────────────────────────────────────────
+- tapOn:
+    id: "nav-transactions"
+- assertVisible:
+    id: "transaction-list-screen"
+
+# Poll — the sync worker can take a few seconds
+- extendedWaitUntil:
+    visible:
+      id: "transaction-row-0-amount"
+    timeout: 30000
+
+- tapOn:
+    id: "transaction-row-0"
+- assertVisible:
+    text: "Completed"
+    timeout: 5000

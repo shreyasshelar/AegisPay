@@ -6,9 +6,6 @@ metadata:
   labels:
     environment: prod
     app.kubernetes.io/part-of: aegispay
-  annotations:
-    # Require explicit sync annotation to prevent accidental prod deploys
-    argocd.argoproj.io/sync-wave: "0"
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
@@ -16,9 +13,7 @@ spec:
 
   source:
     repoURL: https://github.com/shreyasshelar/AegisPay.git
-    # Prod tracks release tags only — never auto-deploys from main.
-    # Update this value manually via cd-prod.yml when promoting a release.
-    targetRevision: v0.0.0   # placeholder — overwritten by cd-prod.yml on every release
+    targetRevision: main
     path: infra/helm/aegispay
     helm:
       valueFiles:
@@ -30,18 +25,21 @@ spec:
     namespace: aegispay-prod
 
   syncPolicy:
-    # Production: fully manual — operator must click Sync in ArgoCD UI
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
     syncOptions:
       - CreateNamespace=true
       - PrunePropagationPolicy=foreground
       - PruneLast=true
-      - ApplyOutOfSyncOnly=true
+      - ServerSideApply=true
     retry:
-      limit: 2
+      limit: 3
       backoff:
-        duration: 60s
+        duration: 30s
         factor: 2
-        maxDuration: 10m
+        maxDuration: 5m
 
   revisionHistoryLimit: 20
 

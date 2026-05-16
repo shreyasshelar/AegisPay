@@ -16,6 +16,7 @@ import {
   LogOut,
   ChevronRight,
   Users2,
+  Wallet,
 } from 'lucide-react'
 import { useTransactionSocket } from '@aegispay/api-client'
 import { useNotificationStore } from '@/lib/useNotificationStore'
@@ -33,6 +34,7 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { label: 'Dashboard',     href: '/dashboard',              icon: LayoutDashboard },
   { label: 'Send Money',    href: '/send',         icon: ArrowUpRight    },
+  { label: 'Wallet',        href: '/wallet',       icon: Wallet          },
   { label: 'Transactions',  href: '/transactions', icon: ScrollText      },
   { label: 'Notifications', href: '/notifications',icon: Bell            },
   { label: 'Profile / KYC', href: '/profile',     icon: UserCircle      },

@@ -9,4 +9,9 @@ final class AccountService {
     func getAccount(userId: String) async throws -> Account {
         try await api.get(path: "/api/v1/ledger/accounts/\(userId)")
     }
+
+    /// Returns all accounts for the authenticated user (JWT sub).
+    func getMyAccounts() async throws -> [Account] {
+        try await api.get(path: "/api/v1/ledger/accounts/me")
+    }
 }

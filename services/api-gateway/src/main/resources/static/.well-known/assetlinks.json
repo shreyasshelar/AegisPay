@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.aegispay.android",
+      "sha256_cert_fingerprints": [
+        "TODO:REPLACE_WITH_RELEASE_SHA256_CERT_FINGERPRINT"
+      ]
+    }
+  }
+]

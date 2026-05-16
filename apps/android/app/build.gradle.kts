@@ -30,6 +30,9 @@ android {
         // AppAuth redirect scheme — must match intent-filter in AndroidManifest
         buildConfigField("String", "OAUTH_REDIRECT_URI",
             "\"com.aegispay.android://oauth/callback\"")
+        // Stripe publishable key — pk_test_* for development, pk_live_* injected by CI
+        buildConfigField("String", "STRIPE_PUBLISHABLE_KEY",
+            "\"${project.findProperty("STRIPE_PUBLISHABLE_KEY") ?: "pk_test_placeholder_local_dev"}\"")
 
         manifestPlaceholders["appAuthRedirectScheme"] = "com.aegispay.android"
 
@@ -123,6 +126,14 @@ dependencies {
     // Firebase / FCM
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.messaging)
+
+    // WorkManager + Hilt integration for offline queue
+    implementation(libs.work.runtime.ktx)
+    implementation(libs.hilt.work)
+    ksp(libs.hilt.work.compiler)
+
+    // Stripe Android SDK — PaymentSheet for wallet top-up
+    implementation(libs.stripe.android)
 
     // Coroutines
     implementation(libs.coroutines.android)

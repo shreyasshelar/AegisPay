@@ -83,12 +83,17 @@ export function StepStatus() {
       !resolveError.isPending
     ) {
       resolveError.mutate({
-        errorCode:    tx.failureReason.split(':')[0].trim(),
+        // Prefer machine-readable failureCode; fall back to last segment after ':'
+        errorCode:    tx.failureCode ??
+                      (tx.failureReason.includes(':')
+                        ? tx.failureReason.split(':').pop()!.trim()
+                        : tx.failureReason),
         errorMessage: tx.failureReason,
       })
     }
+  // Only re-run when the transaction first loads or status changes
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tx?.status])
+  }, [tx?.transactionId, tx?.status])
 
   if (!transactionId || isLoading) {
     return (
