@@ -1,0 +1,119 @@
+{{- if .Values.clickhouse.enabled }}
+# ─────────────────────────────────────────────────────────────────────────────
+# ClickHouse cluster configuration — 2 shards × 2 replicas
+#
+# config.xml   — cluster topology & keeper connection
+# users.xml    — application user (read from secret in init container)
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: clickhouse-config
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: clickhouse
+    component: server
+data:
+  config.xml: |
+    <clickhouse>
+      <!-- ── Keeper (ZooKeeper-compatible) ────────────────────────────── -->
+      <zookeeper>
+        {{- range $i := until 3 }}
+        <node>
+          <host>clickhouse-keeper-{{ $i }}.clickhouse-keeper-headless.{{ $.Values.namespace }}.svc.cluster.local</host>
+          <port>2181</port>
+        </node>
+        {{- end }}
+      </zookeeper>
+
+      <!-- ── Cluster topology ──────────────────────────────────────────── -->
+      <remote_servers>
+        <aegispay_cluster>
+          {{- range $shardIdx := until 2 }}
+          <shard>
+            <internal_replication>true</internal_replication>
+            {{- range $repIdx := until 2 }}
+            <replica>
+              <host>clickhouse-shard-{{ $shardIdx }}-{{ $repIdx }}.clickhouse-shard-{{ $shardIdx }}-headless.{{ $.Values.namespace }}.svc.cluster.local</host>
+              <port>9000</port>
+              <user>aegispay_app</user>
+              <password_env_variable>CLICKHOUSE_PASSWORD</password_env_variable>
+            </replica>
+            {{- end }}
+          </shard>
+          {{- end }}
+        </aegispay_cluster>
+      </remote_servers>
+
+      <!-- ── Distributed DDL ───────────────────────────────────────────── -->
+      <distributed_ddl>
+        <path>/clickhouse/task_queue/ddl</path>
+      </distributed_ddl>
+
+      <!-- ── Replication ───────────────────────────────────────────────── -->
+      <merge_tree>
+        <replicated_deduplication_window>100</replicated_deduplication_window>
+      </merge_tree>
+
+      <!-- ── Storage ───────────────────────────────────────────────────── -->
+      <storage_configuration>
+        <disks>
+          <default>
+            <path>/var/lib/clickhouse/</path>
+          </default>
+        </disks>
+        <policies>
+          <default>
+            <volumes>
+              <data>
+                <disk>default</disk>
+              </data>
+            </volumes>
+          </default>
+        </policies>
+      </storage_configuration>
+
+      <!-- ── Networking ────────────────────────────────────────────────── -->
+      <listen_host>0.0.0.0</listen_host>
+      <http_port>8123</http_port>
+      <tcp_port>9000</tcp_port>
+      <interserver_http_port>9009</interserver_http_port>
+
+      <!-- ── Logging ───────────────────────────────────────────────────── -->
+      <logger>
+        <level>information</level>
+        <console>1</console>
+      </logger>
+
+      <!-- ── Query limits ──────────────────────────────────────────────── -->
+      <max_connections>500</max_connections>
+      <max_concurrent_queries>100</max_concurrent_queries>
+      <max_server_memory_usage_to_ram_ratio>0.6</max_server_memory_usage_to_ram_ratio>
+    </clickhouse>
+
+  users.xml: |
+    <clickhouse>
+      <users>
+        <!-- Application user — password injected via env var at pod start -->
+        <aegispay_app>
+          <password_env_variable>CLICKHOUSE_PASSWORD</password_env_variable>
+          <networks>
+            <ip>::/0</ip>
+          </networks>
+          <profile>default</profile>
+          <quota>default</quota>
+          <access_management>0</access_management>
+        </aegispay_app>
+        <!-- Admin user (default) — disable remote access, keep localhost only -->
+        <default>
+          <password></password>
+          <networks>
+            <ip>127.0.0.1</ip>
+            <ip>::1</ip>
+          </networks>
+          <profile>default</profile>
+          <quota>default</quota>
+        </default>
+      </users>
+    </clickhouse>
+{{- end }}

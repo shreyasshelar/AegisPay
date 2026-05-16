@@ -24,8 +24,13 @@ public class LedgerEntry {
     @Column(nullable = false)
     private UUID accountId;
 
-    @Column(nullable = false)
+    /** Null for top-up entries that are not tied to a P2P transaction. */
+    @Column(nullable = true)
     private UUID transactionId;
+
+    /** Stripe PaymentIntent ID — used for top-up idempotency. Null for P2P entries. */
+    @Column(nullable = true, unique = true, length = 100)
+    private String idempotencyKey;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)

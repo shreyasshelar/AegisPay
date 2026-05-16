@@ -7,6 +7,7 @@ struct RootView: View {
     @EnvironmentObject var authStore: AuthStore
 
     @StateObject private var biometricService = BiometricAuthService()
+    @StateObject private var deepLinkRouter   = DeepLinkRouter.shared
 
     /// `true` when the app requires re-authentication before allowing access.
     @State private var isLocked = false
@@ -25,6 +26,7 @@ struct RootView: View {
 
             case .authenticated:
                 MainTabView()
+                    .environmentObject(deepLinkRouter)
                     .overlay {
                         if isLocked {
                             BiometricLockView(

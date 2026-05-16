@@ -1,4 +1,3 @@
-check grafana or other for dashboard
 
 for local db init like n ClickHouseSink (5s flush), 4 tables + 3 materialized views, Helm init-job creates schema on deploy
 
@@ -18,3 +17,27 @@ do live money transaction in prod main branch last only last
 
 using fix protocol for streaming live exchange rates in prod main branch only
 
+just keep 2 prod and on prem how is now ci cd and all maintained now after purning to two
+
+publish android and ios free , android apk in g drive and free without developer acc for ios 
+Publish Android APK (Free, No Play Store)
+Build release APK → ./gradlew assembleRelease
+Sign it → Android Studio → Build → Generate Signed APK
+Upload to Google Drive → share link (anyone with link)
+Users: Settings → Install unknown apps → allow browser → open Drive link → download → install
+⚠️ Each update = re-upload + reshare link manually
+
+iOS Free (No Developer Account)
+Option A — AltStore (easiest, no jailbreak)
+User installs AltStore on their iPhone via Mac/PC
+You share the .ipa file → user sideloads via AltStore
+Limit: 3 apps max, re-sign every 7 days (free Apple ID limit)
+Option B — Sideloadly — same 7-day limit, slightly easier install
+Option C — TestFlight — needs $99/yr developer account (not free)
+For real distribution iOS requires $99/yr. No way around it without jailbreak.
+
+Stripe SDK integration note: Both Android and iOS have a clearly marked TODO comment where PaymentSheet should be invoked. Once the stripe-android / stripe-ios pods are added, replace the TODO with PaymentSheet.present(clientSecret) and on completion call viewModel.confirmTopUp(paymentIntentId).
+
+for multitenant how will be the records in db how will we bifucate users records etc 
+
+fix test cases at last

@@ -33,6 +33,7 @@ fun DashboardScreen(
     onNavigateToNotifications: () -> Unit,
     onNavigateToProfile:       () -> Unit,
     onNavigateToBackOffice:    () -> Unit = {},
+    onNavigateToWallet:        () -> Unit = {},
 ) {
     val uiState       by viewModel.uiState.collectAsState()
     val badgeCount    by viewModel.badgeCount.collectAsState()
@@ -152,9 +153,9 @@ fun DashboardScreen(
                         modifier = Modifier.weight(1f),
                     )
                     QuickAction(
-                        icon    = Icons.Default.Analytics,
-                        label   = "Analytics",
-                        onClick = { /* Phase F2 */ },
+                        icon    = Icons.Default.AddCard,
+                        label   = "Add Money",
+                        onClick = onNavigateToWallet,
                         modifier = Modifier.weight(1f),
                     )
                 }

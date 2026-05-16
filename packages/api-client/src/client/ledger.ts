@@ -2,6 +2,24 @@ import type { AegisApiClient } from './base'
 import { AccountSchema, type Account, type LedgerEntry } from '@aegispay/shared-types'
 import { z } from 'zod'
 
+// ── Wallet top-up ─────────────────────────────────────────────────────────────
+
+export const TopUpIntentSchema = z.object({
+  paymentIntentId: z.string(),
+  clientSecret:    z.string(),
+  amount:          z.number(),
+  currency:        z.string(),
+})
+export type TopUpIntent = z.infer<typeof TopUpIntentSchema>
+
+export const TopUpResultSchema = z.object({
+  status:      z.enum(['SUCCEEDED', 'PENDING', 'FAILED']),
+  referenceId: z.string(),
+  amount:      z.number(),
+  currency:    z.string(),
+})
+export type TopUpResult = z.infer<typeof TopUpResultSchema>
+
 export class LedgerClient {
   constructor(private readonly client: AegisApiClient) {}
 
@@ -30,5 +48,30 @@ export class LedgerClient {
       params: { transactionId },
     })
     return z.array(z.unknown()).parse(data) as LedgerEntry[]
+  }
+
+  /**
+   * Step 1 of the wallet top-up flow.
+   * Creates a Stripe PaymentIntent server-side and returns the client_secret
+   * so the frontend can confirm with Stripe.js / Stripe Elements.
+   */
+  async createTopUpIntent(amount: number, currency: string): Promise<TopUpIntent> {
+    const data = await this.client.post<unknown>('/api/v1/ledger/topup/intent', {
+      amount,
+      currency,
+    })
+    return TopUpIntentSchema.parse(data)
+  }
+
+  /**
+   * Step 2 of the wallet top-up flow.
+   * Called after the Stripe payment is confirmed client-side.
+   * The backend verifies the PaymentIntent and credits the account.
+   */
+  async confirmTopUp(paymentIntentId: string): Promise<TopUpResult> {
+    const data = await this.client.post<unknown>('/api/v1/ledger/topup/confirm', {
+      paymentIntentId,
+    })
+    return TopUpResultSchema.parse(data)
   }
 }
