@@ -122,6 +122,18 @@ IF %ERRORLEVEL% NEQ 0 (
     pause
     exit /b 1
 )
+REM Verify Java 21+
+for /f "tokens=3" %%v in ('java -version 2^>^&1 ^| findstr /i "version"') do (
+    set JAVA_VER=%%v
+)
+set JAVA_VER=!JAVA_VER:"=!
+for /f "delims=." %%m in ("!JAVA_VER!") do set JAVA_MAJOR=%%m
+IF !JAVA_MAJOR! LSS 21 (
+    echo ERROR: Java 21 required but found version !JAVA_VER!
+    echo        Install Temurin 21: https://adoptium.net
+    pause
+    exit /b 1
+)
 
 REM =========================================================
 REM ENVIRONMENT VARIABLES
@@ -161,8 +173,8 @@ for %%p in (
 5433 6379 27017 9094 8180 8123 3100 8090
 8080 8081 8082 8083 8084 8085 8086 8087 8089 8091 3000
 ) do (
-    for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":%%p " 2^>nul') do (
-        taskkill /PID %%a /F >nul 2>&1
+    for /f "tokens=5" %%a in ('netstat -ano ^| findstr /r ":%%p[ \t]" 2^>nul') do (
+        if NOT "%%a"=="" taskkill /PID %%a /F >nul 2>&1
     )
 )
 
@@ -173,9 +185,22 @@ REM BUILD SHARED LIBS
 REM =========================================================
 
 echo.
-echo Building shared libraries...
+echo Installing root POM...
 
-call !MVN_CMD! --batch-mode --no-transfer-progress clean package ^
+call !MVN_CMD! --batch-mode --no-transfer-progress install -N -DskipTests -q
+
+IF %ERRORLEVEL% NEQ 0 (
+    echo ERROR: Root POM install failed
+    pause
+    exit /b 1
+)
+
+echo Root POM installed
+
+echo.
+echo Building and installing shared libraries...
+
+call !MVN_CMD! --batch-mode --no-transfer-progress clean install ^
 -pl libs/common-domain,libs/common-security,libs/common-kafka,libs/common-observability ^
 --also-make ^
 -DskipTests -q
@@ -186,7 +211,7 @@ IF %ERRORLEVEL% NEQ 0 (
     exit /b 1
 )
 
-echo Shared libs built
+echo Shared libs built and installed
 
 REM =========================================================
 REM BUILD SERVICES
@@ -211,7 +236,6 @@ reconciliation-service
 
     call !MVN_CMD! --batch-mode --no-transfer-progress package ^
     -pl services/%%s ^
-    --also-make ^
     -DskipTests -q
 
     IF !ERRORLEVEL! NEQ 0 (
@@ -243,10 +267,17 @@ REM =========================================================
 echo.
 echo Waiting for Keycloak realm...
 
+set _KC_TRIES=0
 :wait_keycloak
 curl -sf http://localhost:8180/realms/aegispay >nul 2>&1
 IF %ERRORLEVEL% NEQ 0 (
-    echo   Keycloak not ready yet...
+    set /a _KC_TRIES+=1
+    IF !_KC_TRIES! GEQ 60 (
+        echo ERROR: Keycloak did not start after 3 minutes. Check Docker logs.
+        pause
+        exit /b 1
+    )
+    echo   Keycloak not ready yet ^(!_KC_TRIES!/60^)...
     timeout /t 3 >nul
     goto wait_keycloak
 )
@@ -259,9 +290,12 @@ REM =========================================================
 echo.
 echo Configuring Keycloak client scopes...
 
-call infra\local\keycloak\configure-keycloak.bat
-
-echo Keycloak configured
+IF EXIST infra\local\keycloak\configure-keycloak.bat (
+    call infra\local\keycloak\configure-keycloak.bat
+    echo Keycloak configured
+) ELSE (
+    echo WARNING: infra\local\keycloak\configure-keycloak.bat not found, skipping
+)
 
 REM =========================================================
 REM WAIT FOR CLICKHOUSE
@@ -270,10 +304,17 @@ REM =========================================================
 echo.
 echo Waiting for ClickHouse...
 
+set _CH_TRIES=0
 :wait_clickhouse
 curl -sf http://localhost:8123/ping 2>nul | findstr "Ok" >nul 2>&1
 IF %ERRORLEVEL% NEQ 0 (
-    echo   ClickHouse not ready yet...
+    set /a _CH_TRIES+=1
+    IF !_CH_TRIES! GEQ 36 (
+        echo ERROR: ClickHouse did not start after 3 minutes. Check Docker logs.
+        pause
+        exit /b 1
+    )
+    echo   ClickHouse not ready yet ^(!_CH_TRIES!/36^)...
     timeout /t 5 >nul
     goto wait_clickhouse
 )
@@ -286,14 +327,21 @@ REM =========================================================
 echo.
 echo Waiting for Grafana...
 
+set _GF_TRIES=0
 :wait_grafana
 curl -sf http://localhost:3100/api/health 2>nul | findstr "ok" >nul 2>&1
 IF %ERRORLEVEL% NEQ 0 (
-    echo   Grafana not ready yet...
+    set /a _GF_TRIES+=1
+    IF !_GF_TRIES! GEQ 36 (
+        echo WARNING: Grafana did not respond after 3 minutes, continuing anyway...
+        goto :grafana_done
+    )
+    echo   Grafana not ready yet ^(!_GF_TRIES!/36^)...
     timeout /t 5 >nul
     goto wait_grafana
 )
 echo Grafana ready
+:grafana_done
 
 REM =========================================================
 REM WAIT FOR KAFKA
@@ -302,10 +350,17 @@ REM =========================================================
 echo.
 echo Waiting for Kafka broker...
 
+set _KF_TRIES=0
 :wait_kafka
 docker exec aegispay-kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >nul 2>&1
 IF %ERRORLEVEL% NEQ 0 (
-    echo   Kafka not ready yet...
+    set /a _KF_TRIES+=1
+    IF !_KF_TRIES! GEQ 60 (
+        echo ERROR: Kafka did not start after 3 minutes. Check Docker logs.
+        pause
+        exit /b 1
+    )
+    echo   Kafka not ready yet ^(!_KF_TRIES!/60^)...
     timeout /t 3 >nul
     goto wait_kafka
 )
@@ -421,6 +476,13 @@ IF NOT EXIST apps\web\.env.local (
     echo Created apps\web\.env.local from example
 )
 
+where pnpm >nul 2>&1
+IF %ERRORLEVEL% NEQ 0 (
+    echo ERROR: pnpm not found on PATH.
+    echo        Install: npm install -g pnpm
+    pause
+    exit /b 1
+)
 call pnpm install --silent
 start "web-app" /MIN cmd /c "pnpm --filter @aegispay/web dev > logs\web.log 2>&1"
 
