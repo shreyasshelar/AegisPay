@@ -55,5 +55,22 @@
       <artifactId>jjwt-jackson</artifactId>
       <scope>runtime</scope>
     </dependency>
+    <!-- AOP support for TenantTransactionInterceptor (@Aspect, ProceedingJoinPoint) -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-aop</artifactId>
+    </dependency>
+    <!-- JDBC support for JdbcTemplate (optional in services without a DB) -->
+    <dependency>
+      <groupId>org.springframework</groupId>
+      <artifactId>spring-jdbc</artifactId>
+      <optional>true</optional>
+    </dependency>
+    <!-- spring-tx for TransactionSynchronizationManager -->
+    <dependency>
+      <groupId>org.springframework</groupId>
+      <artifactId>spring-tx</artifactId>
+      <optional>true</optional>
+    </dependency>
   </dependencies>
 </project>

@@ -80,7 +80,7 @@ public class TransactionService {
                 .metadata(meta.isEmpty() ? null : meta)
                 .build();
 
-        transactionRepository.save(txn);
+        txn = transactionRepository.save(txn);
 
         // Write outbox entry atomically in the same transaction
         OutboxEntry outboxEntry = eventProducer.buildTransactionInitiatedEntry(txn);

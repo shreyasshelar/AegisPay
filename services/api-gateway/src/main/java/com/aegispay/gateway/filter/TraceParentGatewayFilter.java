@@ -8,7 +8,6 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.http.server.reactive.ServerHttpRequestDecorator;
 import org.springframework.lang.NonNull;
-import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.web.server.ServerWebExchange;
@@ -70,16 +69,14 @@ public class TraceParentGatewayFilter implements GatewayFilter, Ordered {
             }
         };
 
-        ServerHttpResponse response = exchange.getResponse();
+        // Echo traceparent in the response header directly (not via beforeCommit) so it
+        // is visible to downstream filters and test assertions before the body is written.
         final String finalTraceParent = traceParent;
-        response.beforeCommit(() -> {
-            try {
-                response.getHeaders().set(HEADER_TRACE_PARENT, finalTraceParent);
-            } catch (UnsupportedOperationException ignored) {
-                // Headers already committed (e.g. circuit-breaker fallback) — skip
-            }
-            return Mono.empty();
-        });
+        try {
+            exchange.getResponse().getHeaders().set(HEADER_TRACE_PARENT, finalTraceParent);
+        } catch (UnsupportedOperationException ignored) {
+            // Headers already committed (e.g. circuit-breaker fallback) — skip
+        }
 
         return chain.filter(exchange.mutate().request(decoratedRequest).build());
     }

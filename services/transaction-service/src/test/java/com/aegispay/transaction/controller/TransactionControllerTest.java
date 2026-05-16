@@ -1,6 +1,7 @@
 package com.aegispay.transaction.controller;
 
 import com.aegispay.common.domain.enums.TransactionStatus;
+import com.aegispay.transaction.config.SecurityConfig;
 import com.aegispay.transaction.domain.dto.TransactionRequest;
 import com.aegispay.transaction.domain.dto.TransactionResponse;
 import com.aegispay.transaction.service.TransactionService;
@@ -9,8 +10,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
@@ -26,11 +29,15 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(TransactionController.class)
+@Import(SecurityConfig.class)
 class TransactionControllerTest {
 
     @Autowired private MockMvc mockMvc;
     @Autowired private ObjectMapper objectMapper;
     @MockBean  private TransactionService transactionService;
+    // Provide a JwtDecoder mock so Spring Security can initialise the resource-server
+    // filter chain in the @WebMvcTest slice (no issuer-uri available in test context).
+    @MockBean  private JwtDecoder jwtDecoder;
 
     private static final UUID TXN_ID   = UUID.randomUUID();
     private static final UUID USER_ID  = UUID.randomUUID();
