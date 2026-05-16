@@ -141,7 +141,26 @@ REM =========================================================
 
 set NODE_OPTIONS=--dns-result-order=ipv4first
 
+REM ── PostgreSQL (host port 5433 maps to container port 5432) ──────────────
+set DB_HOST=localhost
 set DB_PORT=5433
+set DB_USERNAME=aegispay
+set DB_PASSWORD=aegispay_dev
+
+REM ── Redis ─────────────────────────────────────────────────────────────────
+set REDIS_HOST=localhost
+set REDIS_PORT=6379
+set REDIS_PASSWORD=aegispay_dev
+
+REM ── MongoDB ───────────────────────────────────────────────────────────────
+set MONGODB_HOST=localhost
+set MONGODB_PORT=27017
+set MONGODB_URI=mongodb://localhost:27017/aegispay
+
+REM ── ClickHouse ────────────────────────────────────────────────────────────
+set CLICKHOUSE_URL=jdbc:clickhouse://localhost:8123/aegispay_analytics
+set CLICKHOUSE_USER=default
+set CLICKHOUSE_PASSWORD=
 
 set OAUTH2_ISSUER_URI=http://localhost:8180/realms/aegispay
 set OAUTH2_PRIMARY_ISSUER_URI=http://localhost:8180/realms/aegispay
@@ -378,6 +397,50 @@ IF %ERRORLEVEL% NEQ 0 (
     goto wait_kafka
 )
 echo Kafka ready
+
+REM =========================================================
+REM WAIT FOR DB-INIT (ensures per-service databases exist)
+REM =========================================================
+
+echo.
+echo Waiting for db-init to finish creating databases...
+
+set _DBI_TRIES=0
+:wait_db_init
+docker inspect --format "{{.State.Status}}" aegispay-db-init >nul 2>&1
+IF %ERRORLEVEL% NEQ 0 (
+    REM container not yet visible — still starting
+    set /a _DBI_TRIES+=1
+    IF !_DBI_TRIES! GEQ 60 (
+        echo WARNING: db-init status unknown after 60 tries, continuing...
+        goto :db_init_done
+    )
+    timeout /t 2 >nul
+    goto wait_db_init
+)
+for /f "tokens=*" %%s in ('docker inspect --format "{{.State.Status}}" aegispay-db-init 2^>nul') do set DBI_STATUS=%%s
+IF "!DBI_STATUS!"=="exited" goto :db_init_done
+set /a _DBI_TRIES+=1
+IF !_DBI_TRIES! GEQ 60 (
+    echo WARNING: db-init still running after 2 minutes, continuing...
+    goto :db_init_done
+)
+echo   db-init still running ^(!DBI_STATUS!^)...
+timeout /t 2 >nul
+goto wait_db_init
+:db_init_done
+
+REM Verify aegispay user can connect — catch wrong-password early
+echo Verifying PostgreSQL credentials...
+docker exec aegispay-postgres psql -U aegispay -d aegispay -c "SELECT 1" >nul 2>&1
+IF %ERRORLEVEL% NEQ 0 (
+    echo ERROR: Cannot connect to PostgreSQL as user 'aegispay'.
+    echo        Check DB_PASSWORD matches POSTGRES_PASSWORD in docker-compose.yml.
+    echo        Both must be 'aegispay_dev' for local dev.
+    pause
+    exit /b 1
+)
+echo PostgreSQL credentials verified
 
 REM =========================================================
 REM CREATE LOG DIRECTORY
