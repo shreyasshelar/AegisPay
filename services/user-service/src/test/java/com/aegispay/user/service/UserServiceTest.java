@@ -11,6 +11,7 @@ import com.aegispay.user.domain.mapper.UserMapperImpl;
 import com.aegispay.user.idempotency.IdempotencyService;
 import com.aegispay.user.kafka.UserEventProducer;
 import com.aegispay.user.kyc.KycStateMachine;
+import com.aegispay.user.service.KeycloakAdminService;
 import com.aegispay.user.outbox.OutboxEntry;
 import com.aegispay.user.outbox.OutboxEntryRepository;
 import com.aegispay.user.repository.KycDocumentRepository;
@@ -43,6 +44,7 @@ class UserServiceTest {
     @Mock private IdempotencyService idempotencyService;
     @Mock private UserEventProducer eventProducer;
     @Mock private AiPlatformClient aiPlatformClient;
+    @Mock private KeycloakAdminService keycloakAdminService;
 
     @InjectMocks
     private UserService userService;

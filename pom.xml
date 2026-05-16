@@ -214,6 +214,25 @@
                 <artifactId>mapstruct-processor</artifactId>
                 <version>${mapstruct.version}</version>
               </path>
+              <!--
+                Make internal platform libs visible to Lombok's embedded ECJ during
+                annotation processing.  Without these entries, ECJ (which runs in the
+                isolated annotation-processor classpath) cannot resolve types from
+                common-domain / common-kafka and writes unqualified-type error-recovery
+                bytecode.  That bytecode then causes "incompatible types" compilation
+                errors in test-compile because javac sees two different TransactionStatus /
+                KycStatus symbols.
+              -->
+              <path>
+                <groupId>com.aegispay</groupId>
+                <artifactId>common-domain</artifactId>
+                <version>${project.version}</version>
+              </path>
+              <path>
+                <groupId>com.aegispay</groupId>
+                <artifactId>common-kafka</artifactId>
+                <version>${project.version}</version>
+              </path>
             </annotationProcessorPaths>
           </configuration>
         </plugin>

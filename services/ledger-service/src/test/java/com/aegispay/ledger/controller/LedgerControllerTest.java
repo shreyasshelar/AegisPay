@@ -1,12 +1,16 @@
 package com.aegispay.ledger.controller;
 
+import com.aegispay.ledger.config.SecurityConfig;
 import com.aegispay.ledger.domain.dto.AccountResponse;
 import com.aegispay.ledger.domain.dto.LedgerEntryResponse;
 import com.aegispay.ledger.service.LedgerService;
+import com.aegispay.ledger.service.TopUpService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Import;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -21,6 +25,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(LedgerController.class)
+@Import(SecurityConfig.class)
 class LedgerControllerTest {
 
     @Autowired
@@ -28,6 +33,15 @@ class LedgerControllerTest {
 
     @MockBean
     LedgerService ledgerService;
+
+    // LedgerController constructor requires TopUpService
+    @MockBean
+    TopUpService topUpService;
+
+    // Provide a JwtDecoder mock so Spring Security can initialise the resource-server
+    // filter chain in the @WebMvcTest slice (no issuer-uri available in test context).
+    @MockBean
+    JwtDecoder jwtDecoder;
 
     UUID userId = UUID.randomUUID();
     UUID txnId = UUID.randomUUID();

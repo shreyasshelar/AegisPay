@@ -96,9 +96,10 @@ public class PaymentSagaOrchestrator {
         if (event.getDecision().name().equals("REJECTED")) {
             failStep(saga, ASSESS_RISK, "Risk rejected: score=" + event.getRiskScore());
             failSaga(saga, "Transaction rejected by risk engine: score=" + event.getRiskScore());
-            // No publishTransactionFailed here — onBalanceRolledBack emits the single
-            // terminal TRANSACTION_FAILED event after rollback completes.
+            // Publish rollback first, then the terminal failure event so transaction-service
+            // can mark the transaction as FAILED immediately (consistent with timeout/gateway paths).
             publishRollbackBalance(saga, saga.getFailureReason());
+            publishTransactionFailed(saga, "RISK_REJECTED", saga.getFailureReason());
             return;
         }
 
