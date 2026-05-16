@@ -43,3 +43,5 @@ for multitenant how will be the records in db how will we bifucate users records
 fix test cases at last
 
 how stripe actually send money like in my project based on email and all 
+
+remove all secretes from repo before dilevery
