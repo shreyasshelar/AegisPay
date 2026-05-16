@@ -93,25 +93,24 @@ REM =========================================================
 
 set MVN_CMD=mvn
 where mvn >nul 2>&1
-IF %ERRORLEVEL% NEQ 0 (
-    for %%d in (
-        "C:\Program Files\Apache\maven\bin\mvn.cmd"
-        "C:\tools\maven\bin\mvn.cmd"
-        "%USERPROFILE%\scoop\apps\maven\current\bin\mvn.cmd"
-        "%USERPROFILE%\AppData\Local\Programs\apache-maven\bin\mvn.cmd"
-    ) do (
-        if exist %%d (
-            set MVN_CMD=%%d
-            goto :mvn_found
-        )
-    )
+if %ERRORLEVEL% EQU 0 goto :mvn_found
+set MVN_CMD=
+for %%d in (
+    "C:\Program Files\Apache\maven\bin\mvn.cmd"
+    "C:\tools\maven\bin\mvn.cmd"
+    "%USERPROFILE%\scoop\apps\maven\current\bin\mvn.cmd"
+    "%USERPROFILE%\AppData\Local\Programs\apache-maven\bin\mvn.cmd"
+) do (
+    if exist %%d if "!MVN_CMD!"=="" set MVN_CMD=%%d
+)
+if "!MVN_CMD!"=="" (
     echo ERROR: mvn not found on PATH and no common install dir matched.
     echo        Install Maven 3.9+ and ensure mvn.cmd is on PATH.
     echo        https://maven.apache.org/download.cgi
     pause
     exit /b 1
-    :mvn_found
 )
+:mvn_found
 echo Maven: !MVN_CMD!
 
 REM =========================================================
