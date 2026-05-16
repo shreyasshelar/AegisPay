@@ -198,6 +198,19 @@ IF %ERRORLEVEL% NEQ 0 (
 echo Root POM installed
 
 echo.
+echo Installing libs parent POM ^(aegispay-libs^)...
+
+call !MVN_CMD! --batch-mode --no-transfer-progress install -N -f libs\pom.xml -DskipTests -q
+
+IF %ERRORLEVEL% NEQ 0 (
+    echo ERROR: libs parent POM install failed
+    pause
+    exit /b 1
+)
+
+echo Libs parent POM installed
+
+echo.
 echo Building and installing shared libraries...
 
 call !MVN_CMD! --batch-mode --no-transfer-progress clean install ^
