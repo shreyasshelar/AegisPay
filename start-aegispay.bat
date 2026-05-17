@@ -146,10 +146,11 @@ set DB_HOST=localhost
 set DB_PORT=5433
 set DB_USERNAME=aegispay
 set DB_PASSWORD=aegispay_dev
-REM Spring-native overrides — bypass ${VAR:default} placeholder resolution
-REM These are honoured unconditionally by Spring Boot's property binder,
-REM even when child Java processes are launched via "start cmd /c".
-set SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5433/aegispay
+REM Spring-native overrides — these are honoured unconditionally by Spring Boot's
+REM property binder even when child processes are launched via "start cmd /c".
+REM NOTE: SPRING_DATASOURCE_URL is intentionally NOT set here so each service
+REM       resolves its own per-service database from application.yml (e.g.
+REM       aegispay_users, aegispay_ledger, etc.). Only credentials are overridden.
 set SPRING_DATASOURCE_USERNAME=aegispay
 set SPRING_DATASOURCE_PASSWORD=aegispay_dev
 
@@ -439,7 +440,7 @@ goto wait_db_init
 
 REM Verify aegispay user can connect — catch wrong-password early
 echo Verifying PostgreSQL credentials...
-docker exec aegispay-postgres psql -U aegispay -d aegispay -c "SELECT 1" >nul 2>&1
+docker exec -e PGPASSWORD=aegispay_dev aegispay-postgres psql -U aegispay -d aegispay -c "SELECT 1" >nul 2>&1
 IF %ERRORLEVEL% NEQ 0 (
     echo ERROR: Cannot connect to PostgreSQL as user 'aegispay'.
     echo        Check DB_PASSWORD matches POSTGRES_PASSWORD in docker-compose.yml.
@@ -539,10 +540,10 @@ echo Seeding test accounts...
 set CUSTOMER_KC_UUID=59295e61-a284-40ed-8d3b-9e15bedeb040
 set PAYEE_KC_UUID=3bf3e523-9de8-4254-9cc9-d5fa50ff8d4a
 
-docker exec aegispay-postgres psql -U aegispay -d aegispay_ledger -c "INSERT INTO accounts (user_id, currency, available_balance, reserved_balance) VALUES ('%CUSTOMER_KC_UUID%', 'INR', 50000.00, 0.00), ('%PAYEE_KC_UUID%', 'INR', 25000.00, 0.00) ON CONFLICT (user_id, currency) DO NOTHING;" >nul 2>&1
+docker exec -e PGPASSWORD=aegispay_dev aegispay-postgres psql -U aegispay -d aegispay_ledger -c "INSERT INTO accounts (user_id, currency, available_balance, reserved_balance) VALUES ('%CUSTOMER_KC_UUID%', 'INR', 50000.00, 0.00), ('%PAYEE_KC_UUID%', 'INR', 25000.00, 0.00) ON CONFLICT (user_id, currency) DO NOTHING;" >nul 2>&1
 IF %ERRORLEVEL% EQU 0 ( echo Ledger accounts seeded ) ELSE ( echo Ledger seed skipped ^(may already exist^) )
 
-docker exec aegispay-postgres psql -U aegispay -d aegispay_users -c "INSERT INTO users (external_id, email, first_name, last_name, phone, role, kyc_status, is_active) VALUES ('%CUSTOMER_KC_UUID%', 'customer@aegispay.local', 'Test', 'Customer', '+919000000001', 'CUSTOMER', 'APPROVED', true), ('%PAYEE_KC_UUID%', 'payee@aegispay.local', 'Test', 'Payee', '+919000000002', 'CUSTOMER', 'APPROVED', true) ON CONFLICT DO NOTHING;" >nul 2>&1
+docker exec -e PGPASSWORD=aegispay_dev aegispay-postgres psql -U aegispay -d aegispay_users -c "INSERT INTO users (external_id, email, first_name, last_name, phone, role, kyc_status, is_active) VALUES ('%CUSTOMER_KC_UUID%', 'customer@aegispay.local', 'Test', 'Customer', '+919000000001', 'CUSTOMER', 'APPROVED', true), ('%PAYEE_KC_UUID%', 'payee@aegispay.local', 'Test', 'Payee', '+919000000002', 'CUSTOMER', 'APPROVED', true) ON CONFLICT DO NOTHING;" >nul 2>&1
 IF %ERRORLEVEL% EQU 0 ( echo User data seeded ) ELSE ( echo User seed skipped ^(may already exist^) )
 
 echo Test accounts ready — Customer INR 50000  ^|  Payee INR 25000
