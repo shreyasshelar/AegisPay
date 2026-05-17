@@ -24,6 +24,22 @@ spring:
             waitDurationInOpenState: 10s
             permittedNumberOfCallsInHalfOpenState: 5
 
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Multi-IdP: configured programmatically via JwtIssuerReactiveAuthenticationManagerResolver
+          # This single issuer-uri is kept as a reference; actual resolution is done in SecurityConfig
+          issuer-uri: ${OAUTH2_PRIMARY_ISSUER_URI:http://localhost:8180/realms/aegispay}
+
+  data:
+    redis:
+      url: ${REDIS_URL:redis://default:aegispay_dev@localhost:6379}
+      ssl:
+        enabled: ${REDIS_SSL_ENABLED:false}
+      lettuce:
+        shutdown-timeout: 200ms
+
 # Resilience4j native config — per-route circuit breaker overrides
 resilience4j:
   circuitbreaker:
@@ -41,28 +57,6 @@ resilience4j:
         waitDurationInOpenState: 15s
         permittedNumberOfCallsInHalfOpenState: 5
         minimumNumberOfCalls: 5
-
-  security:
-    oauth2:
-      resourceserver:
-        jwt:
-          # Multi-IdP: configured programmatically via JwtIssuerReactiveAuthenticationManagerResolver
-          # This single issuer-uri is kept as a reference; actual resolution is done in SecurityConfig
-          issuer-uri: ${OAUTH2_PRIMARY_ISSUER_URI:http://localhost:8180/realms/aegispay}
-
-  data:
-    redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
-      password: ${REDIS_PASSWORD:aegispay_dev}
-      ssl:
-        enabled: ${REDIS_SSL_ENABLED:false}
-      lettuce:
-        pool:
-          max-active: 16
-          max-idle: 8
-          min-idle: 2
-          max-wait: 2s
 
 server:
   port: ${SERVER_PORT:8080}

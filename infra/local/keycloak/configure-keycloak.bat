@@ -5,54 +5,182 @@ set KC_URL=http://localhost:8180
 set REALM=aegispay
 set ADMIN_USER=admin
 set ADMIN_PASS=admin
-set CLIENT_ID_NAME=aegispay-web
+
+REM UUIDs must match the values seeded into aegispay_users / aegispay_ledger by start-aegispay.bat
+set CUSTOMER_KC_UUID=59295e61-a284-40ed-8d3b-9e15bedeb040
+set PAYEE_KC_UUID=3bf3e523-9de8-4254-9cc9-d5fa50ff8d4a
 
 echo =========================================================
-echo Configuring Keycloak
+echo   Keycloak Post-Import Configuration
 echo =========================================================
+
+REM =========================================================
+REM WAIT FOR ADMIN TOKEN
+REM =========================================================
 
 echo Waiting for Keycloak admin token...
 
 :wait_token
-
-curl -s -X POST "%KC_URL%/realms/master/protocol/openid-connect/token" -H "Content-Type: application/x-www-form-urlencoded" -d "client_id=admin-cli" -d "username=%ADMIN_USER%" -d "password=%ADMIN_PASS%" -d "grant_type=password" -o token.json
+curl -s -X POST "%KC_URL%/realms/master/protocol/openid-connect/token" ^
+  -H "Content-Type: application/x-www-form-urlencoded" ^
+  -d "client_id=admin-cli" ^
+  -d "username=%ADMIN_USER%" ^
+  -d "password=%ADMIN_PASS%" ^
+  -d "grant_type=password" ^
+  -o token.json
 
 findstr "access_token" token.json >nul
-
 IF %ERRORLEVEL% NEQ 0 (
-    echo Waiting for admin token...
+    echo   Keycloak not ready yet, retrying...
     timeout /t 3 >nul
     goto wait_token
 )
 
+REM Extract token (strip quotes and spaces)
+for /f "tokens=2 delims=:," %%a in ('findstr "access_token" token.json') do set TOKEN=%%a
+set TOKEN=!TOKEN:"=!
+set TOKEN=!TOKEN: =!
 echo Admin token obtained
 
 REM =========================================================
-REM EXTRACT TOKEN
+REM 1. DECLARE CUSTOM USER PROFILE ATTRIBUTES
+REM    Keycloak 24 Declarative User Profile blocks undeclared
+REM    attributes.  Register aegispay_* attrs so they persist.
 REM =========================================================
 
-for /f "tokens=2 delims=:," %%a in ('findstr "access_token" token.json') do (
-    set TOKEN=%%a
+echo.
+echo [1/4] Configuring User Profile...
+
+curl -s -X PUT "%KC_URL%/admin/realms/%REALM%/users/profile" ^
+  -H "Authorization: Bearer !TOKEN!" ^
+  -H "Content-Type: application/json" ^
+  -d "{\"unmanagedAttributePolicy\":\"ADMIN_EDIT\",\"attributes\":[{\"name\":\"username\"},{\"name\":\"email\"},{\"name\":\"firstName\"},{\"name\":\"lastName\"},{\"name\":\"aegispay_user_id\",\"displayName\":\"AegisPay User ID\",\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\"]}},{\"name\":\"aegispay_role\",\"displayName\":\"AegisPay Role\",\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\"]}},{\"name\":\"aegispay_tenant_id\",\"displayName\":\"AegisPay Tenant ID\",\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\"]}}]}" ^
+  >nul 2>&1
+
+echo   User Profile configured
+
+REM =========================================================
+REM 2. CREATE / UPDATE TEST USERS
+REM    Uses PUT with the fixed UUID so re-runs are idempotent.
+REM    Attributes must be set AFTER the profile declares them.
+REM =========================================================
+
+echo.
+echo [2/4] Creating test users...
+
+REM ── customer ──────────────────────────────────────────────
+curl -s -X PUT "%KC_URL%/admin/realms/%REALM%/users/%CUSTOMER_KC_UUID%" ^
+  -H "Authorization: Bearer !TOKEN!" ^
+  -H "Content-Type: application/json" ^
+  -d "{\"id\":\"%CUSTOMER_KC_UUID%\",\"username\":\"customer\",\"email\":\"customer@aegispay.local\",\"firstName\":\"Test\",\"lastName\":\"Customer\",\"enabled\":true,\"emailVerified\":true,\"attributes\":{\"aegispay_user_id\":[\"%CUSTOMER_KC_UUID%\"],\"aegispay_role\":[\"CUSTOMER\"],\"aegispay_tenant_id\":[\"aegispay\"]},\"credentials\":[{\"type\":\"password\",\"value\":\"Test@1234\",\"temporary\":false}]}" ^
+  -o nul -w "%%{http_code}" >nul 2>&1
+
+REM If user doesn't exist (404 on PUT) create via POST instead
+curl -s -X POST "%KC_URL%/admin/realms/%REALM%/users" ^
+  -H "Authorization: Bearer !TOKEN!" ^
+  -H "Content-Type: application/json" ^
+  -d "{\"id\":\"%CUSTOMER_KC_UUID%\",\"username\":\"customer\",\"email\":\"customer@aegispay.local\",\"firstName\":\"Test\",\"lastName\":\"Customer\",\"enabled\":true,\"emailVerified\":true,\"attributes\":{\"aegispay_user_id\":[\"%CUSTOMER_KC_UUID%\"],\"aegispay_role\":[\"CUSTOMER\"],\"aegispay_tenant_id\":[\"aegispay\"]},\"credentials\":[{\"type\":\"password\",\"value\":\"Test@1234\",\"temporary\":false}]}" ^
+  >nul 2>&1
+
+echo   customer@aegispay.local created/updated
+
+REM ── payee ─────────────────────────────────────────────────
+curl -s -X PUT "%KC_URL%/admin/realms/%REALM%/users/%PAYEE_KC_UUID%" ^
+  -H "Authorization: Bearer !TOKEN!" ^
+  -H "Content-Type: application/json" ^
+  -d "{\"id\":\"%PAYEE_KC_UUID%\",\"username\":\"payee\",\"email\":\"payee@aegispay.local\",\"firstName\":\"Test\",\"lastName\":\"Payee\",\"enabled\":true,\"emailVerified\":true,\"attributes\":{\"aegispay_user_id\":[\"%PAYEE_KC_UUID%\"],\"aegispay_role\":[\"CUSTOMER\"],\"aegispay_tenant_id\":[\"aegispay\"]},\"credentials\":[{\"type\":\"password\",\"value\":\"Test@1234\",\"temporary\":false}]}" ^
+  >nul 2>&1
+
+curl -s -X POST "%KC_URL%/admin/realms/%REALM%/users" ^
+  -H "Authorization: Bearer !TOKEN!" ^
+  -H "Content-Type: application/json" ^
+  -d "{\"id\":\"%PAYEE_KC_UUID%\",\"username\":\"payee\",\"email\":\"payee@aegispay.local\",\"firstName\":\"Test\",\"lastName\":\"Payee\",\"enabled\":true,\"emailVerified\":true,\"attributes\":{\"aegispay_user_id\":[\"%PAYEE_KC_UUID%\"],\"aegispay_role\":[\"CUSTOMER\"],\"aegispay_tenant_id\":[\"aegispay\"]},\"credentials\":[{\"type\":\"password\",\"value\":\"Test@1234\",\"temporary\":false}]}" ^
+  >nul 2>&1
+
+echo   payee@aegispay.local created/updated
+
+REM =========================================================
+REM 3. ASSIGN CUSTOMER REALM ROLE TO TEST USERS
+REM    Fetch the role object first (need its id + name).
+REM =========================================================
+
+echo.
+echo [3/4] Assigning CUSTOMER role...
+
+curl -s "%KC_URL%/admin/realms/%REALM%/roles/CUSTOMER" ^
+  -H "Authorization: Bearer !TOKEN!" ^
+  -o customer_role.json
+
+REM Resolve actual Keycloak user IDs (may differ from the requested UUID)
+curl -s "%KC_URL%/admin/realms/%REALM%/users?search=customer@aegispay.local&max=1" ^
+  -H "Authorization: Bearer !TOKEN!" ^
+  -o cust_user.json
+
+curl -s "%KC_URL%/admin/realms/%REALM%/users?search=payee@aegispay.local&max=1" ^
+  -H "Authorization: Bearer !TOKEN!" ^
+  -o payee_user.json
+
+REM Extract Keycloak-assigned user IDs
+for /f "tokens=2 delims=:," %%a in ('findstr "\"id\"" cust_user.json') do (
+    set CUST_ID=%%a
+    set CUST_ID=!CUST_ID:"=!
+    set CUST_ID=!CUST_ID: =!
+    goto :got_cust_id
 )
+:got_cust_id
 
-set TOKEN=%TOKEN:"=%
-set TOKEN=%TOKEN: =%
+for /f "tokens=2 delims=:," %%a in ('findstr "\"id\"" payee_user.json') do (
+    set PAYEE_ID=%%a
+    set PAYEE_ID=!PAYEE_ID:"=!
+    set PAYEE_ID=!PAYEE_ID: =!
+    goto :got_payee_id
+)
+:got_payee_id
 
-echo Token extracted
+REM Wrap role in array and POST to role-mappings
+for /f "tokens=*" %%r in ('type customer_role.json') do set ROLE_BODY=[%%r]
+
+curl -s -X POST "%KC_URL%/admin/realms/%REALM%/users/!CUST_ID!/role-mappings/realm" ^
+  -H "Authorization: Bearer !TOKEN!" ^
+  -H "Content-Type: application/json" ^
+  -d "!ROLE_BODY!" >nul 2>&1
+
+curl -s -X POST "%KC_URL%/admin/realms/%REALM%/users/!PAYEE_ID!/role-mappings/realm" ^
+  -H "Authorization: Bearer !TOKEN!" ^
+  -H "Content-Type: application/json" ^
+  -d "!ROLE_BODY!" >nul 2>&1
+
+echo   CUSTOMER role assigned
 
 REM =========================================================
-REM GET CLIENT UUID
+REM 4. SET PASSWORDS (idempotent — reset even if already set)
 REM =========================================================
 
-echo Resolving client UUID...
+echo.
+echo [4/4] Setting passwords...
 
-curl -s "%KC_URL%/admin/realms/%REALM%/clients?clientId=%CLIENT_ID_NAME%" -H "Authorization: Bearer %TOKEN%" -o client.json
+curl -s -X PUT "%KC_URL%/admin/realms/%REALM%/users/!CUST_ID!/reset-password" ^
+  -H "Authorization: Bearer !TOKEN!" ^
+  -H "Content-Type: application/json" ^
+  -d "{\"type\":\"password\",\"value\":\"Test@1234\",\"temporary\":false}" >nul 2>&1
 
-type client.json
+curl -s -X PUT "%KC_URL%/admin/realms/%REALM%/users/!PAYEE_ID!/reset-password" ^
+  -H "Authorization: Bearer !TOKEN!" ^
+  -H "Content-Type: application/json" ^
+  -d "{\"type\":\"password\",\"value\":\"Test@1234\",\"temporary\":false}" >nul 2>&1
+
+echo   Passwords set
+
+REM =========================================================
+REM CLEANUP
+REM =========================================================
+
+del /q token.json client.json customer_role.json cust_user.json payee_user.json >nul 2>&1
 
 echo.
 echo =========================================================
-echo Keycloak configuration completed
+echo   Keycloak configuration completed
+echo   Test accounts:
+echo     customer@aegispay.local / Test@1234
+echo     payee@aegispay.local    / Test@1234
 echo =========================================================
-
-pause
