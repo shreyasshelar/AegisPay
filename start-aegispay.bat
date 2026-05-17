@@ -186,6 +186,7 @@ IF "%STRIPE_PUBLISHABLE_KEY%"=="" set STRIPE_PUBLISHABLE_KEY=pk_test_placeholder
 IF "%SMTP_PASSWORD%"=="" set SMTP_PASSWORD=mcinrqrbfqayklee
 IF "%SLACK_WEBHOOK_URL%"=="" set SLACK_WEBHOOK_URL=https://hooks.slack.com/services/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
 IF "%FAST2SMS_API_KEY%"=="" set FAST2SMS_API_KEY=ZNd8Xx4lqrERbj67Unwi1LHvB0smOFDayTCkgczIYKM9oPAfV2jDTskbhao0QZ3luvA7VfiLdWM2KNOe
+IF "%STRIPE_WEBHOOK_SECRET%"=="" set STRIPE_WEBHOOK_SECRET=whsec_a832f229a3955efe1399cef8e1e858e598b2d5e8c01a4b0417a0684419e7b176
 
 REM =========================================================
 REM FREE REQUIRED PORTS
