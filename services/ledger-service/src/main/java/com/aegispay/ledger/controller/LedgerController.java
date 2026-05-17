@@ -27,12 +27,13 @@ public class LedgerController {
     private final LedgerService ledgerService;
     private final TopUpService  topUpService;
 
-    /** Customer: get own account balances from JWT sub claim. */
+    /** Customer: get own account balances. */
     @GetMapping("/accounts/me")
     @PreAuthorize("hasRole('CUSTOMER')")
     public ResponseEntity<ApiResponse<List<AccountResponse>>> getMyAccounts(
             @AuthenticationPrincipal Jwt jwt) {
-        UUID userId = UUID.fromString(jwt.getSubject());
+        String claim = jwt.getClaimAsString("aegispay_user_id");
+        UUID userId = UUID.fromString(claim != null ? claim : jwt.getSubject());
         return ResponseEntity.ok(ApiResponse.ok(ledgerService.getAccountsForUser(userId)));
     }
 
