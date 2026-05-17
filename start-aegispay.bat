@@ -157,12 +157,16 @@ set SPRING_DATASOURCE_PASSWORD=aegispay_dev
 REM ── Redis ─────────────────────────────────────────────────────────────────
 set REDIS_HOST=localhost
 set REDIS_PORT=6379
+set REDIS_USERNAME=default
 set REDIS_PASSWORD=aegispay_dev
+REM Full URL used by api-gateway (reactive Lettuce needs inline auth in the URI)
+set REDIS_URL=redis://default:aegispay_dev@localhost:6379
 
 REM ── MongoDB ───────────────────────────────────────────────────────────────
+REM Do NOT set MONGODB_URI here — each service has a different database name.
+REM application.yml defaults (with credentials) are used per-service.
 set MONGODB_HOST=localhost
 set MONGODB_PORT=27017
-set MONGODB_URI=mongodb://localhost:27017/aegispay
 
 REM ── ClickHouse ────────────────────────────────────────────────────────────
 set CLICKHOUSE_URL=jdbc:clickhouse://localhost:8123/aegispay_analytics
@@ -200,7 +204,7 @@ for %%p in (
 5433 6379 27017 9094 8180 8123 3100 8090
 8080 8081 8082 8083 8084 8085 8086 8087 8089 8091 3000
 ) do (
-    for /f "tokens=5" %%a in ('netstat -ano ^| findstr /r ":%%p[ \t]" 2^>nul') do (
+    for /f "tokens=5" %%a in ('netstat -ano ^| findstr /r " :%%p " ^| findstr /i "LISTENING" 2^>nul') do (
         if NOT "%%a"=="" taskkill /PID %%a /F >nul 2>&1
     )
 )
@@ -464,7 +468,7 @@ echo.
 echo Starting backend services (Wave 1)...
 
 start "api-gateway" /MIN cmd /c ^
-"java -jar services\api-gateway\target\api-gateway-1.0.0-SNAPSHOT.jar > logs\api-gateway.log 2>&1"
+"java -DUSER_SERVICE_URI=http://localhost:8081 -DTRANSACTION_SERVICE_URI=http://localhost:8082 -DLEDGER_SERVICE_URI=http://localhost:8083 -DORCHESTRATOR_SERVICE_URI=http://localhost:8084 -DRISK_ENGINE_URI=http://localhost:8085 -DNOTIFICATION_SERVICE_URI=http://localhost:8086 -DAI_PLATFORM_URI=http://localhost:8091 -DOAUTH2_PRIMARY_ISSUER_URI=http://localhost:8180/realms/aegispay -DOAUTH2_ISSUER_KEYCLOAK=http://localhost:8180/realms/aegispay -Dspring.data.redis.url=redis://default:aegispay_dev@localhost:6379 -jar services\api-gateway\target\api-gateway-1.0.0-SNAPSHOT.jar > logs\api-gateway.log 2>&1"
 
 start "user-service" /MIN cmd /c ^
 "java -jar services\user-service\target\user-service-1.0.0-SNAPSHOT.jar > logs\user-service.log 2>&1"
@@ -497,9 +501,16 @@ REM =========================================================
 echo.
 echo Waiting for ledger-service before starting reconciliation...
 
+set _LS_TRIES=0
 :wait_ledger
 curl -sf http://localhost:8083/actuator/health >nul 2>&1
 IF %ERRORLEVEL% NEQ 0 (
+    set /a _LS_TRIES+=1
+    IF !_LS_TRIES! GEQ 120 (
+        echo ERROR: ledger-service did not start after 6 minutes. Check logs\ledger-service.log
+        pause
+        exit /b 1
+    )
     timeout /t 3 >nul
     goto wait_ledger
 )
@@ -560,15 +571,8 @@ IF NOT EXIST apps\web\.env.local (
     echo Created apps\web\.env.local from example
 )
 
-where pnpm >nul 2>&1
-IF %ERRORLEVEL% NEQ 0 (
-    echo ERROR: pnpm not found on PATH.
-    echo        Install: npm install -g pnpm
-    pause
-    exit /b 1
-)
-call pnpm install --silent
-start "web-app" /MIN cmd /c "pnpm --filter @aegispay/web dev > logs\web.log 2>&1"
+call npm install --silent
+start "web-app" /MIN cmd /c "npm run dev --workspace=apps/web > logs\web.log 2>&1"
 
 REM =========================================================
 REM ANDROID EMULATOR  (only when "android" argument given)
@@ -771,10 +775,16 @@ REM =========================================================
 :wait_service
 set _SVC=%1
 set _PORT=%2
+set _SVC_TRIES=0
 echo   Waiting for %_SVC% on port %_PORT%...
 :_svc_loop
 curl -sf http://localhost:%_PORT%/actuator/health >nul 2>&1
 IF %ERRORLEVEL% NEQ 0 (
+    set /a _SVC_TRIES+=1
+    IF !_SVC_TRIES! GEQ 120 (
+        echo   WARNING: %_SVC% did not become healthy after 6 minutes. Check logs\%_SVC%.log
+        exit /b 1
+    )
     timeout /t 3 >nul
     goto _svc_loop
 )

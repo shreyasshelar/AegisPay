@@ -47,7 +47,11 @@ END;
 $$;
 
 -- Grant only what the service needs
-GRANT CONNECT ON DATABASE CURRENT_DATABASE TO aegispay_user_svc;
+DO $$
+BEGIN
+    EXECUTE format('GRANT CONNECT ON DATABASE %I TO aegispay_user_svc', current_database());
+END;
+$$;
 GRANT USAGE  ON SCHEMA public              TO aegispay_user_svc;
 GRANT SELECT, INSERT, UPDATE, DELETE
     ON users, kyc_documents               TO aegispay_user_svc;
