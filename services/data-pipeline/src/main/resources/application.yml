@@ -1,8 +1,8 @@
-spring:
+﻿spring:
   application:
     name: data-pipeline
 
-  # Disable auto-DataSource configuration — we wire ClickHouse manually
+  # Disable auto-DataSource configuration â€” we wire ClickHouse manually
   autoconfigure:
     exclude:
       - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
@@ -46,6 +46,8 @@ aegispay:
     window-size-minutes: 1        # 1-minute tumbling windows
 
 logging:
+  file:
+    name: logs/data-pipeline.log
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
   level:

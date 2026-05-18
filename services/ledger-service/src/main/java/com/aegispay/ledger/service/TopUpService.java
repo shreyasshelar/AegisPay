@@ -12,6 +12,7 @@ import com.aegispay.ledger.repository.LedgerEntryRepository;
 import com.stripe.Stripe;
 import com.stripe.exception.StripeException;
 import com.stripe.model.PaymentIntent;
+import com.stripe.param.PaymentIntentConfirmParams;
 import com.stripe.param.PaymentIntentCreateParams;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -96,6 +97,23 @@ public class TopUpService {
         String metaUserId = intent.getMetadata().get("aegispay_user_id");
         if (metaUserId == null || !metaUserId.equals(userId.toString())) {
             throw new IllegalArgumentException("PaymentIntent does not belong to the authenticated user");
+        }
+
+        // In Stripe test mode auto-confirm with pm_card_visa so the frontend
+        // doesn't need a full Stripe.js card-collection flow during development.
+        if (!"succeeded".equals(intent.getStatus()) && stripeSecretKey.startsWith("sk_test_")) {
+            if ("requires_payment_method".equals(intent.getStatus())
+                    || "requires_confirmation".equals(intent.getStatus())) {
+                try {
+                    intent = intent.confirm(
+                            PaymentIntentConfirmParams.builder()
+                                    .setPaymentMethod("pm_card_visa")
+                                    .build());
+                    log.info("Test-mode auto-confirm: pi={} status={}", intent.getId(), intent.getStatus());
+                } catch (StripeException e) {
+                    throw new IllegalStateException("Auto-confirm failed: " + e.getMessage(), e);
+                }
+            }
         }
 
         if (!"succeeded".equals(intent.getStatus())) {

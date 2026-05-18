@@ -1,4 +1,4 @@
-spring:
+﻿spring:
   application:
     name: payment-orchestrator
 
@@ -42,7 +42,7 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: ${OAUTH2_ISSUER_URI:http://localhost:8180/realms/aegispay}
+          jwk-set-uri: ${OAUTH2_JWK_SET_URI:http://localhost:8180/realms/aegispay/protocol/openid-connect/certs}
 
 server:
   port: ${SERVER_PORT:8084}
@@ -57,7 +57,7 @@ management:
       service: ${spring.application.name}
 
 stripe:
-  # Injected from K8s Secret aegispay-stripe-secret (via ESO → Vault)
+  # Injected from K8s Secret aegispay-stripe-secret (via ESO â†’ Vault)
   secret-key: ${STRIPE_SECRET_KEY:sk_test_placeholder_local_dev}
   webhook-secret: ${STRIPE_WEBHOOK_SECRET:whsec_placeholder_local_dev}
   # Default payment method used for server-side confirmation.
@@ -80,6 +80,8 @@ resilience4j:
         permitted-number-of-calls-in-half-open-state: 3
 
 logging:
+  file:
+    name: logs/payment-orchestrator.log
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} [traceId=%X{traceId}] [corrId=%X{correlationId}] - %msg%n"
   level:
