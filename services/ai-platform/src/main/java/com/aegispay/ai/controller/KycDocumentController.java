@@ -18,19 +18,25 @@ public class KycDocumentController {
     private final KycDocumentService kycDocumentService;
 
     /**
-     * Process a KYC document image (base64-encoded) and return quality score,
-     * tampering assessment, and extracted data.
+     * Process a KYC document image and return quality, tampering, validation, and OCR results.
+     * <p>
+     * {@code registeredName} is optional but strongly recommended: when provided, the AI will
+     * cross-check the name printed on the document against the registered account name.
      */
     @PostMapping("/process")
     public ResponseEntity<KycDocumentService.KycProcessingResult> process(
             @Valid @RequestBody ProcessRequest request) {
-        KycDocumentService.KycProcessingResult result =
-                kycDocumentService.process(request.base64ImageData(), request.mimeType());
+        KycDocumentService.KycProcessingResult result = kycDocumentService.process(
+                request.base64ImageData(),
+                request.mimeType(),
+                request.registeredName());
         return ResponseEntity.ok(result);
     }
 
     public record ProcessRequest(
             @NotBlank String base64ImageData,
-            @NotBlank String mimeType
+            @NotBlank String mimeType,
+            /** Optional: registered full name for name cross-validation. */
+            String registeredName
     ) {}
 }
