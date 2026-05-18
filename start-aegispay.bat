@@ -192,6 +192,10 @@ set NOTIFICATION_SERVICE_URI=http://localhost:8086
 set AI_PLATFORM_URI=http://localhost:8091
 
 REM Optional — override if you have real keys
+REM AI Platform — OpenRouter (free models, onprem profile). Get key: https://openrouter.ai
+IF "%OPENROUTER_API_KEY%"=="" set OPENROUTER_API_KEY=sk-ant-placeholder-local-dev
+REM AI Platform — Anthropic Claude (prod profile). Set for real KYC/fraud AI with Claude.
+IF "%ANTHROPIC_API_KEY%"=="" set ANTHROPIC_API_KEY=sk-ant-placeholder-local-dev
 IF "%STRIPE_SECRET_KEY%"=="" set STRIPE_SECRET_KEY=sk_test_51TTkk2CyjRW67i1DP4dcrEgzhOm9dUe61k9U5kPNoDST6Deuy9rAvgJY0ZL93kKbDmdP7SEAUXUM6M4TMMtxkWNb00eKgRIql5
 IF "%STRIPE_PUBLISHABLE_KEY%"=="" set STRIPE_PUBLISHABLE_KEY=pk_test_placeholder_local_dev
 IF "%SMTP_PASSWORD%"=="" set SMTP_PASSWORD=mcinrqrbfqayklee
@@ -474,7 +478,7 @@ echo.
 echo Starting backend services (Wave 1)...
 
 start "api-gateway" /MIN cmd /c ^
-"java -DUSER_SERVICE_URI=http://localhost:8081 -DTRANSACTION_SERVICE_URI=http://localhost:8082 -DLEDGER_SERVICE_URI=http://localhost:8083 -DORCHESTRATOR_SERVICE_URI=http://localhost:8084 -DRISK_ENGINE_URI=http://localhost:8085 -DNOTIFICATION_SERVICE_URI=http://localhost:8086 -DAI_PLATFORM_URI=http://localhost:8091 -DOAUTH2_PRIMARY_ISSUER_URI=http://!LAN_IP!:8180/realms/aegispay -DOAUTH2_ISSUER_KEYCLOAK=http://!LAN_IP!:8180/realms/aegispay -DCORS_ALLOWED_ORIGIN_1=http://!LAN_IP!:3000 -Dspring.data.redis.url=redis://default:aegispay_dev@localhost:6379 -jar services\api-gateway\target\api-gateway-1.0.0-SNAPSHOT.jar > logs\api-gateway.log 2>&1"
+"java -DUSER_SERVICE_URI=http://localhost:8081 -DTRANSACTION_SERVICE_URI=http://localhost:8082 -DLEDGER_SERVICE_URI=http://localhost:8083 -DORCHESTRATOR_SERVICE_URI=http://localhost:8084 -DRISK_ENGINE_URI=http://localhost:8085 -DNOTIFICATION_SERVICE_URI=http://localhost:8086 -DAI_PLATFORM_URI=http://localhost:8091 -DOAUTH2_PRIMARY_ISSUER_URI=http://!LAN_IP!:8180/realms/aegispay -DOAUTH2_ISSUER_KEYCLOAK=http://!LAN_IP!:8180/realms/aegispay -DOAUTH2_ISSUER_KEYCLOAK_LOCAL=http://localhost:8180/realms/aegispay -DCORS_ALLOWED_ORIGIN_1=http://!LAN_IP!:3000 -Dspring.data.redis.url=redis://default:aegispay_dev@localhost:6379 -jar services\api-gateway\target\api-gateway-1.0.0-SNAPSHOT.jar > logs\api-gateway.log 2>&1"
 
 start "user-service" /MIN cmd /c ^
 "java -jar services\user-service\target\user-service-1.0.0-SNAPSHOT.jar > logs\user-service.log 2>&1"
@@ -495,7 +499,7 @@ start "notification-service" /MIN cmd /c ^
 "java -jar services\notification-service\target\notification-service-1.0.0-SNAPSHOT.jar > logs\notification-service.log 2>&1"
 
 start "ai-platform" /MIN cmd /c ^
-"java -jar services\ai-platform\target\ai-platform-1.0.0-SNAPSHOT.jar > logs\ai-platform.log 2>&1"
+"java -Dspring.profiles.active=onprem -jar services\ai-platform\target\ai-platform-1.0.0-SNAPSHOT.jar > logs\ai-platform.log 2>&1"
 
 start "data-pipeline" /MIN cmd /c ^
 "java -jar services\data-pipeline\target\data-pipeline-1.0.0-SNAPSHOT.jar > logs\data-pipeline.log 2>&1"

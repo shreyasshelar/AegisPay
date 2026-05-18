@@ -1,4 +1,4 @@
-spring:
+﻿spring:
   application:
     name: transaction-service
 
@@ -53,7 +53,7 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: ${OAUTH2_ISSUER_URI:http://localhost:8180/realms/aegispay}
+          jwk-set-uri: ${OAUTH2_JWK_SET_URI:http://localhost:8180/realms/aegispay/protocol/openid-connect/certs}
 
 server:
   port: ${SERVER_PORT:8082}
@@ -75,6 +75,8 @@ aegispay:
     ttl-seconds: 86400
 
 logging:
+  file:
+    name: logs/transaction-service.log
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} [traceId=%X{traceId}] [corrId=%X{correlationId}] [userId=%X{userId}] - %msg%n"
   level:
