@@ -50,6 +50,18 @@ export function maskId(id: string): string {
   return `${id.slice(0, 8)}…`
 }
 
+/**
+ * Resolve a WebSocket base URL for the current browser context.
+ * NEXT_PUBLIC_WS_* vars are compiled with the value from .env at build time,
+ * which is often ws://localhost:PORT. When the app is accessed from a LAN IP
+ * (e.g. http://192.168.29.34:3000), replace localhost with the actual serving
+ * hostname so WebSocket connections reach the correct host.
+ */
+export function resolveWsUrl(envUrl: string): string {
+  if (typeof window === 'undefined') return envUrl
+  return envUrl.replace('localhost', window.location.hostname)
+}
+
 /** Copy text to clipboard — returns promise. */
 export async function copyToClipboard(text: string): Promise<void> {
   if (navigator.clipboard) {
