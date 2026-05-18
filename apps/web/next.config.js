@@ -4,6 +4,13 @@ const isDev = process.env.NODE_ENV === 'development'
 // Server-side API base (not exposed to browser) — used by the rewrite proxy
 const API_BASE_URL = process.env.API_BASE_URL ?? 'http://localhost:8080'
 
+// WebSocket host for CSP — derive from NEXT_PUBLIC_WS_BASE_URL so LAN-IP testing works.
+// e.g. ws://192.168.29.34:8086  →  extract ws://192.168.29.34 (all ports on that host)
+const wsBaseUrl = process.env.NEXT_PUBLIC_WS_BASE_URL ?? 'ws://localhost:8086'
+const wsHost = (() => {
+  try { const u = new URL(wsBaseUrl); return `${u.protocol}//${u.hostname}` } catch { return 'ws://localhost' }
+})()
+
 const nextConfig = {
   transpilePackages: [
     '@aegispay/design-system',
@@ -30,10 +37,10 @@ const nextConfig = {
   },
 
   async headers() {
+    // Allow ws://hostname:* so WebSocket to notification-service works from any IP
+    const wsAllow = wsHost === 'ws://localhost' ? 'ws://localhost:*' : `ws://localhost:* ${wsHost}:*`
     const connectSrc = isDev
-      // Dev: allow HTTP to localhost for API gateway, ws for notification WS
-      ? "connect-src 'self' http://localhost:* ws://localhost:* wss: https:"
-      // Prod: same-origin rewrites mean no cross-origin HTTP needed; HTTPS for third-parties
+      ? `connect-src 'self' http://localhost:* ${wsAllow} wss: https:`
       : "connect-src 'self' wss: https:"
 
     return [
@@ -67,7 +74,17 @@ const nextConfig = {
   reactStrictMode: true,
 
   experimental: {
-    serverActions: { allowedOrigins: ['localhost:3000'] },
+    serverActions: {
+      // Allow server actions from localhost and any LAN IP configured via NEXTAUTH_URL
+      allowedOrigins: (() => {
+        const origins = ['localhost:3000']
+        const nextAuthUrl = process.env.NEXTAUTH_URL
+        if (nextAuthUrl) {
+          try { origins.push(new URL(nextAuthUrl).host) } catch {}
+        }
+        return [...new Set(origins)]
+      })(),
+    },
   },
 }
 
