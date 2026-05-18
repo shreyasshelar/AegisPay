@@ -1,4 +1,4 @@
-spring:
+﻿spring:
   application:
     name: notification-service
 
@@ -18,7 +18,7 @@ spring:
     host: ${SMTP_HOST:smtp.gmail.com}
     port: ${SMTP_PORT:587}
     username: ${SMTP_USERNAME:aegispay.dev@gmail.com}
-    # SMTP_PASSWORD injected from Vault via ESO → K8s secret aegispay-smtp-secret
+    # SMTP_PASSWORD injected from Vault via ESO â†’ K8s secret aegispay-smtp-secret
     password: ${SMTP_PASSWORD:}
     from: ${SMTP_FROM_ADDRESS:aegispay.dev@gmail.com}
     properties:
@@ -35,7 +35,7 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: ${OAUTH2_ISSUER_URI:http://localhost:8180/realms/aegispay}
+          jwk-set-uri: ${OAUTH2_JWK_SET_URI:http://localhost:8180/realms/aegispay/protocol/openid-connect/certs}
 
 server:
   port: ${SERVER_PORT:8086}
@@ -64,6 +64,8 @@ aegispay:
       webhook-url: ${SLACK_WEBHOOK_URL:}
 
 logging:
+  file:
+    name: logs/notification-service.log
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} [traceId=%X{traceId}] [corrId=%X{correlationId}] - %msg%n"
   level:

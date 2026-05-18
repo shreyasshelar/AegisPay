@@ -41,7 +41,10 @@ public class UserController {
     /** Get the authenticated user's own profile. */
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<UserResponse>> getMe(@AuthenticationPrincipal Jwt jwt) {
-        UserResponse response = userService.getByExternalId(jwt.getSubject());
+        String externalId = jwt.getClaimAsString("aegispay_user_id") != null
+                ? jwt.getClaimAsString("aegispay_user_id")
+                : jwt.getSubject();
+        UserResponse response = userService.getByExternalId(externalId);
         return ResponseEntity.ok(ApiResponse.ok(response));
     }
 
@@ -62,11 +65,21 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.ok(result));
     }
 
-    /** Get any user by internal UUID. Requires BACK_OFFICE, ADMIN, or MERCHANT_OPS role. */
+    /** Get a user by UUID. Back-office can fetch any user; customers can only fetch themselves. */
     @GetMapping("/{userId}")
-    @PreAuthorize("hasAnyRole('BACK_OFFICE', 'ADMIN', 'MERCHANT_OPS')")
-    public ResponseEntity<ApiResponse<UserResponse>> getById(@PathVariable UUID userId) {
-        UserResponse response = userService.getById(userId);
+    @PreAuthorize("hasAnyRole('BACK_OFFICE', 'ADMIN', 'MERCHANT_OPS') or " +
+                  "#jwt.getClaimAsString('aegispay_user_id') == #userId.toString() or " +
+                  "#jwt.subject == #userId.toString()")
+    public ResponseEntity<ApiResponse<UserResponse>> getById(
+            @PathVariable UUID userId,
+            @AuthenticationPrincipal Jwt jwt) {
+        // Customers pass their aegispay_user_id (external UUID) — look up by external ID.
+        // Back-office passes the internal DB UUID — look up by internal ID.
+        String aeId = jwt.getClaimAsString("aegispay_user_id");
+        boolean isSelf = userId.toString().equals(aeId) || userId.toString().equals(jwt.getSubject());
+        UserResponse response = isSelf
+                ? userService.getByExternalId(userId.toString())
+                : userService.getById(userId);
         return ResponseEntity.ok(ApiResponse.ok(response));
     }
 
