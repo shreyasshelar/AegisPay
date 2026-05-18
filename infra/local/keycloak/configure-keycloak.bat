@@ -204,13 +204,49 @@ curl -s -X PUT "%KC_URL%/admin/realms/%REALM%/clients/!WEB_CLIENT_ID!" ^
   -d "{\"redirectUris\":[\"http://localhost:3000/*\",\"http://!LAN_IP!:3000/*\"],\"webOrigins\":[\"http://localhost:3000\",\"http://!LAN_IP!:3000\"]}" ^
   >nul 2>&1
 
-echo   LAN redirect URIs registered
+echo   LAN redirect URIs registered (web)
+
+REM ── Android: add LAN IP emulator redirect (10.0.2.2 = Android emulator localhost) ─
+curl -s "%KC_URL%/admin/realms/%REALM%/clients?clientId=aegispay-android" ^
+  -H "Authorization: Bearer !TOKEN!" ^
+  -o android_client.json
+for /f "tokens=2 delims=:," %%a in ('findstr "\"id\"" android_client.json') do (
+    set ANDROID_CLIENT_ID=%%a
+    set ANDROID_CLIENT_ID=!ANDROID_CLIENT_ID:"=!
+    set ANDROID_CLIENT_ID=!ANDROID_CLIENT_ID: =!
+    goto :got_android_client
+)
+:got_android_client
+curl -s -X PUT "%KC_URL%/admin/realms/%REALM%/clients/!ANDROID_CLIENT_ID!" ^
+  -H "Authorization: Bearer !TOKEN!" ^
+  -H "Content-Type: application/json" ^
+  -d "{\"redirectUris\":[\"com.aegispay.android://oauth/callback\",\"http://10.0.2.2:8080\",\"http://!LAN_IP!:8080\"],\"webOrigins\":[\"*\"]}" ^
+  >nul 2>&1
+echo   LAN redirect URIs registered (android)
+
+REM ── iOS: add LAN IP redirect ─────────────────────────────────────────────────────
+curl -s "%KC_URL%/admin/realms/%REALM%/clients?clientId=aegispay-ios" ^
+  -H "Authorization: Bearer !TOKEN!" ^
+  -o ios_client.json
+for /f "tokens=2 delims=:," %%a in ('findstr "\"id\"" ios_client.json') do (
+    set IOS_CLIENT_ID=%%a
+    set IOS_CLIENT_ID=!IOS_CLIENT_ID:"=!
+    set IOS_CLIENT_ID=!IOS_CLIENT_ID: =!
+    goto :got_ios_client
+)
+:got_ios_client
+curl -s -X PUT "%KC_URL%/admin/realms/%REALM%/clients/!IOS_CLIENT_ID!" ^
+  -H "Authorization: Bearer !TOKEN!" ^
+  -H "Content-Type: application/json" ^
+  -d "{\"redirectUris\":[\"aegispay://oauth/callback\",\"https://aegispay.app/auth/callback\"],\"webOrigins\":[\"*\"]}" ^
+  >nul 2>&1
+echo   LAN redirect URIs registered (ios)
 
 REM =========================================================
 REM CLEANUP
 REM =========================================================
 
-del /q token.json client.json customer_role.json cust_user.json payee_user.json >nul 2>&1
+del /q token.json client.json customer_role.json cust_user.json payee_user.json android_client.json ios_client.json web_client.json >nul 2>&1
 
 echo.
 echo =========================================================
