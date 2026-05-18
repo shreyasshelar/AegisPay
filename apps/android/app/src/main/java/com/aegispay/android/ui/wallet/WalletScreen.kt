@@ -125,7 +125,7 @@ private fun WalletContent(
     accounts:        List<Account>,
     topUpResult:     TopUpResult?,
     isLoading:       Boolean,
-    onTopUp:         (Double) -> Unit,
+    onTopUp:         (java.math.BigDecimal) -> Unit,
     onDismissResult: () -> Unit,
 ) {
     var amountText  by remember { mutableStateOf("") }
@@ -196,11 +196,11 @@ private fun WalletContent(
 
         Button(
             onClick = {
-                val parsed = amountText.toDoubleOrNull()
+                val parsed = amountText.toBigDecimalOrNull()
                 when {
-                    parsed == null || parsed <= 0 ->
+                    parsed == null || parsed <= java.math.BigDecimal.ZERO ->
                         amountError = "Enter a valid amount"
-                    parsed < 1.0 ->
+                    parsed < java.math.BigDecimal.ONE ->
                         amountError = "Minimum top-up is ₹1"
                     else -> onTopUp(parsed)
                 }
@@ -278,7 +278,7 @@ private fun BalanceCard(account: Account) {
                 style = MaterialTheme.typography.headlineMedium,
                 color = MaterialTheme.colorScheme.onPrimaryContainer,
             )
-            if (account.reservedBalance > 0) {
+            if (account.reservedBalance > java.math.BigDecimal.ZERO) {
                 Spacer(Modifier.height(4.dp))
                 Text(
                     text  = "Reserved: ${fmt.format(account.reservedBalance)}",

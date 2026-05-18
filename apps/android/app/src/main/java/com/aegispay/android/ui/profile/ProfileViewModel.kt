@@ -122,6 +122,7 @@ class ProfileViewModel @Inject constructor(
                     documentType    = docType,
                     base64ImageData = base64,
                     mimeType        = mimeType,
+                    registeredName  = _uiState.value.profile?.name,
                 )
             )
         }
@@ -158,6 +159,8 @@ class ProfileViewModel @Inject constructor(
     val canConfirm: Boolean
         get() {
             val r = _uiState.value.kycResult ?: return false
-            return r.quality.acceptable && r.tampering?.tampered != true
+            if (r.tampering?.tampered == true) return false
+            if (r.validation?.overallValid == false) return false
+            return r.quality.acceptable
         }
 }

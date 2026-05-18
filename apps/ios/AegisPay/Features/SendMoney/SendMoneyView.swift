@@ -23,6 +23,7 @@ struct SendMoneyView: View {
             .navigationTitle("Send Money")
             .navigationBarTitleDisplayMode(.large)
             .task { await vm.loadKycStatus(userId: authStore.currentUser?.id ?? "") }
+            .onAppear { Task { await vm.loadKycStatus(userId: authStore.currentUser?.id ?? "") } }
         }
     }
 

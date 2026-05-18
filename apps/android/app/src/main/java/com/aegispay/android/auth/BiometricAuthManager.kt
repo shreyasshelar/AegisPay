@@ -23,6 +23,18 @@ enum class BiometricAvailability {
     UNSUPPORTED,
 }
 
+// ── BiometricAuthResult ───────────────────────────────────────────────────────
+
+sealed class BiometricAuthResult {
+    data object Success       : BiometricAuthResult()
+    data object UserCancelled : BiometricAuthResult()
+    data object LockedOut     : BiometricAuthResult()  // too many attempts; passcode required
+    data object NotEnrolled   : BiometricAuthResult()
+    data class  Failed(val message: String) : BiometricAuthResult()
+
+    val isSuccess: Boolean get() = this is Success
+}
+
 // ── BiometricAuthManager ──────────────────────────────────────────────────────
 
 /**
@@ -31,7 +43,7 @@ enum class BiometricAvailability {
  *
  * Usage:
  *   val result = biometricAuthManager.authenticate(activity, "Unlock AegisPay")
- *   if (result) { /* authenticated */ }
+ *   if (result is BiometricAuthResult.Success) { /* authenticated */ }
  */
 @Singleton
 class BiometricAuthManager @Inject constructor(
@@ -72,28 +84,39 @@ class BiometricAuthManager @Inject constructor(
 
     /**
      * Shows the system biometric prompt attached to [activity].
-     * Returns `true` on success, `false` on any failure (cancelled, lockout, error).
+     * Returns a [BiometricAuthResult] so callers can differentiate cancel,
+     * lockout, not-enrolled, and genuine failure rather than treating all
+     * as the same false value.
      *
      * Must be called from a coroutine on the main thread.
      */
     suspend fun authenticate(
-        activity:    FragmentActivity,
-        title:       String = "AegisPay",
-        subtitle:    String = "Confirm your identity to continue",
+        activity:     FragmentActivity,
+        title:        String = "AegisPay",
+        subtitle:     String = "Confirm your identity to continue",
         negativeText: String = "Cancel",
-    ): Boolean = suspendCancellableCoroutine { cont ->
+    ): BiometricAuthResult = suspendCancellableCoroutine { cont ->
         val executor = ContextCompat.getMainExecutor(activity)
 
         val callback = object : BiometricPrompt.AuthenticationCallback() {
             override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                if (cont.isActive) cont.resume(true)
+                if (cont.isActive) cont.resume(BiometricAuthResult.Success)
             }
             override fun onAuthenticationFailed() {
                 // A single biometric attempt failed — prompt stays open, don't resolve yet.
             }
             override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
-                // Terminal error (cancelled, lockout, etc.)
-                if (cont.isActive) cont.resume(false)
+                if (!cont.isActive) return
+                val result = when (errorCode) {
+                    BiometricPrompt.ERROR_USER_CANCELED,
+                    BiometricPrompt.ERROR_CANCELED,
+                    BiometricPrompt.ERROR_NEGATIVE_BUTTON -> BiometricAuthResult.UserCancelled
+                    BiometricPrompt.ERROR_LOCKOUT,
+                    BiometricPrompt.ERROR_LOCKOUT_PERMANENT -> BiometricAuthResult.LockedOut
+                    BiometricPrompt.ERROR_NO_BIOMETRICS    -> BiometricAuthResult.NotEnrolled
+                    else                                   -> BiometricAuthResult.Failed(errString.toString())
+                }
+                cont.resume(result)
             }
         }
 

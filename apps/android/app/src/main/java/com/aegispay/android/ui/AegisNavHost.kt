@@ -36,7 +36,7 @@ object Route {
     fun transactionDetail(id: String) = "transactions/$id"
 }
 
-private val BACK_OFFICE_ROLES = setOf("BACK_OFFICE", "ADMIN", "MERCHANT_OPS")
+private val BACK_OFFICE_ROLES = setOf("BACK_OFFICE", "ADMIN")
 
 // ── Nav host ──────────────────────────────────────────────────────────────────
 
@@ -144,7 +144,12 @@ fun AegisNavHost(
                 navDeepLink { uriPattern = "https://api.aegispay.shreyasshelar.uk/transactions/{transactionId}" },
             ),
         ) { back ->
-            val txId = back.arguments!!.getString("transactionId")!!
+            val txId = back.arguments?.getString("transactionId")
+            if (txId == null) {
+                // Deep link arrived without transactionId — navigate back rather than crash
+                navController.navigateUp()
+                return@composable
+            }
             TransactionDetailScreen(
                 transactionId = txId,
                 viewModel     = hiltViewModel(),

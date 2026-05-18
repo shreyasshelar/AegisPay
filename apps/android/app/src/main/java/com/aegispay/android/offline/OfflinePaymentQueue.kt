@@ -8,6 +8,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import java.math.BigDecimal
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -36,7 +37,7 @@ class OfflinePaymentQueue @Inject constructor(
      */
     suspend fun enqueue(
         payeeId:  String,
-        amount:   Double,
+        amount:   BigDecimal,
         currency: String,
         note:     String?,
     ): String {

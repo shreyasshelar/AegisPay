@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.aegispay.android.auth.AuthRepository
 import com.aegispay.android.network.AegisApiService
 import com.aegispay.android.network.CreateTransactionRequest
+import java.math.BigDecimal
 import com.aegispay.android.network.ErrorResolutionRequest
 import com.aegispay.android.network.ErrorResolutionResponse
 import com.aegispay.android.network.KycStatus
@@ -98,9 +99,9 @@ class SendMoneyViewModel @Inject constructor(
         get() {
             val text = _uiState.value.amountText
             if (text.isBlank()) return "Amount is required"
-            val v = text.toDoubleOrNull() ?: return "Enter a valid amount"
-            if (v <= 0) return "Amount must be greater than zero"
-            if (v > 1_000_000) return "Maximum 10,00,000 per transfer"
+            val v = text.toBigDecimalOrNull() ?: return "Enter a valid amount"
+            if (v <= BigDecimal.ZERO) return "Amount must be greater than zero"
+            if (v > BigDecimal("1000000")) return "Maximum 10,00,000 per transfer"
             return null
         }
 
@@ -136,7 +137,7 @@ class SendMoneyViewModel @Inject constructor(
                     idempotencyKey = idempotencyKey,
                     request = CreateTransactionRequest(
                         payeeId  = state.payeeId.trim(),
-                        amount   = state.amountText.toDouble(),
+                        amount   = state.amountText.toBigDecimal(),
                         currency = state.currency,
                         note     = state.note.ifBlank { null },
                     ),

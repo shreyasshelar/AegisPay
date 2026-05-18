@@ -309,7 +309,7 @@ fun AegisTextField(
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 
-fun formatAmount(amount: Double, currency: String): String {
+fun formatAmount(amount: java.math.BigDecimal, currency: String): String {
     val fmt = NumberFormat.getCurrencyInstance(
         if (currency == "INR") Locale("en", "IN") else Locale.US
     )
