@@ -6,6 +6,10 @@ set REALM=aegispay
 set ADMIN_USER=admin
 set ADMIN_PASS=admin
 
+REM LAN_IP is inherited from start-aegispay.bat (set to machine's LAN IP for remote browser access)
+REM Falls back to localhost if run standalone
+IF "!LAN_IP!"=="" set LAN_IP=localhost
+
 REM UUIDs must match the values seeded into aegispay_users / aegispay_ledger by start-aegispay.bat
 set CUSTOMER_KC_UUID=59295e61-a284-40ed-8d3b-9e15bedeb040
 set PAYEE_KC_UUID=3bf3e523-9de8-4254-9cc9-d5fa50ff8d4a
@@ -170,6 +174,37 @@ curl -s -X PUT "%KC_URL%/admin/realms/%REALM%/users/!PAYEE_ID!/reset-password" ^
   -d "{\"type\":\"password\",\"value\":\"Test@1234\",\"temporary\":false}" >nul 2>&1
 
 echo   Passwords set
+
+REM =========================================================
+REM 5. ADD LAN-IP REDIRECT URIs TO aegispay-web CLIENT
+REM    Allows login from browsers on other devices on the LAN.
+REM    Reads current redirectUris and appends the LAN IP entries.
+REM =========================================================
+
+echo.
+echo [5/5] Registering LAN redirect URIs for http://!LAN_IP!:3000 ...
+
+curl -s "%KC_URL%/admin/realms/%REALM%/clients?clientId=aegispay-web" ^
+  -H "Authorization: Bearer !TOKEN!" ^
+  -o web_client.json
+
+REM Extract the client's internal UUID
+for /f "tokens=2 delims=:," %%a in ('findstr "\"id\"" web_client.json') do (
+    set WEB_CLIENT_ID=%%a
+    set WEB_CLIENT_ID=!WEB_CLIENT_ID:"=!
+    set WEB_CLIENT_ID=!WEB_CLIENT_ID: =!
+    goto :got_web_client
+)
+:got_web_client
+
+REM Patch redirectUris and webOrigins to include the LAN IP
+curl -s -X PUT "%KC_URL%/admin/realms/%REALM%/clients/!WEB_CLIENT_ID!" ^
+  -H "Authorization: Bearer !TOKEN!" ^
+  -H "Content-Type: application/json" ^
+  -d "{\"redirectUris\":[\"http://localhost:3000/*\",\"http://!LAN_IP!:3000/*\"],\"webOrigins\":[\"http://localhost:3000\",\"http://!LAN_IP!:3000\"]}" ^
+  >nul 2>&1
+
+echo   LAN redirect URIs registered
 
 REM =========================================================
 REM CLEANUP
