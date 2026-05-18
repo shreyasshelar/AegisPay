@@ -1,5 +1,6 @@
 import SwiftUI
 import PhotosUI
+import AVFoundation
 
 // MARK: — Camera picker wrapper
 
@@ -46,12 +47,29 @@ struct ProfileView: View {
 
     @State private var showSourceSheet  = false
     @State private var showCamera       = false
+    @State private var showCameraPermissionDenied = false
     @State private var cameraImage:    UIImage? = nil
 
     // When camera returns an image, process it
     private func handleCameraImage(_ img: UIImage?) {
         guard let img else { return }
         Task { await vm.processImage(img) }
+    }
+
+    private func requestCameraAndShow() {
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            showCamera = true
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .video) { granted in
+                DispatchQueue.main.async {
+                    if granted { showCamera = true }
+                    else { showCameraPermissionDenied = true }
+                }
+            }
+        default:
+            showCameraPermissionDenied = true
+        }
     }
 
     var body: some View {
@@ -86,11 +104,21 @@ struct ProfileView: View {
             }
             // Source selection action sheet
             .confirmationDialog("Select Document Source", isPresented: $showSourceSheet, titleVisibility: .visible) {
-                Button("Camera") { showCamera = true }
+                Button("Camera") { requestCameraAndShow() }
                 PhotosPicker(selection: $vm.selectedPhoto, matching: .images) {
                     Text("Photo Library")
                 }
                 Button("Cancel", role: .cancel) {}
+            }
+            .alert("Camera Access Required", isPresented: $showCameraPermissionDenied) {
+                Button("Cancel", role: .cancel) {}
+                Button("Open Settings") {
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(url)
+                    }
+                }
+            } message: {
+                Text("Please allow camera access in Settings to scan your document.")
             }
         }
     }

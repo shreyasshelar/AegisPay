@@ -6,7 +6,9 @@ import com.aegispay.android.network.AegisApiService
 import com.aegispay.android.network.Account
 import com.aegispay.android.network.TopUpConfirmRequest
 import com.aegispay.android.network.TopUpIntentRequest
+import java.math.BigDecimal
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -75,7 +77,7 @@ class WalletViewModel @Inject constructor(
      * On success sets [clientSecret] which triggers [WalletScreen] to call
      * `paymentSheet.presentWithPaymentIntent(clientSecret, config)`.
      */
-    fun createTopUpIntent(amount: Double, currency: String = "INR") {
+    fun createTopUpIntent(amount: BigDecimal, currency: String = "INR") {
         viewModelScope.launch {
             _isTopUpLoading.value = true
             try {
@@ -87,7 +89,7 @@ class WalletViewModel @Inject constructor(
             } catch (e: Exception) {
                 val prev = _uiState.value
                 _uiState.value = WalletUiState.Error("Could not initiate top-up: ${e.message}")
-                kotlinx.coroutines.delay(2_500)
+                delay(2_500)
                 _uiState.value = if (prev is WalletUiState.Success) prev
                                  else WalletUiState.Success(emptyList())
             } finally {

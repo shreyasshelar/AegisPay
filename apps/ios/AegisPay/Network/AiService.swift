@@ -33,7 +33,7 @@ final class AiService {
 
     // ── KYC document processing ───────────────────────────────────────────────
 
-    func processKycDocument(_ request: KycDocumentRequest) async throws -> UserProfile {
+    func processKycDocument(_ request: KycDocumentRequest) async throws -> KycProcessingResult {
         try await api.post(path: "/api/v1/ai/kyc/process", body: request)
     }
 }

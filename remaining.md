@@ -306,33 +306,30 @@ Both scripts: build all JARs → start Docker infra → wait for Keycloak + Clic
 ### Notification Deduplication (this session)
 - [x] **`sidebar.tsx`** — Suppressed global `toast.info` when user is on `/send` or `/transactions/*` (those pages fire their own success/error toast from the WebSocket status subscription). Badge counter still increments. Eliminates the double-toast on transaction completion/failure.
 
-### Mobile — iOS & Android Bugs Found (audited, not yet fixed)
+### Mobile — iOS & Android Bugs (audited and fixed)
 
 #### iOS
 
 | Severity | File | Issue |
 |----------|------|-------|
-| CRITICAL | `apps/ios/AegisPay/Services/AiService.swift:36` | `processKycDocument()` returns `UserProfile` instead of `KycProcessingResult` — wrong return type. Method is dead code (never called; `ProfileViewModel` uses `UserService.processKycDocument()` correctly), but the type error will cause a compile failure if it is ever wired up. |
-| MEDIUM | `apps/ios/AegisPay/Services/ApiClient.swift:104,108` | Force-unwrap `!` on `URLComponents` / URL construction — crashes at runtime with a malformed base URL instead of throwing `ApiError.invalidURL`. Should use `guard let … else { throw ApiError.invalidURL }`. |
-| MEDIUM | `apps/ios/AegisPay/Features/SendMoney/SendMoneyViewModel.swift:194` | `errorCode` extracted with `.components(separatedBy: ":").first` — should be `.last` (backend format is `SERVICE:CODE`; `.first` returns the service prefix, not the machine-readable error code). Frontend error-code display will always show the wrong segment. |
-| MEDIUM | `apps/ios/AegisPay/Features/Profile/ProfileView.swift` | No explicit `AVCaptureDevice.requestAccess(for: .video)` before launching camera picker. iOS 17+ will silently deny capture if the app hasn't requested permission in-context. Permission is declared in `Info.plist` but never requested at the call site. |
-| MEDIUM | `apps/ios/AegisPay/Services/BiometricAuthService.swift` | All `LAError` variants return `false` with no differentiation — `.userCancel`, `.biometryLockout`, `.biometryNotEnrolled`, and `.systemCancel` all produce identical behaviour. UI cannot distinguish "user cancelled" (dismissable) from "locked out" (requires passcode) from "not enrolled" (requires settings CTA). |
-| LOW | `apps/ios/AegisPay/Features/SendMoney/SendMoneyViewModel.swift` | `kycStatus` loaded once on `init` via `loadKycStatus()`, never refreshed on screen re-entry (`onAppear`). If a user completes KYC and navigates back to Send Money without a cold restart, the guard will still show them as blocked. |
-| MISSING | `apps/ios/AegisPay/Models/` | `KycDocumentRequest` struct is missing the `registeredName: String?` field added to the backend this session. API calls will omit the field → AI platform cannot perform name cross-match validation for iOS users. |
-| MISSING | `apps/ios/AegisPay/Models/` | `KycProcessingResult` struct is missing the `validation` object added to the backend this session (16-field document validation breakdown). iOS KYC result screen will not show per-check pass/fail details. |
+| ~~CRITICAL~~ ✅ | `apps/ios/AegisPay/Network/AiService.swift:36` | `processKycDocument()` now returns `KycProcessingResult` (was `UserProfile`). |
+| ~~MEDIUM~~ ✅ | `apps/ios/AegisPay/Network/ApiClient.swift:104,108` | Force-unwrap replaced with `guard let … else { throw ApiError(...) }` on both `URLComponents` and `components.url`. |
+| ~~MEDIUM~~ ✅ | `apps/ios/AegisPay/Features/SendMoney/SendMoneyViewModel.swift:194` | `errorCode` extraction changed to `.last` (was `.first`) so the machine-readable code segment is used. |
+| ~~MEDIUM~~ ✅ | `apps/ios/AegisPay/Features/Profile/ProfileView.swift` | Added `requestCameraAndShow()` — calls `AVCaptureDevice.requestAccess(for: .video)` before opening camera; shows Settings deep-link alert on denial. |
+| ~~MEDIUM~~ ✅ | `apps/ios/AegisPay/Auth/BiometricAuthService.swift` | `authenticate()` now returns `BiometricAuthResult` enum (`success / userCancelled / lockedOut / notEnrolled / failed`). `BiometricLockView` shows appropriate messages per case; user-cancel no longer shows an error. |
+| ~~LOW~~ ✅ | `apps/ios/AegisPay/Features/SendMoney/SendMoneyView.swift` | Added `.onAppear` to re-trigger `loadKycStatus` on every screen re-entry (`.task` alone was unreliable after NavigationLink push/pop). |
+| ~~MISSING~~ ✅ | `apps/ios/AegisPay/Network/Endpoints.swift` | `KycDocumentRequest` now has `registeredName: String?`; `KycProcessingResult` now has `validation: KycValidationResult?` (17-field struct). `ProfileViewModel` passes `profile?.name` as `registeredName`; `canConfirm` respects `validation.overallValid`. |
 
 #### Android
 
 | Severity | File | Issue |
 |----------|------|-------|
-| CRITICAL | `apps/android/app/src/main/java/com/aegispay/android/data/models/ApiModels.kt` | `Transaction.amount`, `Account.availableBalance`, `CreateTransactionRequest.amount`, and other financial fields use `Double` instead of `BigDecimal`. IEEE 754 floating-point loses precision on values like ₹1,234.56 → rounding errors accumulate across balance calculations. Backend returns exact decimal strings; they should be parsed as `BigDecimal`. |
-| MEDIUM | `apps/android/app/src/main/java/com/aegispay/android/ui/navigation/AegisNavHost.kt:147` | `back.arguments!!.getString("transactionId")!!` — double force-unwrap. If the deep link arrives without a `transactionId` argument (e.g. malformed push notification URL), this crashes with `NullPointerException`. Should use safe-access + early return or `requireNotNull` with a descriptive message. |
-| MEDIUM | `apps/android/app/src/main/java/com/aegispay/android/ui/profile/ProfileScreen.kt` | Camera / storage permissions declared in `AndroidManifest.xml` but no `ActivityResultContracts.RequestPermission` launcher at the call site before the camera is launched. On Android 10+ the launcher silently fails; on Android 6–9 it crashes with `SecurityException`. Runtime permission request must be added. |
-| LOW | `apps/android/app/src/main/java/com/aegispay/android/ui/` | `MERCHANT_OPS` role constant included in `BACK_OFFICE_ROLES` set used for UI visibility. Backend Keycloak realm does not define this role — any user erroneously assigned it will see back-office nav items but all back-office API calls will return 403. |
-| LOW | `apps/android/app/src/main/java/com/aegispay/android/ui/wallet/WalletViewModel.kt` | `kotlinx.coroutines.delay` called with fully-qualified name instead of `import kotlinx.coroutines.delay`. Compiles and runs correctly but is a style inconsistency that will confuse linters. |
-| MISSING | `apps/android/app/src/main/java/com/aegispay/android/data/models/ApiModels.kt` | `KycDocumentRequest` data class is missing `registeredName: String?` field added to backend this session. Android KYC uploads will omit the field → AI platform cannot cross-match name for Android users. |
-| MISSING | `apps/android/app/src/main/java/com/aegispay/android/data/models/ApiModels.kt` | `KycProcessingResult` data class is missing the `validation` object (16-field breakdown) added to backend this session. Android KYC result cannot display per-check details. |
-| MISSING | `apps/android/app/src/main/java/com/aegispay/android/data/models/ApiModels.kt` | `Transaction` data class is missing `failureCode: String?` field added to backend in an earlier session. Android transaction detail screen cannot display machine-readable failure codes. |
+| ~~CRITICAL~~ ✅ | `apps/android/app/.../network/ApiModels.kt` | `Transaction.amount`, `Account.availableBalance`, `CreateTransactionRequest.amount`, `TopUpIntentRequest/Response.amount`, `OfflinePaymentEntity.amount` all changed from `Double` to `BigDecimal`. `BigDecimalAdapter` added to Moshi. Room `TypeConverter` added for `BigDecimal`. All call sites updated (`SendMoneyViewModel`, `WalletViewModel`, `WalletScreen`, `DashboardScreen`, `OfflinePaymentQueue`). |
+| ~~MEDIUM~~ ✅ | `apps/android/app/.../ui/AegisNavHost.kt:147` | Double force-unwrap replaced — `back.arguments?.getString("transactionId")` null-safe; navigates up if null instead of crashing. |
+| ✅ N/A | `apps/android/app/.../ui/profile/ProfileScreen.kt` | Camera permission was already handled correctly (`permissionLauncher` + `launchCamera()` function) — no fix needed. |
+| ~~LOW~~ ✅ | `apps/android/app/.../ui/AegisNavHost.kt` | Removed `MERCHANT_OPS` from `BACK_OFFICE_ROLES` — role not defined in Keycloak realm. |
+| ~~LOW~~ ✅ | `apps/android/app/.../ui/wallet/WalletViewModel.kt` | Added `import kotlinx.coroutines.delay`; removed fully-qualified usage. |
+| ~~MISSING~~ ✅ | `apps/android/app/.../network/ApiModels.kt` | `KycDocumentRequest` now has `registeredName: String? = null`; `KycProcessingResult` now has `validation: KycValidationResult?`; `Transaction` now has `failureCode: String?`. `ProfileViewModel.canConfirm` respects `validation.overallValid`; `registeredName` passed from profile name. |
 
 ---
 
@@ -359,8 +356,8 @@ Both scripts: build all JARs → start Docker infra → wait for Keycloak + Clic
 | Grafana Dashboards | ✅ 100% | 3 dashboards provisioned (needs ClickHouse data to show) |
 | API Gateway | ✅ 100% | CB (fixed this session), rate limiting, routing |
 | Circuit Breakers | ✅ 100% | Fixed this session — all CBs now actually open |
-| Mobile (iOS) | ✅ 100% | Biometric, STOMP, push, KYC, deep links, Live Activity |
-| Mobile (Android) | ✅ 100% | Biometric, FCM, STOMP, KYC, deep links, offline queue |
+| Mobile (iOS) | ✅ 100% | All bugs fixed: return type, URL force-unwrap, errorCode, camera permission, biometric, KYC models |
+| Mobile (Android) | ✅ 100% | All bugs fixed: BigDecimal precision, nav force-unwrap, MERCHANT_OPS role, delay import, KYC models |
 | Web Frontend | ✅ 99% | All flows complete; minor polish possible |
 | Infrastructure / Helm | ✅ 100% | Helm v1.1.0, ArgoCD, Cloudflare tunnel, ClickHouse HA |
 | Load Tests | ✅ 100% | k6 happy-path + idempotency + saga-timeout |

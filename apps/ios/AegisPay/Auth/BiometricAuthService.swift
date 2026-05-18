@@ -10,6 +10,18 @@ enum BiometricType {
     case opticID
 }
 
+// MARK: — BiometricAuthResult
+
+enum BiometricAuthResult {
+    case success
+    case userCancelled
+    case lockedOut           // too many failures — passcode required
+    case notEnrolled         // biometrics not set up on device
+    case failed(String)      // other LAError or system failure
+
+    var isSuccess: Bool { self == .success }
+}
+
 // MARK: — BiometricAuthService
 
 /// Wraps LocalAuthentication to provide biometric availability, type detection,
@@ -69,9 +81,10 @@ final class BiometricAuthService: ObservableObject {
     }
 
     /// Prompts the user to authenticate with biometrics.
-    /// Returns `true` on success, `false` on any failure — the caller decides
-    /// what to do (e.g. fall back to password or sign out).
-    func authenticate(reason: String) async -> Bool {
+    /// Returns a `BiometricAuthResult` so callers can differentiate cancel,
+    /// lockout, not-enrolled, and genuine failure rather than treating all
+    /// as the same error state.
+    func authenticate(reason: String) async -> BiometricAuthResult {
         let context = LAContext()
         var canError: NSError?
 
@@ -79,18 +92,31 @@ final class BiometricAuthService: ObservableObject {
             .deviceOwnerAuthenticationWithBiometrics,
             error: &canError
         ) else {
-            return false
+            let code = (canError as? LAError)?.code
+            if code == .biometryNotEnrolled { return .notEnrolled }
+            if code == .biometryLockout     { return .lockedOut }
+            return .failed(canError?.localizedDescription ?? "Biometrics unavailable")
         }
 
         do {
-            let success = try await context.evaluatePolicy(
+            try await context.evaluatePolicy(
                 .deviceOwnerAuthenticationWithBiometrics,
                 localizedReason: reason
             )
-            return success
+            return .success
+        } catch let error as LAError {
+            switch error.code {
+            case .userCancel, .appCancel, .systemCancel:
+                return .userCancelled
+            case .biometryLockout:
+                return .lockedOut
+            case .biometryNotEnrolled:
+                return .notEnrolled
+            default:
+                return .failed(error.localizedDescription)
+            }
         } catch {
-            // LAError cases (userCancel, biometryLockout, etc.) all map to false.
-            return false
+            return .failed(error.localizedDescription)
         }
     }
 }
