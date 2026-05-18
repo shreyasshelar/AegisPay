@@ -22,7 +22,7 @@ import {
 import { useQueryClient } from '@tanstack/react-query'
 import { AegisBadge, AegisStatusTimeline } from '@aegispay/design-system'
 import { Header } from '@/components/header'
-import { formatAmount, formatDate, copyToClipboard } from '@/lib/utils'
+import { formatAmount, formatDate, copyToClipboard, resolveWsUrl } from '@/lib/utils'
 import type { TransactionStatusUpdate } from '@aegispay/shared-types'
 
 const TERMINAL = new Set(['COMPLETED', 'FAILED', 'ROLLED_BACK'])
@@ -44,7 +44,7 @@ export function TransactionDetailClient({
   const resolveError = useResolveError()
 
   // WebSocket: subscribe to transaction-service per-transaction status topic
-  const txWsBaseUrl = process.env.NEXT_PUBLIC_TX_WS_BASE_URL ?? 'ws://localhost:8082'
+  const txWsBaseUrl = resolveWsUrl(process.env.NEXT_PUBLIC_TX_WS_BASE_URL ?? 'ws://localhost:8082')
   useTransactionStatusSocket({
     transactionId,
     accessToken: session?.accessToken ?? null,

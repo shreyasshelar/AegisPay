@@ -20,7 +20,7 @@ import {
 } from 'lucide-react'
 import { useTransactionSocket } from '@aegispay/api-client'
 import { useNotificationStore } from '@/lib/useNotificationStore'
-import { cn } from '@/lib/utils'
+import { cn, resolveWsUrl } from '@/lib/utils'
 import type { TransactionNotification } from '@aegispay/shared-types'
 import { toast } from 'sonner'
 
@@ -52,7 +52,7 @@ export function Sidebar() {
   const { data: session } = useSession()
   const queryClient        = useQueryClient()
   const role              = session?.user?.role ?? 'CUSTOMER'
-  const wsBaseUrl         = process.env.NEXT_PUBLIC_WS_BASE_URL ?? 'ws://localhost:8086'
+  const wsBaseUrl         = resolveWsUrl(process.env.NEXT_PUBLIC_WS_BASE_URL ?? 'ws://localhost:8086')
 
   const { unreadCount, increment } = useNotificationStore()
 

@@ -22,7 +22,7 @@ import {
 import { AegisStatusTimeline } from '@aegispay/design-system'
 import { Button as AegisButton } from '@aegispay/design-system'
 import { useSendMoneyStore } from '@/lib/useSendMoneyStore'
-import { formatAmount } from '@/lib/utils'
+import { formatAmount, resolveWsUrl } from '@/lib/utils'
 import type { TransactionStatusUpdate } from '@aegispay/shared-types'
 
 const TERMINAL = new Set(['COMPLETED', 'FAILED', 'ROLLED_BACK'])
@@ -44,7 +44,7 @@ export function StepStatus() {
   const resolveError = useResolveError()
 
   // WebSocket: subscribe to /topic/transactions/{id}/status on transaction-service
-  const txWsBaseUrl = process.env.NEXT_PUBLIC_TX_WS_BASE_URL ?? 'ws://localhost:8082'
+  const txWsBaseUrl = resolveWsUrl(process.env.NEXT_PUBLIC_TX_WS_BASE_URL ?? 'ws://localhost:8082')
   useTransactionStatusSocket({
     transactionId: transactionId ?? null,
     accessToken:   session?.accessToken ?? null,
