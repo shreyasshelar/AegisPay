@@ -1,8 +1,8 @@
-spring:
+﻿spring:
   application:
     name: reconciliation-service
 
-  # PostgreSQL — reads ledger_entries and saga state
+  # PostgreSQL â€” reads ledger_entries and saga state
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5433}/${DB_NAME:aegispay_ledger}
     username: ${DB_USERNAME:aegispay}
@@ -10,7 +10,7 @@ spring:
     hikari:
       maximum-pool-size: 5
       connection-timeout: 30000
-      # Read-only pool — reconciliation only reads from ledger
+      # Read-only pool â€” reconciliation only reads from ledger
       read-only: true
 
   jpa:
@@ -21,7 +21,7 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
 
-  # Spring Batch metadata tables — use own history table so it doesn't clash with ledger-service's flyway_schema_history
+  # Spring Batch metadata tables â€” use own history table so it doesn't clash with ledger-service's flyway_schema_history
   flyway:
     enabled: true
     locations: classpath:db/migration
@@ -31,15 +31,15 @@ spring:
 
   batch:
     jdbc:
-      initialize-schema: never   # Flyway owns the schema — never let Batch auto-create
+      initialize-schema: never   # Flyway owns the schema â€” never let Batch auto-create
     job:
-      enabled: false   # Don't auto-run jobs on startup — triggered by scheduler
+      enabled: false   # Don't auto-run jobs on startup â€” triggered by scheduler
 
   security:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: ${OAUTH2_ISSUER_URI:http://localhost:8180/realms/aegispay}
+          jwk-set-uri: ${OAUTH2_JWK_SET_URI:http://localhost:8180/realms/aegispay/protocol/openid-connect/certs}
 
 server:
   port: ${SERVER_PORT:8087}
@@ -53,19 +53,19 @@ management:
     tags:
       service: ${spring.application.name}
 
-# ── ClickHouse (writes reconciliation results) ────────────────────────────────
+# â”€â”€ ClickHouse (writes reconciliation results) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 clickhouse:
   url: ${CLICKHOUSE_URL:jdbc:clickhouse://localhost:8123/aegispay_analytics}
   username: ${CLICKHOUSE_USER:default}
   password: ${CLICKHOUSE_PASSWORD:}
 
-# ── Stripe ────────────────────────────────────────────────────────────────────
+# â”€â”€ Stripe â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 stripe:
   secret-key: ${STRIPE_SECRET_KEY:sk_test_placeholder_local_dev}
   # How many days back to fetch Stripe balance transactions per run
   lookback-days: 2
 
-# ── Reconciliation job config ─────────────────────────────────────────────────
+# â”€â”€ Reconciliation job config â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 aegispay:
   reconciliation:
     # Cron: daily at 2:00 AM UTC (after Stripe settles overnight)
@@ -78,6 +78,8 @@ aegispay:
     report-email: ${RECONCILIATION_REPORT_EMAIL:aegispay.dev@gmail.com}
 
 logging:
+  file:
+    name: logs/reconciliation-service.log
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} [job=%X{jobName}] - %msg%n"
   level:

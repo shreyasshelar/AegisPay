@@ -31,9 +31,10 @@ interface SendMoneyState {
 }
 
 function newIdempotencyKey() {
-  return typeof crypto !== 'undefined'
-    ? crypto.randomUUID()
-    : Math.random().toString(36).slice(2)
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  return Math.random().toString(36).slice(2) + Date.now().toString(36)
 }
 
 export const useSendMoneyStore = create<SendMoneyState>((set) => ({

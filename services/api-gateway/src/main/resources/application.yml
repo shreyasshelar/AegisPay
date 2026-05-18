@@ -78,6 +78,8 @@ management:
       env: ${APP_ENV:local}
 
 logging:
+  file:
+    name: logs/api-gateway.log
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} [traceId=%X{traceId}] [corrId=%X{correlationId}] - %msg%n"
   level:
@@ -92,9 +94,7 @@ aegispay:
     # Multi-IdP JWT issuers.  Add new IdPs here without code changes.
     oauth2-trusted-issuers:
       - ${OAUTH2_ISSUER_KEYCLOAK:http://localhost:8180/realms/aegispay}
-      # Always trust localhost so sessions created via localhost still work
-      # when the gateway is also configured to trust a LAN IP issuer.
-      - http://localhost:8180/realms/aegispay
+      - ${OAUTH2_ISSUER_KEYCLOAK_LOCAL:http://localhost:8180/realms/aegispay}
       - ${OAUTH2_ISSUER_ENTRA:https://login.microsoftonline.com/common/v2.0}
       - ${OAUTH2_ISSUER_OKTA:https://dev-000000.okta.com/oauth2/default}
 
