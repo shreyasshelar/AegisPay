@@ -124,10 +124,16 @@ public class GatewayRoutingConfig {
                     .filter(correlationIdFilter)
                     .filter(traceParentFilter)
                     .filter(jwtRelayFilter)
+                    .circuitBreaker(cb -> cb
+                        .setName("notification-service")
+                        .setFallbackUri("forward:/fallback/service-unavailable"))
                 )
                 .uri(svc.getNotificationService()))
 
             // ── Notification Service — WebSocket upgrade ──────────────────────
+            // WebSocket upgrades cannot use the standard circuit-breaker filter
+            // (it breaks the Upgrade handshake). The CB on the REST route above
+            // provides health signal; WS reconnects are handled client-side.
             .route("notification-service-ws", r -> r
                 .path("/ws/**")
                 .filters(f -> f
