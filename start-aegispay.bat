@@ -141,6 +141,11 @@ REM =========================================================
 
 set NODE_OPTIONS=--dns-result-order=ipv4first
 
+REM ── LAN IP — used when testing the web app from another device on the same network.
+REM    Browser must reach Keycloak and the WebSocket directly on this IP.
+REM    Server-to-server calls (api-gateway → downstream, Next.js → api-gateway) stay on localhost.
+set LAN_IP=192.168.29.34
+
 REM ── PostgreSQL (host port 5433 maps to container port 5432) ──────────────
 set DB_HOST=localhost
 set DB_PORT=5433
@@ -173,9 +178,10 @@ set CLICKHOUSE_URL=jdbc:clickhouse://localhost:8123/aegispay_analytics
 set CLICKHOUSE_USER=default
 set CLICKHOUSE_PASSWORD=
 
-set OAUTH2_ISSUER_URI=http://localhost:8180/realms/aegispay
-set OAUTH2_PRIMARY_ISSUER_URI=http://localhost:8180/realms/aegispay
-set OAUTH2_ISSUER_KEYCLOAK=http://localhost:8180/realms/aegispay
+REM Use LAN_IP so the browser can reach Keycloak for login and tokens carry the right issuer
+set OAUTH2_ISSUER_URI=http://!LAN_IP!:8180/realms/aegispay
+set OAUTH2_PRIMARY_ISSUER_URI=http://!LAN_IP!:8180/realms/aegispay
+set OAUTH2_ISSUER_KEYCLOAK=http://!LAN_IP!:8180/realms/aegispay
 
 set USER_SERVICE_URI=http://localhost:8081
 set TRANSACTION_SERVICE_URI=http://localhost:8082
@@ -468,7 +474,7 @@ echo.
 echo Starting backend services (Wave 1)...
 
 start "api-gateway" /MIN cmd /c ^
-"java -DUSER_SERVICE_URI=http://localhost:8081 -DTRANSACTION_SERVICE_URI=http://localhost:8082 -DLEDGER_SERVICE_URI=http://localhost:8083 -DORCHESTRATOR_SERVICE_URI=http://localhost:8084 -DRISK_ENGINE_URI=http://localhost:8085 -DNOTIFICATION_SERVICE_URI=http://localhost:8086 -DAI_PLATFORM_URI=http://localhost:8091 -DOAUTH2_PRIMARY_ISSUER_URI=http://localhost:8180/realms/aegispay -DOAUTH2_ISSUER_KEYCLOAK=http://localhost:8180/realms/aegispay -Dspring.data.redis.url=redis://default:aegispay_dev@localhost:6379 -jar services\api-gateway\target\api-gateway-1.0.0-SNAPSHOT.jar > logs\api-gateway.log 2>&1"
+"java -DUSER_SERVICE_URI=http://localhost:8081 -DTRANSACTION_SERVICE_URI=http://localhost:8082 -DLEDGER_SERVICE_URI=http://localhost:8083 -DORCHESTRATOR_SERVICE_URI=http://localhost:8084 -DRISK_ENGINE_URI=http://localhost:8085 -DNOTIFICATION_SERVICE_URI=http://localhost:8086 -DAI_PLATFORM_URI=http://localhost:8091 -DOAUTH2_PRIMARY_ISSUER_URI=http://!LAN_IP!:8180/realms/aegispay -DOAUTH2_ISSUER_KEYCLOAK=http://!LAN_IP!:8180/realms/aegispay -DCORS_ALLOWED_ORIGIN_1=http://!LAN_IP!:3000 -Dspring.data.redis.url=redis://default:aegispay_dev@localhost:6379 -jar services\api-gateway\target\api-gateway-1.0.0-SNAPSHOT.jar > logs\api-gateway.log 2>&1"
 
 start "user-service" /MIN cmd /c ^
 "java -jar services\user-service\target\user-service-1.0.0-SNAPSHOT.jar > logs\user-service.log 2>&1"
@@ -566,10 +572,27 @@ REM =========================================================
 echo.
 echo Starting frontend...
 
-IF NOT EXIST apps\web\.env.local (
-    copy apps\web\.env.local.example apps\web\.env.local >nul
-    echo Created apps\web\.env.local from example
-)
+REM Always regenerate .env.local so LAN_IP URLs are current on every run
+(
+echo NODE_OPTIONS=--dns-result-order=ipv4first
+echo.
+echo # NextAuth
+echo NEXTAUTH_URL=http://!LAN_IP!:3000
+echo NEXTAUTH_SECRET=aegispay-local-dev-secret-change-in-prod
+echo.
+echo # Keycloak - browser must reach this IP for login redirects
+echo KEYCLOAK_ID=aegispay-web
+echo KEYCLOAK_SECRET=
+echo KEYCLOAK_ISSUER=http://!LAN_IP!:8180/realms/aegispay
+echo.
+echo # Backend API - Next.js server-side rewrite, stays localhost
+echo NEXT_PUBLIC_API_BASE_URL=
+echo API_BASE_URL=http://localhost:8080
+echo.
+echo # WebSocket - browser connects directly, must use LAN IP
+echo NEXT_PUBLIC_WS_BASE_URL=ws://!LAN_IP!:8086
+) > apps\web\.env.local
+echo Generated apps\web\.env.local with LAN_IP=!LAN_IP!
 
 call npm install --silent
 start "web-app" /MIN cmd /c "npm run dev --workspace=apps/web > logs\web.log 2>&1"
