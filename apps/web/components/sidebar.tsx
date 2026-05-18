@@ -65,7 +65,15 @@ export function Sidebar() {
       queryClient.invalidateQueries({ queryKey: ['notifications', 'list'] })
       if (!pathname.startsWith('/notifications')) {
         increment()
-        // Show toast only when the user isn't already on the notifications page
+      }
+      // Suppress global toast on pages that already show their own status toast:
+      //   /send        → StepStatus.tsx fires toast.success on COMPLETED
+      //   /transactions/[id] → transaction-detail-client.tsx fires toast from WebSocket
+      // Showing both would give the user two simultaneous toasts for the same event.
+      const pageHandlesOwnToast =
+        pathname.startsWith('/send') ||
+        pathname.startsWith('/transactions/')
+      if (!pathname.startsWith('/notifications') && !pageHandlesOwnToast) {
         toast.info(notification.title, { description: notification.body })
       }
     },
