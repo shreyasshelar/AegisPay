@@ -15,6 +15,7 @@ struct BiometricLockView: View {
 
     @State private var isAuthenticating = false
     @State private var authFailed = false
+    @State private var authFailureMessage = "Authentication failed. Try again."
 
     // ── Body ───────────────────────────────────────────────────────────────────
 
@@ -60,7 +61,7 @@ struct BiometricLockView: View {
                     .accessibilityHidden(true)
 
                     if authFailed {
-                        Text("Authentication failed. Try again.")
+                        Text(authFailureMessage)
                             .font(.callout)
                             .foregroundStyle(Color.aegisDanger)
                             .multilineTextAlignment(.center)
@@ -144,12 +145,22 @@ struct BiometricLockView: View {
         authFailed = false
 
         Task {
-            let success = await biometricService.authenticate(reason: "Unlock AegisPay")
+            let result = await biometricService.authenticate(reason: "Unlock AegisPay")
             isAuthenticating = false
-            if success {
+            switch result {
+            case .success:
                 onUnlock()
-            } else {
+            case .userCancelled:
+                authFailed = false   // user intentionally cancelled — no error shown
+            case .lockedOut:
                 authFailed = true
+                authFailureMessage = "Too many attempts. Use your passcode to unlock."
+            case .notEnrolled:
+                authFailed = true
+                authFailureMessage = "Biometrics not set up. Enable them in Settings."
+            case .failed(let msg):
+                authFailed = true
+                authFailureMessage = msg.isEmpty ? "Authentication failed. Try again." : msg
             }
         }
     }

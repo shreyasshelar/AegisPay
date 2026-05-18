@@ -2,6 +2,7 @@ package com.aegispay.android.network
 
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
+import java.math.BigDecimal
 import java.util.Date
 
 // ── Transaction ───────────────────────────────────────────────────────────────
@@ -27,12 +28,13 @@ data class Transaction(
     @Json(name = "transactionId") val transactionId: String,
     @Json(name = "payerId")       val payerId:       String,
     @Json(name = "payeeId")       val payeeId:       String,
-    @Json(name = "amount")        val amount:        Double,
+    @Json(name = "amount")        val amount:        BigDecimal,
     @Json(name = "currency")      val currency:      String,
     @Json(name = "status")        val status:        TransactionStatus,
     @Json(name = "initiatedAt")   val initiatedAt:   Date,
     @Json(name = "completedAt")   val completedAt:   Date?,
     @Json(name = "failureReason") val failureReason: String?,
+    @Json(name = "failureCode")   val failureCode:   String?,
     @Json(name = "note")          val note:          String?,
 )
 
@@ -49,7 +51,7 @@ data class PagedTransactions(
 @JsonClass(generateAdapter = true)
 data class CreateTransactionRequest(
     @Json(name = "payeeId")  val payeeId:  String,
-    @Json(name = "amount")   val amount:   Double,
+    @Json(name = "amount")   val amount:   BigDecimal,
     @Json(name = "currency") val currency: String,
     @Json(name = "note")     val note:     String?,
 )
@@ -61,15 +63,15 @@ data class Account(
     @Json(name = "id")               val id:               String,
     @Json(name = "userId")           val userId:           String,
     @Json(name = "currency")         val currency:         String,
-    @Json(name = "availableBalance") val availableBalance: Double,
-    @Json(name = "reservedBalance")  val reservedBalance:  Double,
+    @Json(name = "availableBalance") val availableBalance: BigDecimal,
+    @Json(name = "reservedBalance")  val reservedBalance:  BigDecimal,
 )
 
 // ── Wallet top-up ─────────────────────────────────────────────────────────────
 
 @JsonClass(generateAdapter = true)
 data class TopUpIntentRequest(
-    @Json(name = "amount")   val amount:   Double,
+    @Json(name = "amount")   val amount:   BigDecimal,
     @Json(name = "currency") val currency: String,
 )
 
@@ -77,7 +79,7 @@ data class TopUpIntentRequest(
 data class TopUpIntentResponse(
     @Json(name = "paymentIntentId") val paymentIntentId: String,
     @Json(name = "clientSecret")    val clientSecret:    String,
-    @Json(name = "amount")          val amount:          Double,
+    @Json(name = "amount")          val amount:          BigDecimal,
     @Json(name = "currency")        val currency:        String,
 )
 
@@ -120,6 +122,7 @@ data class KycDocumentRequest(
     @Json(name = "documentType")    val documentType:    String,
     @Json(name = "base64ImageData") val base64ImageData: String,
     @Json(name = "mimeType")        val mimeType:        String,
+    @Json(name = "registeredName")  val registeredName:  String? = null,
 )
 
 @JsonClass(generateAdapter = true)
@@ -151,6 +154,27 @@ data class KycExtractedData(
 )
 
 @JsonClass(generateAdapter = true)
+data class KycValidationResult(
+    @Json(name = "documentTypeDetected")    val documentTypeDetected:    String?,
+    @Json(name = "formatValid")             val formatValid:             Boolean?,
+    @Json(name = "formatDetails")           val formatDetails:           String?,
+    @Json(name = "notExpired")              val notExpired:              Boolean?,
+    @Json(name = "ageVerified")             val ageVerified:             Boolean?,
+    @Json(name = "securityFeaturesPresent") val securityFeaturesPresent: Boolean?,
+    @Json(name = "missingSecurityFeatures") val missingSecurityFeatures: List<String>?,
+    @Json(name = "nameMatch")               val nameMatch:               Boolean?,
+    @Json(name = "nameMatchDetails")        val nameMatchDetails:        String?,
+    @Json(name = "issuingAuthorityVisible") val issuingAuthorityVisible: Boolean?,
+    @Json(name = "photoPresent")            val photoPresent:            Boolean?,
+    @Json(name = "extractedDocumentNumber") val extractedDocumentNumber: String?,
+    @Json(name = "extractedExpiry")         val extractedExpiry:         String?,
+    @Json(name = "extractedDob")            val extractedDob:            String?,
+    @Json(name = "extractedName")           val extractedName:           String?,
+    @Json(name = "overallValid")            val overallValid:            Boolean,
+    @Json(name = "failureReasons")          val failureReasons:          List<String>?,
+)
+
+@JsonClass(generateAdapter = true)
 data class KycProcessingResult(
     @Json(name = "status")          val status:          String,
     @Json(name = "rejectionCode")   val rejectionCode:   String?,
@@ -158,6 +182,7 @@ data class KycProcessingResult(
     @Json(name = "quality")         val quality:         KycQuality,
     @Json(name = "tampering")       val tampering:       KycTampering?,
     @Json(name = "extractedData")   val extractedData:   KycExtractedData?,
+    @Json(name = "validation")      val validation:      KycValidationResult?,
 )
 
 // ── Notifications ─────────────────────────────────────────────────────────────

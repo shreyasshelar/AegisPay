@@ -3,6 +3,7 @@ package com.aegispay.android.di
 import com.aegispay.android.BuildConfig
 import com.aegispay.android.auth.AuthRepository
 import com.aegispay.android.network.AegisApiService
+import com.aegispay.android.network.BigDecimalAdapter
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.adapters.Rfc3339DateJsonAdapter
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
@@ -33,6 +34,7 @@ object NetworkModule {
     @Singleton
     fun provideMoshi(): Moshi = Moshi.Builder()
         .add(Date::class.java, Rfc3339DateJsonAdapter().nullSafe())
+        .add(BigDecimalAdapter())
         .add(KotlinJsonAdapterFactory())
         .build()
 

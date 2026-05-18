@@ -126,9 +126,10 @@ enum KycDocumentType: String, CaseIterable {
 }
 
 struct KycDocumentRequest: Encodable {
-    let documentType:   String
+    let documentType:    String
     let base64ImageData: String
-    let mimeType:       String
+    let mimeType:        String
+    let registeredName:  String?   // cross-matched against extracted name by AI platform
 }
 
 struct KycQuality: Codable {
@@ -156,13 +157,34 @@ struct KycExtractedData: Codable {
     let address:        String?
 }
 
+struct KycValidationResult: Codable {
+    let documentTypeDetected:      String?
+    let formatValid:               Bool?
+    let formatDetails:             String?
+    let notExpired:                Bool?
+    let ageVerified:               Bool?
+    let securityFeaturesPresent:   Bool?
+    let missingSecurityFeatures:   [String]?
+    let nameMatch:                 Bool?
+    let nameMatchDetails:          String?
+    let issuingAuthorityVisible:   Bool?
+    let photoPresent:              Bool?
+    let extractedDocumentNumber:   String?
+    let extractedExpiry:           String?
+    let extractedDob:              String?
+    let extractedName:             String?
+    let overallValid:              Bool
+    let failureReasons:            [String]?
+}
+
 struct KycProcessingResult: Codable {
-    let status:        String   // APPROVED | MANUAL_REVIEW | REJECTED
+    let status:          String   // APPROVED | MANUAL_REVIEW | REJECTED
     let rejectionCode:   String?
     let rejectionReason: String?
-    let quality:       KycQuality
-    let tampering:     KycTampering?
-    let extractedData: KycExtractedData?
+    let quality:         KycQuality
+    let tampering:       KycTampering?
+    let extractedData:   KycExtractedData?
+    let validation:      KycValidationResult?
 }
 
 // MARK: — Risk / Back-office

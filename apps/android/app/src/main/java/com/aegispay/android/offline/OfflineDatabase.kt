@@ -6,6 +6,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverter
 import androidx.room.TypeConverters
+import java.math.BigDecimal
 
 @Database(
     entities = [OfflinePaymentEntity::class],
@@ -24,6 +25,12 @@ abstract class OfflineDatabase : RoomDatabase() {
         @TypeConverter
         fun toStatus(value: String): OfflinePaymentStatus =
             OfflinePaymentStatus.valueOf(value)
+
+        @TypeConverter
+        fun fromBigDecimal(value: BigDecimal): String = value.toPlainString()
+
+        @TypeConverter
+        fun toBigDecimal(value: String): BigDecimal = BigDecimal(value)
     }
 
     companion object {

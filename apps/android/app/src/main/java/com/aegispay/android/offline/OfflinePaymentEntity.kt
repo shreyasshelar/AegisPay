@@ -3,6 +3,7 @@ package com.aegispay.android.offline
 import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import java.math.BigDecimal
 
 /**
  * Represents a payment request that was captured while the device was offline.
@@ -25,7 +26,7 @@ data class OfflinePaymentEntity(
     @ColumnInfo(name = "payee_id")
     val payeeId: String,
 
-    val amount: Double,
+    val amount: BigDecimal,
     val currency: String,
     val note: String?,
 

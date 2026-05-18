@@ -85,7 +85,8 @@ final class ProfileViewModel: ObservableObject {
         let request = KycDocumentRequest(
             documentType:    selectedDocType.rawValue,
             base64ImageData: base64,
-            mimeType:        mimeType
+            mimeType:        mimeType,
+            registeredName:  profile?.name
         )
 
         do {
@@ -130,7 +131,9 @@ final class ProfileViewModel: ObservableObject {
 
     var canConfirm: Bool {
         guard let r = kycResult else { return false }
-        return r.quality.acceptable && r.tampering?.tampered != true
+        if r.tampering?.tampered == true { return false }
+        if let v = r.validation, !v.overallValid { return false }
+        return r.quality.acceptable
     }
 }
 

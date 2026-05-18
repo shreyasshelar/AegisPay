@@ -101,11 +101,16 @@ final class ApiClient: ObservableObject {
     ) async throws -> T {
 
         // Build URL
-        var components = URLComponents(url: baseURL.appendingPathComponent(path), resolvingAgainstBaseURL: false)!
+        guard var components = URLComponents(url: baseURL.appendingPathComponent(path), resolvingAgainstBaseURL: false) else {
+            throw ApiError(statusCode: 0, message: "Invalid URL: \(path)", errorCode: "INVALID_URL")
+        }
         if !params.isEmpty {
             components.queryItems = params.map { URLQueryItem(name: $0.key, value: $0.value) }
         }
-        var request = URLRequest(url: components.url!)
+        guard let resolvedURL = components.url else {
+            throw ApiError(statusCode: 0, message: "Could not resolve URL for path: \(path)", errorCode: "INVALID_URL")
+        }
+        var request = URLRequest(url: resolvedURL)
         request.httpMethod = method
 
         // Headers

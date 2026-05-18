@@ -116,7 +116,7 @@ fun DashboardScreen(
                         } else {
                             Text(
                                 text  = formatAmount(
-                                    uiState.account?.availableBalance ?: 0.0,
+                                    uiState.account?.availableBalance ?: java.math.BigDecimal.ZERO,
                                     uiState.account?.currency ?: "INR",
                                 ),
                                 color = Color.White,
