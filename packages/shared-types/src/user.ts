@@ -40,6 +40,7 @@ export type User = z.infer<typeof UserSchema>
 export const KycUploadRequestSchema = z.object({
   base64ImageData: z.string().min(1),
   mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp']),
+  registeredName: z.string().optional(),
 })
 export type KycUploadRequest = z.infer<typeof KycUploadRequestSchema>
 
@@ -71,6 +72,27 @@ export const KycProcessingResultSchema = z.object({
       documentType: z.string().nullable(),
       expiryDate: z.string().nullable(),
       address: z.string().nullable(),
+    })
+    .nullable(),
+  validation: z
+    .object({
+      documentTypeDetected: z.string().nullable(),
+      formatValid: z.boolean(),
+      formatDetails: z.string().nullable(),
+      notExpired: z.boolean().nullable(),
+      ageVerified: z.boolean().nullable(),
+      securityFeaturesPresent: z.boolean(),
+      missingSecurityFeatures: z.array(z.string()),
+      nameMatch: z.boolean().nullable(),
+      nameMatchDetails: z.string().nullable(),
+      issuingAuthorityVisible: z.boolean(),
+      photoPresent: z.boolean(),
+      extractedDocumentNumber: z.string().nullable(),
+      extractedExpiry: z.string().nullable(),
+      extractedDob: z.string().nullable(),
+      extractedName: z.string().nullable(),
+      overallValid: z.boolean(),
+      failureReasons: z.array(z.string()),
     })
     .nullable(),
 })

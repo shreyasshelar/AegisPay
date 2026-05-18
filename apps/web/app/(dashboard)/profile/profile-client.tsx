@@ -18,6 +18,9 @@ import {
   FileCheck,
   ChevronDown,
   Fingerprint,
+  BadgeCheck,
+  BadgeX,
+  Minus,
 } from 'lucide-react'
 import { useUser, useProcessKyc, useConfirmKyc, useBiometric } from '@aegispay/api-client'
 import { Header } from '@/components/header'
@@ -115,6 +118,80 @@ function ExtractedDataCard({ data }: { data: NonNullable<KycProcessingResult['ex
   )
 }
 
+// ── Validation checks card ────────────────────────────────────────────────────
+
+type CheckState = boolean | null | undefined
+
+function CheckRow({ label, value, detail }: { label: string; value: CheckState; detail?: string | null }) {
+  const icon =
+    value === true ? <BadgeCheck className="h-4 w-4 text-success-500 shrink-0" /> :
+    value === false ? <BadgeX className="h-4 w-4 text-danger-500 shrink-0" /> :
+    <Minus className="h-4 w-4 text-slate-300 shrink-0" />
+
+  const textColor =
+    value === true ? 'text-success-700' :
+    value === false ? 'text-danger-700' :
+    'text-slate-400'
+
+  return (
+    <div className="flex items-start gap-2.5 py-2">
+      {icon}
+      <div className="flex-1 min-w-0">
+        <span className={cn('text-xs font-medium', textColor)}>{label}</span>
+        {detail && (
+          <p className="text-xs text-slate-400 mt-0.5 break-words">{detail}</p>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function ValidationChecksCard({ v }: { v: NonNullable<KycProcessingResult['validation']> }) {
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center gap-2 mb-1">
+        <ShieldCheck className="h-4 w-4 text-primary-500" />
+        <h3 className="text-sm font-semibold text-slate-900">Document Validation</h3>
+        <span className={cn(
+          'ml-auto rounded-full px-2 py-0.5 text-xs font-semibold',
+          v.overallValid ? 'bg-success-50 text-success-700' : 'bg-danger-50 text-danger-700',
+        )}>
+          {v.overallValid ? 'Pass' : 'Fail'}
+        </span>
+      </div>
+
+      {v.documentTypeDetected && v.documentTypeDetected !== 'UNKNOWN' && (
+        <p className="text-xs text-slate-500">
+          Detected: <span className="font-medium text-slate-700">{v.documentTypeDetected}</span>
+        </p>
+      )}
+
+      <div className="divide-y divide-slate-100 rounded-lg bg-slate-50 px-3 ring-1 ring-slate-100">
+        <CheckRow label="Document format valid"    value={v.formatValid}               detail={v.formatDetails} />
+        <CheckRow label="Not expired"              value={v.notExpired}                detail={v.notExpired === false ? 'Document is expired' : undefined} />
+        <CheckRow label="Age verified (18+)"       value={v.ageVerified}               detail={v.ageVerified === false ? 'Applicant appears to be under 18' : undefined} />
+        <CheckRow label="Security features"        value={v.securityFeaturesPresent}   detail={v.missingSecurityFeatures?.length ? v.missingSecurityFeatures.join(', ') : undefined} />
+        <CheckRow label="Issuing authority visible" value={v.issuingAuthorityVisible}  />
+        <CheckRow label="Photo present"            value={v.photoPresent}              />
+        {v.nameMatch !== null && v.nameMatch !== undefined && (
+          <CheckRow label="Name matches account"   value={v.nameMatch}                 detail={v.nameMatchDetails ?? undefined} />
+        )}
+      </div>
+
+      {!v.overallValid && v.failureReasons.length > 0 && (
+        <div className="rounded-lg bg-danger-50 px-3 py-2.5 ring-1 ring-danger-200">
+          <p className="text-xs font-semibold text-danger-700 mb-1">Rejection reasons</p>
+          <ul className="list-disc list-inside space-y-0.5">
+            {v.failureReasons.map((r, i) => (
+              <li key={i} className="text-xs text-danger-600">{r}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function ProfileClient({ userId }: { userId: string }) {
@@ -158,6 +235,7 @@ export function ProfileClient({ userId }: { userId: string }) {
       const result = await processKyc.mutateAsync({
         base64ImageData: base64,
         mimeType: file.type as 'image/jpeg' | 'image/png' | 'image/webp',
+        registeredName: session?.user?.name ?? undefined,
       })
       setKycResult(result)
 
@@ -169,13 +247,17 @@ export function ProfileClient({ userId }: { userId: string }) {
         toast.error('Document tampering detected', {
           description: 'Please upload an unmodified original document',
         })
+      } else if (result.validation && !result.validation.overallValid) {
+        toast.error('Document validation failed', {
+          description: result.validation.failureReasons[0] ?? 'Document did not pass verification checks',
+        })
       } else {
         toast.success('Document analysed', { description: 'Review the extracted data below and confirm' })
       }
     } catch (err) {
       toast.error('Upload failed', { description: err instanceof Error ? err.message : 'Please try again' })
     }
-  }, [processKyc])
+  }, [processKyc, session?.user?.name])
 
   function onFileInputChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -381,6 +463,13 @@ export function ProfileClient({ userId }: { userId: string }) {
               </div>
             )}
 
+            {/* Document validation checks */}
+            {kycResult.validation && (
+              <div className="space-y-2">
+                <ValidationChecksCard v={kycResult.validation} />
+              </div>
+            )}
+
             {/* Extracted data */}
             {kycResult.extractedData && (
               <div className="space-y-2">
@@ -412,7 +501,11 @@ export function ProfileClient({ userId }: { userId: string }) {
                 type="button"
                 loading={confirmKyc.isPending}
                 onClick={handleConfirm}
-                disabled={!kycResult.quality.acceptable || kycResult.tampering?.tampered === true}
+                disabled={
+                  !kycResult.quality.acceptable ||
+                  kycResult.tampering?.tampered === true ||
+                  kycResult.validation?.overallValid === false
+                }
                 className="flex-1"
               >
                 <CheckCircle2 className="h-4 w-4" />
