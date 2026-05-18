@@ -35,8 +35,16 @@ export class AegisApiClient {
       if (token) {
         req.headers.Authorization = `Bearer ${token}`
       }
-      // Correlation ID for distributed tracing (propagated server-side via MDC)
-      req.headers['X-Correlation-ID'] = crypto.randomUUID()
+      // Correlation ID for distributed tracing (propagated server-side via MDC).
+      // crypto.randomUUID() requires a secure context (HTTPS); fall back to a
+      // Math.random-based UUID so LAN HTTP dev access still works.
+      req.headers['X-Correlation-ID'] =
+        (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+          ? crypto.randomUUID()
+          : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+              const r = (Math.random() * 16) | 0
+              return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16)
+            })
       return req
     })
 
