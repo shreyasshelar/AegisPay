@@ -15,14 +15,90 @@ spring:
           type: elastic
           max-idle-time: 30s
 
+    # ── Spring Cloud CircuitBreaker (Resilience4j) ──────────────────────────────
+    # THIS is the namespace the Gateway circuitBreaker() filter reads.
+    # The native resilience4j.circuitbreaker.* namespace below is for @CircuitBreaker
+    # annotations only — it does NOT affect gateway filters.
     circuitbreaker:
       resilience4j:
         instances:
+          # Baseline: applied to any named CB that has no explicit override.
+          # minimumNumberOfCalls MUST be <= slidingWindowSize; if omitted it
+          # defaults to 100, which means the circuit never opens on low traffic.
           default:
             slidingWindowSize: 10
+            minimumNumberOfCalls: 10
             failureRateThreshold: 50
             waitDurationInOpenState: 10s
             permittedNumberOfCallsInHalfOpenState: 5
+            slowCallDurationThreshold: 10s
+            slowCallRateThreshold: 80
+
+          user-service:
+            slidingWindowSize: 20
+            minimumNumberOfCalls: 5
+            failureRateThreshold: 60
+            waitDurationInOpenState: 15s
+            permittedNumberOfCallsInHalfOpenState: 5
+            slowCallDurationThreshold: 8s
+            slowCallRateThreshold: 80
+
+          transaction-service:
+            slidingWindowSize: 20
+            minimumNumberOfCalls: 5
+            failureRateThreshold: 60
+            waitDurationInOpenState: 15s
+            permittedNumberOfCallsInHalfOpenState: 5
+            # POST is idempotency-key protected, so retries are safe
+            slowCallDurationThreshold: 10s
+            slowCallRateThreshold: 80
+
+          ledger-service:
+            slidingWindowSize: 10
+            minimumNumberOfCalls: 5
+            failureRateThreshold: 50
+            waitDurationInOpenState: 10s
+            permittedNumberOfCallsInHalfOpenState: 3
+            slowCallDurationThreshold: 5s
+            slowCallRateThreshold: 80
+
+          payment-orchestrator:
+            slidingWindowSize: 10
+            minimumNumberOfCalls: 5
+            failureRateThreshold: 50
+            waitDurationInOpenState: 20s
+            permittedNumberOfCallsInHalfOpenState: 3
+            slowCallDurationThreshold: 15s
+            slowCallRateThreshold: 80
+
+          risk-engine:
+            slidingWindowSize: 10
+            minimumNumberOfCalls: 5
+            failureRateThreshold: 50
+            waitDurationInOpenState: 10s
+            permittedNumberOfCallsInHalfOpenState: 3
+            slowCallDurationThreshold: 8s
+            slowCallRateThreshold: 80
+
+          notification-service:
+            slidingWindowSize: 10
+            minimumNumberOfCalls: 5
+            failureRateThreshold: 60
+            # Notifications are best-effort; recover faster
+            waitDurationInOpenState: 8s
+            permittedNumberOfCallsInHalfOpenState: 3
+            slowCallDurationThreshold: 5s
+            slowCallRateThreshold: 80
+
+          # AI platform calls invoke Claude LLM — allow longer slow-call threshold
+          ai-platform:
+            slidingWindowSize: 10
+            minimumNumberOfCalls: 5
+            failureRateThreshold: 50
+            waitDurationInOpenState: 30s
+            permittedNumberOfCallsInHalfOpenState: 3
+            slowCallDurationThreshold: 25s
+            slowCallRateThreshold: 80
 
   security:
     oauth2:
@@ -39,24 +115,6 @@ spring:
         enabled: ${REDIS_SSL_ENABLED:false}
       lettuce:
         shutdown-timeout: 200ms
-
-# Resilience4j native config — per-route circuit breaker overrides
-resilience4j:
-  circuitbreaker:
-    instances:
-      # Transaction service: more lenient window so idempotent retries don't open the circuit
-      transaction-service:
-        slidingWindowSize: 20
-        failureRateThreshold: 60
-        waitDurationInOpenState: 15s
-        permittedNumberOfCallsInHalfOpenState: 5
-        minimumNumberOfCalls: 5
-      user-service:
-        slidingWindowSize: 20
-        failureRateThreshold: 60
-        waitDurationInOpenState: 15s
-        permittedNumberOfCallsInHalfOpenState: 5
-        minimumNumberOfCalls: 5
 
 server:
   port: ${SERVER_PORT:8080}

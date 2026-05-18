@@ -75,9 +75,14 @@ resilience4j:
     instances:
       payment-gateway:
         sliding-window-size: 10
+        # Must be <= sliding-window-size; if omitted it defaults to 100 and the
+        # circuit never opens on low traffic.
+        minimum-number-of-calls: 5
         failure-rate-threshold: 50
         wait-duration-in-open-state: 30s
         permitted-number-of-calls-in-half-open-state: 3
+        slow-call-duration-threshold: 20s
+        slow-call-rate-threshold: 80
 
 logging:
   file:
