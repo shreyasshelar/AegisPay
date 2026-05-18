@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -53,7 +54,15 @@ public class ExchangeRateService {
 
     private final RestClient restClient = RestClient.builder()
             .baseUrl(FRANKFURTER_BASE_URL)
+            .requestFactory(frankfurterRequestFactory())
             .build();
+
+    private static SimpleClientHttpRequestFactory frankfurterRequestFactory() {
+        SimpleClientHttpRequestFactory f = new SimpleClientHttpRequestFactory();
+        f.setConnectTimeout(3_000);   // 3 s — fail fast if Frankfurter unreachable
+        f.setReadTimeout(5_000);      // 5 s — response timeout
+        return f;
+    }
 
     // ── Public API ────────────────────────────────────────────────────────────
 
