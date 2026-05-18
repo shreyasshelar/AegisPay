@@ -2553,52 +2553,5 @@
                            "policies":  [
 
                                         ]
-                       },
-    "userProfileConfig":  {
-                              "unmanagedAttributePolicy":  "ADMIN_EDIT",
-                              "attributes":  [
-                                                 {
-                                                     "multivalued":  false,
-                                                     "name":  "aegispay_user_id",
-                                                     "displayName":  "AegisPay User ID",
-                                                     "permissions":  {
-                                                                         "edit":  [
-                                                                                      "admin"
-                                                                                  ],
-                                                                         "view":  [
-                                                                                      "admin",
-                                                                                      "user"
-                                                                                  ]
-                                                                     }
-                                                 },
-                                                 {
-                                                     "multivalued":  false,
-                                                     "name":  "aegispay_role",
-                                                     "displayName":  "AegisPay Role",
-                                                     "permissions":  {
-                                                                         "edit":  [
-                                                                                      "admin"
-                                                                                  ],
-                                                                         "view":  [
-                                                                                      "admin",
-                                                                                      "user"
-                                                                                  ]
-                                                                     }
-                                                 },
-                                                 {
-                                                     "multivalued":  false,
-                                                     "name":  "aegispay_tenant_id",
-                                                     "displayName":  "AegisPay Tenant ID",
-                                                     "permissions":  {
-                                                                         "edit":  [
-                                                                                      "admin"
-                                                                                  ],
-                                                                         "view":  [
-                                                                                      "admin",
-                                                                                      "user"
-                                                                                  ]
-                                                                     }
-                                                 }
-                                             ]
-                          }
+                       }
 }
