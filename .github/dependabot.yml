@@ -1,0 +1,185 @@
+version: 2
+updates:
+  # ── Java / Maven (all 10 services + common library) ─────────────────────────
+  - package-ecosystem: maven
+    directory: /services/common
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels: [dependencies, java]
+
+  - package-ecosystem: maven
+    directory: /services/api-gateway
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels: [dependencies, java]
+
+  - package-ecosystem: maven
+    directory: /services/transaction-service
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels: [dependencies, java]
+
+  - package-ecosystem: maven
+    directory: /services/user-service
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels: [dependencies, java]
+
+  - package-ecosystem: maven
+    directory: /services/payment-orchestrator
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels: [dependencies, java]
+
+  - package-ecosystem: maven
+    directory: /services/risk-engine
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels: [dependencies, java]
+
+  - package-ecosystem: maven
+    directory: /services/ledger-service
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels: [dependencies, java]
+
+  - package-ecosystem: maven
+    directory: /services/notification-service
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels: [dependencies, java]
+
+  - package-ecosystem: maven
+    directory: /services/reconciliation-service
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels: [dependencies, java]
+
+  - package-ecosystem: maven
+    directory: /services/ai-platform
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels: [dependencies, java]
+
+  - package-ecosystem: maven
+    directory: /services/data-pipeline
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels: [dependencies, java]
+
+  # ── npm (Next.js web app) ────────────────────────────────────────────────────
+  - package-ecosystem: npm
+    directory: /apps/web
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    labels: [dependencies, javascript]
+    groups:
+      next-ecosystem:
+        patterns:
+          - next
+          - react
+          - react-dom
+          - "@types/react*"
+          - "@types/node"
+      radix-ui:
+        patterns:
+          - "@radix-ui/*"
+      testing:
+        patterns:
+          - vitest
+          - playwright
+          - "@testing-library/*"
+
+  # ── Docker base images ───────────────────────────────────────────────────────
+  - package-ecosystem: docker
+    directory: /services/api-gateway
+    schedule:
+      interval: monthly
+    labels: [dependencies, docker]
+
+  - package-ecosystem: docker
+    directory: /services/transaction-service
+    schedule:
+      interval: monthly
+    labels: [dependencies, docker]
+
+  - package-ecosystem: docker
+    directory: /services/user-service
+    schedule:
+      interval: monthly
+    labels: [dependencies, docker]
+
+  - package-ecosystem: docker
+    directory: /services/payment-orchestrator
+    schedule:
+      interval: monthly
+    labels: [dependencies, docker]
+
+  - package-ecosystem: docker
+    directory: /services/risk-engine
+    schedule:
+      interval: monthly
+    labels: [dependencies, docker]
+
+  - package-ecosystem: docker
+    directory: /services/ledger-service
+    schedule:
+      interval: monthly
+    labels: [dependencies, docker]
+
+  - package-ecosystem: docker
+    directory: /services/notification-service
+    schedule:
+      interval: monthly
+    labels: [dependencies, docker]
+
+  - package-ecosystem: docker
+    directory: /services/reconciliation-service
+    schedule:
+      interval: monthly
+    labels: [dependencies, docker]
+
+  - package-ecosystem: docker
+    directory: /services/ai-platform
+    schedule:
+      interval: monthly
+    labels: [dependencies, docker]
+
+  - package-ecosystem: docker
+    directory: /services/data-pipeline
+    schedule:
+      interval: monthly
+    labels: [dependencies, docker]
+
+  # ── GitHub Actions ───────────────────────────────────────────────────────────
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels: [dependencies, github-actions]

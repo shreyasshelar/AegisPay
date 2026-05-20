@@ -1,6 +1,8 @@
 ﻿spring:
   application:
     name: ledger-service
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
 
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5433}/${DB_NAME:aegispay_ledger}
@@ -8,12 +10,15 @@
     password: ${DB_PASSWORD:aegispay_dev}
     hikari:
       maximum-pool-size: ${DB_POOL_SIZE:5}
+      minimum-idle: ${DB_POOL_MIN:2}
       connection-timeout: 30000
+      keepalive-time: 30000
 
   jpa:
     hibernate:
       ddl-auto: validate
     show-sql: false
+    open-in-view: false
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
@@ -45,6 +50,7 @@
     consumer:
       group-id: ledger-service
       auto-offset-reset: earliest
+      enable-auto-commit: "false"
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
 
@@ -56,6 +62,7 @@
 
 server:
   port: ${SERVER_PORT:8083}
+  shutdown: graceful
 
 management:
   endpoints:

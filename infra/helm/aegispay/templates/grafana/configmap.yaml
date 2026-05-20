@@ -66,4 +66,17 @@ binaryData:
   transaction-ops.json: {{ .Files.Get "files/dashboards/transaction-ops.json" | b64enc | quote }}
   fraud-intelligence.json: {{ .Files.Get "files/dashboards/fraud-intelligence.json" | b64enc | quote }}
   sla-latency.json: {{ .Files.Get "files/dashboards/sla-latency.json" | b64enc | quote }}
+---
+# ── Grafana alert rules provisioning ─────────────────────────────────────────
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-alert-rules
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "aegispay.labels" . | nindent 4 }}
+    app.kubernetes.io/name: grafana
+data:
+  aegispay-rules.yaml: |
+    {{ .Files.Get "files/alerting/aegispay-rules.yaml" | nindent 4 }}
 {{- end }}

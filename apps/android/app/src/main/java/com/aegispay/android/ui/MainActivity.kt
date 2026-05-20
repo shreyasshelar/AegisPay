@@ -31,6 +31,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.aegispay.android.auth.AuthState
 import com.aegispay.android.auth.BiometricAuthManager
+import com.aegispay.android.auth.BiometricAuthResult
 import com.aegispay.android.ui.auth.AuthViewModel
 import com.aegispay.android.ui.theme.AegisColor
 import com.aegispay.android.ui.theme.AegisTheme
@@ -58,7 +59,8 @@ class MainActivity : ComponentActivity() {
     ) { /* granted or denied — FCM works regardless, just no notifications if denied */ }
 
     // Whether the biometric lock overlay is showing
-    private val isLockedState = mutableStateOf(false)
+    private val isLockedState   = mutableStateOf(false)
+    private val lockMessageState = mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen().setKeepOnScreenCondition {
@@ -73,7 +75,8 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             AegisTheme {
-                val isLocked by isLockedState
+                val isLocked    by isLockedState
+                val lockMessage by lockMessageState
 
                 Box(modifier = Modifier.fillMaxSize()) {
                     AegisNavHost(
@@ -89,9 +92,14 @@ class MainActivity : ComponentActivity() {
                         exit    = fadeOut(),
                     ) {
                         BiometricLockOverlay(
-                            onUnlock = { isLockedState.value = false },
+                            message   = lockMessage,
+                            onUnlock  = {
+                                lockMessageState.value = null
+                                triggerBiometricUnlock()
+                            },
                             onSignOut = {
-                                isLockedState.value = false
+                                isLockedState.value   = false
+                                lockMessageState.value = null
                                 authViewModel.signOut()
                             },
                         )
@@ -127,16 +135,28 @@ class MainActivity : ComponentActivity() {
 
     private fun triggerBiometricUnlock() {
         lifecycleScope.launch {
-            repeatOnLifecycle(Lifecycle.State.RESUMED) {
-                val success = biometricAuthManager.authenticate(
-                    activity  = this@MainActivity,
-                    title     = "AegisPay",
-                    subtitle  = "Confirm your identity to continue",
-                )
-                if (success) {
-                    isLockedState.value = false
+            when (val result = biometricAuthManager.authenticate(
+                activity  = this@MainActivity,
+                title     = "AegisPay",
+                subtitle  = "Confirm your identity to continue",
+            )) {
+                is BiometricAuthResult.Success -> {
+                    isLockedState.value    = false
+                    lockMessageState.value = null
                 }
-                // On failure, lock overlay stays visible — user can retry via button
+                is BiometricAuthResult.UserCancelled -> {
+                    // User intentionally dismissed — keep lock visible, no error shown
+                    lockMessageState.value = null
+                }
+                is BiometricAuthResult.LockedOut -> {
+                    lockMessageState.value = "Too many attempts. Use your device passcode to unlock."
+                }
+                is BiometricAuthResult.NotEnrolled -> {
+                    lockMessageState.value = "No biometrics enrolled. Enable them in device Settings."
+                }
+                is BiometricAuthResult.Failed -> {
+                    lockMessageState.value = result.message.ifBlank { "Authentication failed. Try again." }
+                }
             }
         }
     }
@@ -146,6 +166,7 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun BiometricLockOverlay(
+    message:   String?,
     onUnlock:  () -> Unit,
     onSignOut: () -> Unit,
 ) {
@@ -190,6 +211,19 @@ private fun BiometricLockOverlay(
                     text  = "Your session is locked",
                     style = MaterialTheme.typography.bodyMedium,
                     color = AegisColor.TextMuted,
+                )
+            }
+
+            // Error/status message
+            if (message != null) {
+                Text(
+                    text  = message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = AegisColor.Danger,
+                    modifier = Modifier
+                        .fillMaxWidth(0.80f)
+                        .semantics { contentDescription = message },
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 )
             }
 

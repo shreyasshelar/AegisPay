@@ -151,8 +151,7 @@ Every technology choice answers the question: *"what problem does this solve tha
 | Workflow | Trigger | Action |
 |----------|---------|--------|
 | `ci.yml` | Push to any branch | Maven build + test, Docker build + push to GHCR |
-| `cd-dev.yml` | Push to `develop` | `yq` patches image tag in `values-dev.yaml`, Argo CD sync |
-| `cd-staging.yml` | Push to `main` | Same for staging |
-| Promote to prod | Manual workflow dispatch | Updates `values-prod.yaml`, opens PR for review |
+| `cd-dev.yml` | Push to `dev` | `yq` patches image tag in `values-dev.yaml`, ArgoCD k3s sync |
+| `cd-prod.yml` | Manual workflow dispatch | Updates `values-prod.yaml`, opens PR for review |
 
 **Why Argo CD (GitOps)?** The cluster's desired state is always in Git. Any manual `kubectl apply` is overwritten on the next sync cycle, preventing drift.

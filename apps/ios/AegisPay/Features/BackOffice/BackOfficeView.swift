@@ -1,9 +1,17 @@
 import SwiftUI
 
+private let adminRoles: Set<String> = ["ADMIN"]
+
 // ── Back-office root view ─────────────────────────────────────────────────────
 
 struct BackOfficeView: View {
     @StateObject private var vm = BackOfficeViewModel()
+    @EnvironmentObject var authStore: AuthStore
+    @State private var showTriageSheet = false
+
+    private var isAdminUser: Bool {
+        adminRoles.contains(authStore.currentUser?.role ?? "")
+    }
 
     var body: some View {
         NavigationStack {
@@ -26,7 +34,10 @@ struct BackOfficeView: View {
                 case .riskCases:
                     RiskCasesTab(vm: vm)
                 case .incidentTriage:
-                    IncidentTriageTab(vm: vm)
+                    IncidentTriageTab(
+                        vm: vm,
+                        onOpenFullTriage: isAdminUser ? { showTriageSheet = true } : nil
+                    )
                 }
             }
             .background(Color.aegisBg)
@@ -46,6 +57,11 @@ struct BackOfficeView: View {
                     }
                 }
             }
+        }
+        // Full-screen triage sheet (ADMIN only)
+        .sheet(isPresented: $showTriageSheet) {
+            TriageView()
+                .environmentObject(authStore)
         }
     }
 }
@@ -272,6 +288,8 @@ private struct RiskCaseDetailSheet: View {
 
 private struct IncidentTriageTab: View {
     @ObservedObject var vm: BackOfficeViewModel
+    /// Non-nil when the signed-in user is ADMIN — tapping opens the full TriageView.
+    var onOpenFullTriage: (() -> Void)? = nil
 
     var body: some View {
         ScrollView {
@@ -279,9 +297,20 @@ private struct IncidentTriageTab: View {
 
                 // ── Input form ────────────────────────────────────────────────
                 VStack(alignment: .leading, spacing: 14) {
-                    Label("New Incident", systemImage: "terminal")
-                        .font(.subheadline).fontWeight(.semibold)
-                        .foregroundStyle(Color.aegisText)
+                    HStack {
+                        Label("New Incident", systemImage: "terminal")
+                            .font(.subheadline).fontWeight(.semibold)
+                            .foregroundStyle(Color.aegisText)
+                        Spacer()
+                        // ADMIN-only shortcut to the dedicated full-screen triage view
+                        if let openFullTriage = onOpenFullTriage {
+                            Button(action: openFullTriage) {
+                                Label("Full Agent", systemImage: "arrow.up.right.square")
+                                    .font(.caption).fontWeight(.medium)
+                                    .foregroundStyle(Color.aegisPrimary)
+                            }
+                        }
+                    }
 
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Affected Service")

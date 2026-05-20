@@ -88,7 +88,7 @@ Cross-cutting: `user.registered` (User Svc → Notification Svc), `risk.assessme
 - **JWT claims**: `aegispay_user_id` (domain UUID), `realm_access.roles` (CUSTOMER/BACK_OFFICE/ADMIN/PARTNER)
 - **STOMP WebSocket auth**: `StompAuthChannelInterceptor` validates JWT from CONNECT frame headers — required for `convertAndSendToUser` routing
 - **Rate limiting**: Redis sliding window per userId (100 req/60s default)
-- **Secret management**: External Secrets Operator → AWS Secrets Manager (dev/staging) or HashiCorp Vault (prod/on-prem)
+- **Secret management**: External Secrets Operator → HashiCorp Vault (dev k3s in-cluster + prod)
 
 ---
 
@@ -116,7 +116,7 @@ Cross-cutting: `user.registered` (User Svc → Notification Svc), `risk.assessme
 
 | Local | Kubernetes | Notes |
 |-------|-----------|-------|
-| `docker compose up -d` | Helm chart `infra/helm/aegispay/` | 5 envs: dev/staging/prod/on-prem/local |
+| `docker compose up -d` | Helm chart `infra/helm/aegispay/` | 3 envs: local/dev/prod |
 | `./start-local.sh` (macOS/Linux) | Argo CD GitOps sync | macOS + Windows bootstrap scripts |
 | `start-aegispay.bat` (Windows) | | Auto-detects Maven, waits for all services |
 

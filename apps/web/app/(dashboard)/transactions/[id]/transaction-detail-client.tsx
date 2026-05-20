@@ -11,6 +11,7 @@ import {
   AlertCircle,
   Lightbulb,
   RefreshCw,
+  Stethoscope,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -39,6 +40,8 @@ export function TransactionDetailClient({
   const router             = useRouter()
   const { data: session }  = useSession()
   const queryClient        = useQueryClient()
+
+  const isAdmin = session?.user?.role === 'ADMIN'
 
   const { data: tx, isLoading, isError } = useTransaction(transactionId)
   const resolveError = useResolveError()
@@ -219,6 +222,23 @@ export function TransactionDetailClient({
             ) : tx.failureReason ? (
               <p className="text-sm text-amber-700 font-mono">{tx.failureReason}</p>
             ) : null}
+          </div>
+        )}
+
+        {/* ADMIN — Triage incident shortcut (shown for failed transactions) */}
+        {isAdmin && isFailed && (
+          <div className="flex justify-end">
+            <button
+              onClick={() =>
+                router.push(
+                  `/back-office/triage?txId=${tx.transactionId}&service=payment-orchestrator`,
+                )
+              }
+              className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm hover:border-indigo-300 hover:text-indigo-700 transition-colors"
+            >
+              <Stethoscope className="h-4 w-4" />
+              Triage Incident
+            </button>
           </div>
         )}
 

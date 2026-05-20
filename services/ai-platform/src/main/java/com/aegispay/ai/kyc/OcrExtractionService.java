@@ -1,6 +1,8 @@
 package com.aegispay.ai.kyc;
 
 import com.aegispay.ai.audit.AiAuditService;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
@@ -34,6 +36,18 @@ public class OcrExtractionService {
     private final ChatClient.Builder chatClientBuilder;
     private final AiAuditService auditService;
 
+    /**
+     * Extract structured data from a KYC document image.
+     *
+     * <p>Resilience decorators:
+     * <ul>
+     *   <li>{@code @CircuitBreaker} — opens after 50% failure rate; fallback returns an
+     *       UNKNOWN-type record so the KYC pipeline can route to MANUAL_REVIEW instead of crashing.
+     *   <li>{@code @Retry} — 2 retries with exponential backoff on transient failures.
+     * </ul>
+     */
+    @CircuitBreaker(name = "kyc-ai", fallbackMethod = "extractFallback")
+    @Retry(name = "kyc-ai")
     public ExtractedDocumentData extract(String base64ImageData, String mimeType) {
         long start = System.currentTimeMillis();
         String output = null;
@@ -56,12 +70,21 @@ public class OcrExtractionService {
         } catch (Exception e) {
             error = e.getMessage();
             log.error("OCR extraction failed: {}", e.getMessage(), e);
+            // Re-throw so @Retry can attempt again and @CircuitBreaker can track the failure.
             throw new RuntimeException("OCR extraction failed: " + e.getMessage(), e);
         } finally {
             long latencyMs = System.currentTimeMillis() - start;
             auditService.log("OCR_EXTRACT", "document image (" + mimeType + ")",
                     output, "claude-sonnet-4-6", latencyMs, error);
         }
+    }
+
+    @SuppressWarnings("unused")   // called reflectively by Resilience4j
+    ExtractedDocumentData extractFallback(String base64ImageData, String mimeType, Throwable cause) {
+        log.warn("OCR extraction fallback triggered (circuit open or retries exhausted): {}",
+                cause != null ? cause.getMessage() : "unknown");
+        return new ExtractedDocumentData(null, null, null, "UNKNOWN", null, null,
+                "AI OCR service is temporarily unavailable. Document routed to manual review.");
     }
 
     private ExtractedDocumentData parseExtraction(String json) {

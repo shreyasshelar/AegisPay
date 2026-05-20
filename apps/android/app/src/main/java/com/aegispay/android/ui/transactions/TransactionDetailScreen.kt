@@ -8,6 +8,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -26,9 +27,11 @@ private val FAILED_STATUSES = setOf(TransactionStatus.FAILED, TransactionStatus.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TransactionDetailScreen(
-    transactionId: String,
-    viewModel:     TransactionDetailViewModel,
-    onNavigateUp:  () -> Unit,
+    transactionId:     String,
+    viewModel:         TransactionDetailViewModel,
+    onNavigateUp:      () -> Unit,
+    /** Non-null when the signed-in user is ADMIN — opens Triage with pre-filled context. */
+    onNavigateToTriage: ((txId: String, service: String) -> Unit)? = null,
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
@@ -220,6 +223,33 @@ fun TransactionDetailScreen(
                                     }
                                 }
                             }
+                        }
+                    }
+
+                    // ── ADMIN triage shortcut ────────────────────────────────
+                    if (isFailed && onNavigateToTriage != null) {
+                        OutlinedButton(
+                            onClick = {
+                                onNavigateToTriage(tx.transactionId, "payment-orchestrator")
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape    = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+                            border   = androidx.compose.foundation.BorderStroke(
+                                1.dp, AegisColor.Primary.copy(alpha = 0.4f)
+                            ),
+                        ) {
+                            Icon(
+                                Icons.Default.Biotech,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = AegisColor.Primary,
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                "Triage Incident",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = AegisColor.Primary,
+                            )
                         }
                     }
 

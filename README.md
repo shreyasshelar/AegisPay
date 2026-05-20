@@ -851,7 +851,7 @@ AegisPay maintains three long-lived branches targeting different deployment envi
 | Branch | Purpose | Infra cost | CD target |
 |---|---|---|---|
 | `main` | **Production-grade** — AWS EKS, managed Kafka (MSK), RDS, ElastiCache, Vault Agent Injector, full resource limits, replicas ≥ 2 for all services | High | ArgoCD → prod EKS cluster |
-| `dev` | **Dev / on-prem** — k3s single-node, Kafka in-cluster, Postgres + Redis in-cluster, OpenRouter API (free tier AI), replicas = 1, reduced resource requests | Low | ArgoCD → `app-onprem.yaml` watches `dev` branch |
+| `dev` | **Dev / k3s** — single-node, Kafka in-cluster, Postgres + Redis in-cluster, OpenRouter API (free tier AI), Stripe test mode, replicas = 1, reduced resource requests | Low | ArgoCD → `app-dev.yaml` auto-syncs on `dev` branch |
 | `feat/data-engineering` | Source branch for Phase 11 — merged into both above | — | (merged, no direct CD) |
 
 ### What differs between the two runnable branches
@@ -917,7 +917,7 @@ global:
 ```bash
 git checkout dev
 # ArgoCD on k3s auto-deploys on push — or force-sync:
-argocd app sync aegispay-onprem --server $ARGOCD_ONPREM_SERVER
+argocd app sync aegispay-dev --server $ARGOCD_DEV_SERVER
 ```
 
 **Running locally for development** (same Docker Compose infra, different env vars):
@@ -940,10 +940,10 @@ export CLICKHOUSE_PASSWORD=""             # empty = no auth in dev
 bash infra/vault/init.sh
 ```
 
-**ArgoCD on-prem deployment**:
+**ArgoCD dev deployment**:
 ```bash
 # Apply the ArgoCD application (watches dev branch)
-kubectl apply -f infra/argocd/app-onprem.yaml
+kubectl apply -f infra/argocd/app-dev.yaml
 # ArgoCD auto-syncs on every push to the branch
 ```
 
@@ -1032,14 +1032,14 @@ AegisPay/                              ← single GitHub repository
 │   │   └── superset_config.py         Superset config (ClickHouse datasource, Redis cache)
 │   ├── helm/aegispay/                 Umbrella Helm chart (all 10 services)
 │   │   ├── values.yaml                Base values (includes global.clickhouse)
-│   │   ├── values-dev.yaml            On-prem k3s overrides (1 replica, 256Mi requests)
-│   │   ├── values-staging.yaml
-│   │   └── values-prod.yaml
+│   │   ├── values-dev.yaml            Dev k3s overrides (1 replica, 256Mi requests, OpenRouter)
+│   │   └── values-prod.yaml           Prod (replicas ≥ 2, full resource limits, Anthropic)
 │   ├── helm/monitoring/               kube-prometheus-stack + Alertmanager routing
-│   │   ├── values-dev.yaml            On-prem Prometheus + Grafana config
+│   │   ├── values-dev.yaml            Dev Prometheus + Grafana config (local-path storage)
 │   │   └── values-prod.yaml           Prod (30d retention, gp3, Slack + Gmail alerts)
-│   └── argocd/                        ArgoCD ApplicationSet (dev / staging / prod)
-│       └── app-onprem.yaml            Watches dev branch
+│   └── argocd/                        ArgoCD Application + ApplicationSet (dev / prod)
+│       ├── app-dev.yaml               Watches dev branch — auto-sync to k3s
+│       └── applicationset.yaml        Prod ApplicationSet (manual approval gate)
 │
 ├── docs/adr/                          Architecture Decision Records
 │   ├── 001-saga-orchestration.md
@@ -1053,7 +1053,6 @@ AegisPay/                              ← single GitHub repository
 │   ├── ci-android.yml                 Gradle build + instrumented tests
 │   ├── ci-java.yml                    Maven build matrix (libs first → 8 services in parallel)
 │   ├── cd-dev.yml                     Push to dev → build dev image → yq patch values-dev.yaml → ArgoCD k3s sync
-│   ├── cd-staging.yml                 On tag → staging deploy
 │   ├── cd-prod.yml                    Manual approval gate → prod deploy
 │   └── security-scan.yml              OWASP dep-check + Trivy image scan
 │
@@ -1093,7 +1092,7 @@ AegisPay/                              ← single GitHub repository
 | **B7** | ✅ | Risk Engine — velocity/geo/amount rules, RAG fraud copilot, blacklist management |
 | **B8** | ✅ | Notification Service — WebSocket registry, email/SMS adapters, notification history |
 | **B9** | ✅ | AI Platform — RAG pipeline, Fraud Copilot, Error Agent, Incident Triage Agent, OCR+KYC |
-| **B10** | ✅ | Integration hardening — Stripe live payments + webhooks, ESO secrets, Alertmanager routing (Slack + Gmail), AI knowledge base seed, expanded e2e Testcontainers suite (11 tests), cost-optimised on-prem k3s stack |
+| **B10** | ✅ | Integration hardening — Stripe live payments + webhooks, ESO secrets, Alertmanager routing (Slack + Gmail), AI knowledge base seed, expanded e2e Testcontainers suite (11 tests), cost-optimised dev k3s stack (OpenRouter + Stripe sandbox) |
 | **B11** | ✅ | **Data Engineering** — Spring Batch settlement reconciliation vs Stripe, Kafka Streams fraud analytics, ClickHouse OLAP schema, Apache Superset dashboards, REST reconciliation API, `feat/data-engineering` branch merged to prod + dev |
 
 ---
@@ -1114,7 +1113,7 @@ AegisPay/                              ← single GitHub repository
 - [x] **Fraud velocity streaming** — Kafka Streams tumbling windows, ClickHouseSink batch flush, pipeline health endpoint
 - [x] **ClickHouse analytics schema** — 4 MergeTree tables + 3 Materialized Views, 2-3 year TTL
 - [x] **Apache Superset** — Helm-deployed to Kubernetes; local dev via Docker Compose; pre-wired to ClickHouse, Superset config with Redis cache + SMTP alerts
-- [x] **Cost-optimised on-prem stack** — k3s `dev` branch (1 replica, 256Mi, OpenRouter AI, no cloud costs)
+- [x] **Cost-optimised dev stack** — k3s `dev` branch (1 replica, 256Mi, OpenRouter AI, Stripe sandbox, no cloud costs)
 
 **Planned 🔜**
 - [ ] **Multi-tenancy** — `tenantId` propagation through JWT claims → PostgreSQL row-level security per tenant

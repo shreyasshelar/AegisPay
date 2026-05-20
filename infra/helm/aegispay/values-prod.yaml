@@ -138,6 +138,11 @@ grafana:
     annotations:
       nginx.ingress.kubernetes.io/auth-type: basic
       nginx.ingress.kubernetes.io/auth-secret: grafana-basic-auth
+  alerting:
+    opsEmail: "ops@aegispay.shreyasshelar.uk"
+    slackWebhookSecretRef:
+      name: aegispay-slack-secret
+      key: webhook-url
   resources:
     requests:
       cpu: 200m

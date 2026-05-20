@@ -1,7 +1,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # AegisPay Infra — Production (GKE / multi-node) values
 #
-# Differences from on-prem:
+# Differences from dev (k3s):
 #   - ClickHouse HA enabled (2 shards × 2 replicas + 3 Keeper nodes)
 #   - Storage class: gke-ssd (GKE SSDs) instead of local-path
 #   - Higher resource requests / limits across the board

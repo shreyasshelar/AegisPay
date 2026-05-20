@@ -2,7 +2,7 @@ apiVersion: v2
 name: aegispay-infra
 description: >
   Umbrella Helm chart for all AegisPay backing services.
-  Used on on-prem k3s environments (dev branch).
+  Used on dev k3s environments (dev branch).
   AWS-managed equivalents (RDS, MSK, ElastiCache, DocumentDB) are used in prod.
 type: application
 version: 0.1.0

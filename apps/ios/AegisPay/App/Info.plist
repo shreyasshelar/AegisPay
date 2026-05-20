@@ -72,6 +72,13 @@
         <string>webcredentials:api.aegispay.shreyasshelar.uk</string>
     </array>
 
+    <!-- App Store encryption compliance.
+         AegisPay uses only the OS-provided TLS/SSL (via URLSession / SecureTransport).
+         It does not implement or link to any custom encryption algorithms.
+         Setting this to false exempts the app from Export Compliance Documentation. -->
+    <key>ITSAppUsesNonExemptEncryption</key>
+    <false/>
+
     <!-- Supported interface orientations -->
     <key>UISupportedInterfaceOrientations</key>
     <array>
