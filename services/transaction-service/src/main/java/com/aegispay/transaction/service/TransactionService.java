@@ -13,6 +13,7 @@ import com.aegispay.transaction.idempotency.IdempotencyService;
 import com.aegispay.transaction.kafka.TransactionEventProducer;
 import com.aegispay.transaction.readmodel.TransactionView;
 import com.aegispay.transaction.readmodel.TransactionViewRepository;
+import com.aegispay.transaction.client.UserServiceClient;
 import com.aegispay.transaction.repository.OutboxEntryRepository;
 import com.aegispay.transaction.repository.TransactionRepository;
 import lombok.RequiredArgsConstructor;
@@ -44,6 +45,7 @@ public class TransactionService {
     private final IdempotencyService idempotencyService;
     private final TransactionEventProducer eventProducer;
     private final MongoTemplate mongoTemplate;
+    private final UserServiceClient userServiceClient;
 
     @Transactional
     public TransactionResponse create(TransactionRequest request,
@@ -56,6 +58,11 @@ public class TransactionService {
                     return transactionMapper.toResponse(existing);
                 })
                 .orElseGet(() -> {
+                    // ── Server-side KYC gate ──────────────────────────────────
+                    // Blocks PENDING, DOCUMENT_SUBMITTED, AI_PROCESSING, REJECTED.
+                    // Allows APPROVED, MANUAL_REVIEW (flagged but not blocked), UNKNOWN (fallback).
+                    userServiceClient.assertKycAllowsTransaction(userId);
+
                     idempotencyService.claim(idempotencyKey);
                     return createNew(request, idempotencyKey, userId);
                 });

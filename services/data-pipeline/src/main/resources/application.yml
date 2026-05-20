@@ -1,6 +1,8 @@
 ﻿spring:
   application:
     name: data-pipeline
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
 
   # Disable auto-DataSource configuration â€” we wire ClickHouse manually
   autoconfigure:
@@ -21,6 +23,7 @@
 
 server:
   port: ${SERVER_PORT:8089}
+  shutdown: graceful
 
 management:
   endpoints:
@@ -49,7 +52,7 @@ logging:
   file:
     name: logs/data-pipeline.log
   pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} [traceId=%X{traceId}] [corrId=%X{correlationId}] - %msg%n"
   level:
     root: INFO
     com.aegispay: DEBUG

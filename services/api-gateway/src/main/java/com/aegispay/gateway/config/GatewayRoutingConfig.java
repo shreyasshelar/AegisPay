@@ -2,6 +2,7 @@ package com.aegispay.gateway.config;
 
 import com.aegispay.gateway.filter.CorrelationIdGatewayFilter;
 import com.aegispay.gateway.filter.JwtRelayGatewayFilter;
+import com.aegispay.gateway.filter.KycRateLimitGatewayFilter;
 import com.aegispay.gateway.filter.TraceParentGatewayFilter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,6 +33,7 @@ public class GatewayRoutingConfig {
     private final CorrelationIdGatewayFilter correlationIdFilter;
     private final TraceParentGatewayFilter traceParentFilter;
     private final JwtRelayGatewayFilter jwtRelayFilter;
+    private final KycRateLimitGatewayFilter kycRateLimitFilter;
 
     @Bean
     public RouteLocator routes(RouteLocatorBuilder builder) {
@@ -143,7 +145,21 @@ public class GatewayRoutingConfig {
                 )
                 .uri(svc.getNotificationService()))
 
-            // ── AI Platform ───────────────────────────────────────────────────
+            // ── AI Platform — KYC (rate-limited: 5 attempts per 24 h per user) ─
+            .route("ai-platform-kyc", r -> r
+                .path("/api/v1/ai/kyc/**")
+                .filters(f -> f
+                    .filter(correlationIdFilter)
+                    .filter(traceParentFilter)
+                    .filter(jwtRelayFilter)
+                    .filter(kycRateLimitFilter)          // ← KYC-specific limiter
+                    .circuitBreaker(cb -> cb
+                        .setName("ai-platform")
+                        .setFallbackUri("forward:/fallback/service-unavailable"))
+                )
+                .uri(svc.getAiPlatform()))
+
+            // ── AI Platform — all other AI routes (incidents, errors, fraud) ──
             .route("ai-platform", r -> r
                 .path("/api/v1/ai/**")
                 .filters(f -> f

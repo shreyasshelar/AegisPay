@@ -1,86 +1,9 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# AI Platform — On-Prem Spring Profile
+# DEPRECATED — use application-dev.yml instead
 #
-# Activated when SPRING_PROFILES_ACTIVE=onprem (set in values-onprem.yaml).
-# Replaces Anthropic Claude with OpenRouter (free tier) for all AI tasks.
+# The "onprem" Spring profile has been renamed to "dev" to match the canonical
+# three-environment model: Local → Dev (k3s, cost-optimised) → Prod (AWS EKS)
 #
-# OpenRouter is OpenAI-API-compatible — Spring AI's OpenAI adapter works
-# without any code changes. Only the base-url and model names change.
-#
-# Free models on OpenRouter (no billing required):
-#   Text / RAG / agents:
-#     meta-llama/llama-3.1-8b-instruct:free
-#     mistralai/mistral-7b-instruct:free
-#     google/gemma-2-9b-it:free
-#
-#   Vision / OCR (KYC document processing):
-#     meta-llama/llama-3.2-11b-vision-instruct:free
-#     qwen/qwen-2-vl-7b-instruct:free
-#
-# Get a free API key at: https://openrouter.ai
+# AiModelConfig.java has been updated: @Profile("onprem") → @Profile("dev")
+# values-dev.yaml sets springProfile: dev for ai-platform
 # ─────────────────────────────────────────────────────────────────────────────
-
-spring:
-  ai:
-    # ── Disable Anthropic (not used on on-prem) ───────────────────────────────
-    anthropic:
-      api-key: "not-used-on-onprem"
-
-    # ── OpenRouter via OpenAI-compatible adapter ───────────────────────────────
-    openai:
-      base-url: https://openrouter.ai/api/v1
-      # OPENROUTER_API_KEY injected from Vault via ESO → K8s secret aegispay-ai-secret
-      api-key: ${OPENROUTER_API_KEY}
-
-      chat:
-        options:
-          # Primary model: Llama 3.1 8B free — good for RAG, fraud explanation,
-          # error resolution, incident triage (text tasks)
-          model: meta-llama/llama-3.1-8b-instruct:free
-          max-tokens: 2048
-          temperature: 0.1
-
-      # Embedding model — OpenRouter does not provide embeddings directly.
-      # Use nomic-embed-text via Ollama (local), or a free embedding endpoint.
-      # For portfolio purposes we fall back to a deterministic hash embedding
-      # (see EmbeddingClient.java — onprem profile uses HashEmbeddingClient).
-      embedding:
-        options:
-          model: text-embedding-ada-002   # placeholder — overridden in code
-
-    # pgvector dimensions must match the embedding model output.
-    # Llama/nomic embeddings = 768 dims. text-embedding-3-small = 1536 dims.
-    # On onprem we use 768 to save space (nomic-embed-text or hash fallback).
-    vectorstore:
-      pgvector:
-        index-type: HNSW
-        distance-type: COSINE_DISTANCE
-        dimensions: 768
-
-# ── On-prem AI model config ────────────────────────────────────────────────────
-aegispay:
-  ai:
-    provider: openrouter
-
-    models:
-      # Fraud copilot, error resolution, incident triage — text tasks
-      chat: "meta-llama/llama-3.1-8b-instruct:free"
-      # KYC document OCR — vision task
-      vision: "meta-llama/llama-3.2-11b-vision-instruct:free"
-      # Embeddings — local via Ollama if running, else hash fallback
-      embedding: "nomic-embed-text"
-
-    rag:
-      top-k: 5
-      similarity-threshold: 0.65   # slightly lower than prod — free models embed differently
-
-    agent:
-      max-iterations: 5   # fewer iterations to stay within free tier rate limits
-
-    audit:
-      enabled: true   # still log all AI calls even on onprem
-
-    # OpenRouter HTTP headers required for tracking / rate limit attribution
-    openrouter:
-      site-url: "https://aegispay.YOUR_DOMAIN.com"
-      site-name: "AegisPay On-Prem"

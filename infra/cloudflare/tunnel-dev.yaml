@@ -1,0 +1,116 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Cloudflare Tunnel — Dev (k3s)
+#
+# Routes external traffic to dev k3s via Traefik ingress.
+# No public IP or open firewall ports required.
+#
+# Setup (once):
+#   1. Cloudflare Dashboard → Zero Trust → Networks → Tunnels
+#   2. Create tunnel → name: "aegispay-dev"
+#   3. Copy tunnel token → store in Vault:
+#        vault kv put secret/aegispay/cloudflare/dev tunnel_token="<token>"
+#   4. Add DNS routes in Tunnel config (Cloudflare UI):
+#        aegispay.shreyasshelar.uk         → http://traefik.kube-system.svc:80
+#        api.aegispay.shreyasshelar.uk     → http://traefik.kube-system.svc:80
+#        grafana.aegispay.shreyasshelar.uk → http://traefik.kube-system.svc:80
+#        argocd.aegispay.shreyasshelar.uk  → http://traefik.kube-system.svc:80
+#        vault.aegispay.shreyasshelar.uk   → http://vault.aegispay.svc:8200
+#   5. Apply: kubectl apply -f infra/cloudflare/tunnel-dev.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudflared-dev
+  namespace: kube-system
+  labels:
+    app: cloudflared
+    environment: dev
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: cloudflared
+      environment: dev
+  template:
+    metadata:
+      labels:
+        app: cloudflared
+        environment: dev
+    spec:
+      containers:
+        - name: cloudflared
+          image: cloudflare/cloudflared:2024.12.2
+          args:
+            - tunnel
+            - --no-autoupdate
+            - --metrics
+            - 0.0.0.0:2000
+            - run
+            - --token
+            - $(TUNNEL_TOKEN)
+          env:
+            - name: TUNNEL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: cloudflare-tunnel-dev-secret
+                  key: tunnel-token
+          ports:
+            - name: metrics
+              containerPort: 2000
+          resources:
+            requests:
+              cpu:    10m
+              memory: 32Mi
+            limits:
+              cpu:    100m
+              memory: 128Mi
+          livenessProbe:
+            httpGet:
+              path: /ready
+              port: 2000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 2000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          effect: NoSchedule
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cloudflared-dev-metrics
+  namespace: kube-system
+  labels:
+    app: cloudflared
+    environment: dev
+spec:
+  selector:
+    app: cloudflared
+    environment: dev
+  ports:
+    - name: metrics
+      port: 2000
+      targetPort: 2000
+---
+# ServiceMonitor so Prometheus scrapes cloudflared tunnel metrics
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: cloudflared-dev
+  namespace: kube-system
+  labels:
+    app: cloudflared
+    environment: dev
+spec:
+  selector:
+    matchLabels:
+      app: cloudflared
+      environment: dev
+  endpoints:
+    - port: metrics
+      interval: 30s

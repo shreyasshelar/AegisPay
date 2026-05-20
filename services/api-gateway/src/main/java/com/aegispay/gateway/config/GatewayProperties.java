@@ -19,6 +19,7 @@ public class GatewayProperties {
 
     private ServiceUris services = new ServiceUris();
     private RateLimiter rateLimiter = new RateLimiter();
+    private KycRateLimiter kycRateLimiter = new KycRateLimiter();
     private Cors cors = new Cors();
 
     @Data
@@ -44,6 +45,20 @@ public class GatewayProperties {
         private String remainingHeader = "X-RateLimit-Remaining";
         private String limitHeader     = "X-RateLimit-Limit";
         private String resetHeader     = "X-RateLimit-Reset";
+    }
+
+    /**
+     * KYC-specific rate limiter — much tighter than the general limiter.
+     * Prevents brute-forcing fake IDs (5 attempts per 24 hours per user).
+     */
+    @Data
+    public static class KycRateLimiter {
+        /** Max KYC attempts per windowHours per user. */
+        private int maxAttempts   = 5;
+        /** Window in hours. */
+        private int windowHours   = 24;
+        /** Redis key TTL (slightly over the window). */
+        private int keyTtlSeconds = 86_500;   // 24 h + 100 s
     }
 
     @Data

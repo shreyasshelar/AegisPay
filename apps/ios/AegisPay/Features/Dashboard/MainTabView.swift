@@ -1,6 +1,7 @@
 import SwiftUI
 
 private let backOfficeRoles: Set<String> = ["BACK_OFFICE", "ADMIN", "MERCHANT_OPS"]
+private let adminRoles:      Set<String> = ["ADMIN"]
 
 struct MainTabView: View {
     @EnvironmentObject var authStore: AuthStore
@@ -11,6 +12,12 @@ struct MainTabView: View {
     private var isBackOfficeUser: Bool {
         let role = authStore.currentUser?.role ?? ""
         return backOfficeRoles.contains(role)
+    }
+
+    /// True when the signed-in user is an ADMIN (can access Triage Agent).
+    private var isAdminUser: Bool {
+        let role = authStore.currentUser?.role ?? ""
+        return adminRoles.contains(role)
     }
 
     var body: some View {
@@ -67,6 +74,20 @@ struct MainTabView: View {
                         )
                     }
                     .tag(6)
+            }
+
+            // ── AI Triage tab (ADMIN only) ────────────────────────────────────
+            if isAdminUser {
+                TriageView()
+                    .tabItem {
+                        Label(
+                            "Triage",
+                            systemImage: selectedTab == 7
+                                ? "stethoscope.circle.fill"
+                                : "stethoscope.circle"
+                        )
+                    }
+                    .tag(7)
             }
         }
         .tint(Color.aegisPrimary)

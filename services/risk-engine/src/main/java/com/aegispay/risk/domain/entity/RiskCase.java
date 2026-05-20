@@ -29,6 +29,10 @@ public class RiskCase {
     @Column(nullable = false)
     private UUID userId;
 
+    /** Recipient of the payment — nullable for legacy records without payeeId. */
+    @Column
+    private UUID payeeId;
+
     @Column(nullable = false)
     private int riskScore;
 

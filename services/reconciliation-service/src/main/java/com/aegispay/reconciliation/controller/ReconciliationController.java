@@ -1,6 +1,7 @@
 package com.aegispay.reconciliation.controller;
 
 import com.aegispay.reconciliation.scheduler.ReconciliationScheduler;
+import org.springframework.validation.annotation.Validated;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.BatchStatus;
@@ -29,6 +30,7 @@ import java.util.Map;
  * Read operations require at least {@code MERCHANT_OPS}.
  */
 @Slf4j
+@Validated
 @RestController
 @RequestMapping("/api/v1/reconciliation")
 @RequiredArgsConstructor

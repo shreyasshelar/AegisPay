@@ -116,7 +116,5 @@ Traditional synchronous REST chains fail under partial failure: if Ledger Servic
 | Environment | Kubernetes | Grafana | Secrets | Notes |
 |-------------|-----------|---------|---------|-------|
 | Local | Docker Compose | ✅ port 3100 | plaintext `.env.local` | Full stack, seeds test data |
-| Dev (AWS EKS) | `aegispay-dev` namespace | ✅ ingress | AWS Secrets Manager | 1 replica each |
-| Staging (AWS EKS) | `aegispay-staging` namespace | ✅ TLS ingress | AWS Secrets Manager | Prod-like sizing |
+| Dev (k3s) | `aegispay` namespace | ✅ Traefik TLS | HashiCorp Vault | Single-node, OpenRouter AI, Stripe test mode |
 | Production (AWS EKS) | `aegispay-prod` namespace | ✅ TLS + basic-auth | HashiCorp Vault | HA, PDB, HPA |
-| On-Prem (k3s) | `aegispay` namespace | ✅ Traefik TLS | Vault | Single-node |

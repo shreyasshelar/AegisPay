@@ -1,6 +1,8 @@
 ﻿spring:
   application:
     name: ai-platform
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
   autoconfigure:
     exclude:
       - org.springframework.ai.vectorstore.pgvector.autoconfigure.PgVectorStoreAutoConfiguration
@@ -11,11 +13,15 @@
     password: ${DB_PASSWORD:aegispay_dev}
     hikari:
       maximum-pool-size: ${DB_POOL_SIZE:5}
+      minimum-idle: ${DB_POOL_MIN:2}
+      connection-timeout: 30000
+      keepalive-time: 30000
 
   jpa:
     hibernate:
       ddl-auto: validate
     show-sql: false
+    open-in-view: false
 
   flyway:
     enabled: true
@@ -50,6 +56,7 @@
 
 server:
   port: ${SERVER_PORT:8091}
+  shutdown: graceful
 
 management:
   endpoints:
@@ -69,6 +76,82 @@ aegispay:
       enabled: true
     agent:
       max-iterations: 10
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      rag-pipeline:
+        failure-rate-threshold: 50
+        sliding-window-size: 10
+        sliding-window-type: COUNT_BASED
+        wait-duration-in-open-state: 60s
+        permitted-number-of-calls-in-half-open-state: 3
+        record-exceptions:
+          - java.lang.RuntimeException
+          - java.util.concurrent.TimeoutException
+      # KYC vision pipeline (OCR, quality, tampering, validation)
+      kyc-ai:
+        failure-rate-threshold: 50
+        sliding-window-size: 5
+        sliding-window-type: COUNT_BASED
+        wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 2
+        minimum-number-of-calls: 3
+        record-exceptions:
+          - java.lang.RuntimeException
+          - java.util.concurrent.TimeoutException
+      # AI triage agent
+      triage-agent:
+        failure-rate-threshold: 50
+        sliding-window-size: 5
+        sliding-window-type: COUNT_BASED
+        wait-duration-in-open-state: 60s
+        permitted-number-of-calls-in-half-open-state: 2
+        minimum-number-of-calls: 3
+        record-exceptions:
+          - java.lang.RuntimeException
+          - java.util.concurrent.TimeoutException
+  retry:
+    instances:
+      rag-pipeline:
+        max-attempts: 3
+        wait-duration: 1s
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+        exponential-max-wait-duration: 10s
+        retry-exceptions:
+          - java.lang.RuntimeException
+      # KYC vision calls — 2 attempts, fast backoff (vision API is slow; don't pile up)
+      kyc-ai:
+        max-attempts: 2
+        wait-duration: 500ms
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+        exponential-max-wait-duration: 5s
+        retry-exceptions:
+          - java.lang.RuntimeException
+      # Triage agent — 2 attempts with 1 s backoff
+      triage-agent:
+        max-attempts: 2
+        wait-duration: 1s
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+        exponential-max-wait-duration: 8s
+        retry-exceptions:
+          - java.lang.RuntimeException
+  timelimiter:
+    instances:
+      rag-pipeline:
+        timeout-duration: 30s
+        cancel-running-future: true
+      # Vision API calls take longer — 60 s cap
+      kyc-ai:
+        timeout-duration: 60s
+        cancel-running-future: true
+      # Triage agent with tool calls — 45 s cap
+      triage-agent:
+        timeout-duration: 45s
+        cancel-running-future: true
 
 logging:
   file:

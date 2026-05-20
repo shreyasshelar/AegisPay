@@ -1,10 +1,17 @@
 import SwiftUI
 
+private let adminRoles: Set<String> = ["ADMIN"]
+
 struct TransactionDetailView: View {
     @EnvironmentObject var authStore: AuthStore
 
     let transactionId: String
     @StateObject private var vm: TransactionDetailViewModel
+    @State private var showTriageSheet = false
+
+    private var isAdminUser: Bool {
+        adminRoles.contains(authStore.currentUser?.role ?? "")
+    }
 
     init(transactionId: String) {
         self.transactionId = transactionId
@@ -20,6 +27,10 @@ struct TransactionDetailView: View {
                     statusCard(tx)
                     if tx.status == .failed || tx.status == .rolledBack {
                         aiErrorCard(tx)
+                        // ADMIN-only triage shortcut
+                        if isAdminUser {
+                            triageButton(tx)
+                        }
                     }
                     detailsCard(tx)
                 } else if let error = vm.errorMessage {
@@ -32,6 +43,15 @@ struct TransactionDetailView: View {
         .background(Color.aegisBg)
         .navigationTitle("Transaction")
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showTriageSheet) {
+            if let tx = vm.transaction {
+                TriageView(
+                    prefillTransactionId: tx.transactionId,
+                    prefillService: "payment-orchestrator"
+                )
+                .environmentObject(authStore)
+            }
+        }
         .task {
             await vm.load()
             if let token = try? await authStore.validAccessToken() {
@@ -84,6 +104,29 @@ struct TransactionDetailView: View {
                 AegisStatusTimeline(status: tx.status)
             }
         }
+    }
+
+    // ── ADMIN triage shortcut ────────────────────────────────────────────────
+
+    private func triageButton(_ tx: Transaction) -> some View {
+        Button {
+            showTriageSheet = true
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "stethoscope")
+                    .font(.system(size: 14))
+                Text("Triage Incident")
+                    .font(.subheadline).fontWeight(.medium)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 11)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.aegisPrimary.opacity(0.5), lineWidth: 1)
+            )
+            .foregroundStyle(Color.aegisPrimary)
+        }
+        .buttonStyle(.plain)
     }
 
     // ── AI error resolution card ──────────────────────────────────────────────

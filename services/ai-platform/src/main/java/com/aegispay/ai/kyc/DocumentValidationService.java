@@ -2,6 +2,8 @@ package com.aegispay.ai.kyc;
 
 import com.aegispay.ai.audit.AiAuditService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
@@ -80,6 +82,18 @@ public class DocumentValidationService {
     private final AiAuditService auditService;
     private final ObjectMapper objectMapper;
 
+    /**
+     * Validate a KYC document image against bank-grade checks.
+     *
+     * <p>Resilience decorators:
+     * <ul>
+     *   <li>{@code @CircuitBreaker} — fallback returns {@code safeFail()} so the KYC pipeline
+     *       routes to MANUAL_REVIEW rather than crashing with a 500.
+     *   <li>{@code @Retry} — 2 retries with exponential backoff before opening circuit.
+     * </ul>
+     */
+    @CircuitBreaker(name = "kyc-ai", fallbackMethod = "validateFallback")
+    @Retry(name = "kyc-ai")
     public DocumentValidationResult validate(
             String base64ImageData,
             String mimeType,
@@ -111,13 +125,22 @@ public class DocumentValidationService {
         } catch (Exception e) {
             error = e.getMessage();
             log.error("Document validation failed: {}", e.getMessage(), e);
-            // Return a safe-fail result rather than crashing the pipeline
-            return DocumentValidationResult.safeFail("Document validation error: " + e.getMessage());
+            // Re-throw so @Retry can attempt again and @CircuitBreaker can track the failure.
+            throw new RuntimeException("Document validation failed: " + e.getMessage(), e);
         } finally {
             long latencyMs = System.currentTimeMillis() - start;
             auditService.log("DOC_VALIDATE", "document image (" + mimeType + ")",
                     output, "claude-sonnet-4-6", latencyMs, error);
         }
+    }
+
+    @SuppressWarnings("unused")   // called reflectively by Resilience4j
+    DocumentValidationResult validateFallback(String base64ImageData, String mimeType,
+                                              String registeredName, Throwable cause) {
+        log.warn("Document validation fallback triggered (circuit open or retries exhausted): {}",
+                cause != null ? cause.getMessage() : "unknown");
+        return DocumentValidationResult.safeFail(
+                "AI validation service temporarily unavailable — document routed to manual review");
     }
 
     private String buildPrompt(String registeredName) {

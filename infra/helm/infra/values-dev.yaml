@@ -1,0 +1,223 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# AegisPay Infra — Dev / k3s values
+#
+# All backing services tuned for a single server (8–16 GB RAM).
+# Every Bitnami chart default that assumes multi-node / cloud is overridden here.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── PostgreSQL ────────────────────────────────────────────────────────────────
+postgresql:
+  enabled: true
+
+  auth:
+    username: aegispay
+    # password comes from Vault via ESO → K8s secret aegispay-db-secret
+    existingSecret: aegispay-db-secret
+    secretKeys:
+      adminPasswordKey: password
+      userPasswordKey: password
+    database: aegispay   # default DB; per-service DBs created by init script
+
+  primary:
+    persistence:
+      enabled: true
+      storageClass: local-path   # k3s default storage class
+      size: 20Gi
+
+    # Init scripts run on first startup — create per-service databases
+    initdb:
+      scriptsConfigMap: postgres-init-scripts
+
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+    # PostgreSQL tuning for a small single-node instance
+    extendedConfiguration: |
+      shared_buffers = 128MB
+      work_mem = 4MB
+      maintenance_work_mem = 64MB
+      max_connections = 100
+      effective_cache_size = 512MB
+
+  # Single node — no replicas
+  readReplicas:
+    replicaCount: 0
+
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+
+# ── MongoDB ───────────────────────────────────────────────────────────────────
+mongodb:
+  enabled: true
+
+  auth:
+    enabled: true
+    username: aegispay
+    existingSecret: aegispay-db-secret
+    existingSecretPasswordKey: password
+    database: aegispay
+
+  # Single node, no replica set needed at this scale
+  architecture: standalone
+
+  persistence:
+    enabled: true
+    storageClass: local-path
+    size: 10Gi
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+
+# ── Redis ─────────────────────────────────────────────────────────────────────
+redis:
+  enabled: true
+
+  architecture: standalone   # no sentinel needed on single node
+
+  auth:
+    enabled: true
+    existingSecret: aegispay-redis-secret
+    existingSecretPasswordKey: password
+
+  master:
+    persistence:
+      enabled: true
+      storageClass: local-path
+      size: 2Gi
+
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 128Mi
+
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+
+# ── Kafka ─────────────────────────────────────────────────────────────────────
+# Uses custom templates (templates/kafka/) with apache/kafka:3.7.0 (free, ASF).
+# Bitnami Kafka chart was removed — it pulls a commercial Docker Hub image.
+kafka:
+  enabled: true
+
+  image:
+    tag: "3.7.0"    # apache/kafka tag — update here to upgrade
+
+  # Fixed cluster ID ensures PVC data survives pod restarts without re-formatting
+  clusterId: "MkU3OEVBNTcwNTJENDM2Qk"
+
+  # Topic defaults — single-node safe
+  numPartitions: 3
+  logRetentionHours: 168
+
+  persistence:
+    storageClass: local-path
+    size: 15Gi
+
+  # JVM heap tuned down for k3s single-node
+  heapOpts: "-Xmx512m -Xms256m"
+
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+# ── Keycloak ──────────────────────────────────────────────────────────────────
+keycloak:
+  enabled: true
+
+  auth:
+    adminUser: admin
+    existingSecret: aegispay-keycloak-secret
+    existingSecretPasswordKey: admin-password
+
+  # Import realm on startup from ConfigMap
+  extraStartupArgs: "--import-realm"
+  extraVolumes:
+    - name: realm-config
+      configMap:
+        name: keycloak-realm-config
+  extraVolumeMounts:
+    - name: realm-config
+      mountPath: /opt/bitnami/keycloak/data/import
+      readOnly: true
+
+  # Use the existing PostgreSQL instance
+  postgresql:
+    enabled: false   # don't deploy a separate PG just for Keycloak
+  externalDatabase:
+    host: postgresql
+    port: 5432
+    user: aegispay
+    database: aegispay_keycloak
+    existingSecret: aegispay-db-secret
+    existingSecretPasswordKey: password
+
+  replicaCount: 1
+
+  persistence:
+    enabled: false   # Keycloak is stateless when backed by PG
+
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+  service:
+    type: ClusterIP
+    ports:
+      http: 8080
+
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+
+  # Secret rotation configuration (used by keycloak-secret-rotation-job.yaml)
+  secretRotation:
+    enabled: true
+  adminUrl: "http://keycloak:8080"
+  adminUsername: "admin"
+  clientId: "aegispay-backend"
+  realm: "aegispay"
+
+# ── Vault ─────────────────────────────────────────────────────────────────────
+vault:
+  addr: "http://vault:8200"
+
+# ── ClickHouse ────────────────────────────────────────────────────────────────
+# Dev: single shard, single replica (HA disabled — not enough nodes).
+# The HA templates are guarded by .Values.clickhouse.enabled; set to false here
+# and run ClickHouse standalone via the official chart or a separate deployment.
+clickhouse:
+  enabled: false   # Override to true + set ha.enabled once you have ≥4 nodes
+
+# ── Namespace ────────────────────────────────────────────────────────────────
+namespace: "aegispay"

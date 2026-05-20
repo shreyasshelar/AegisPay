@@ -7,7 +7,7 @@
 #
 # Prerequisites (done once in Cloudflare dashboard):
 #   1. Log in to dash.cloudflare.com → Zero Trust → Networks → Tunnels
-#   2. Create a tunnel → name it "aegispay-onprem"
+#   2. Create a tunnel → name it "aegispay-dev"
 #   3. Copy the tunnel token shown in the dashboard
 #   4. Store it in Vault:
 #      vault kv put secret/aegispay/cloudflare tunnel_token="<paste token here>"

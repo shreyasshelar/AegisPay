@@ -1,6 +1,8 @@
 ﻿spring:
   application:
     name: notification-service
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
 
   data:
     mongodb:
@@ -11,6 +13,7 @@
     consumer:
       group-id: notification-service
       auto-offset-reset: earliest
+      enable-auto-commit: "false"
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
 
@@ -39,6 +42,7 @@
 
 server:
   port: ${SERVER_PORT:8086}
+  shutdown: graceful
 
 management:
   endpoints:

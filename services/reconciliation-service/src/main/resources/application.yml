@@ -1,6 +1,8 @@
 ﻿spring:
   application:
     name: reconciliation-service
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
 
   # PostgreSQL â€” reads ledger_entries and saga state
   datasource:
@@ -8,15 +10,18 @@
     username: ${DB_USERNAME:aegispay}
     password: ${DB_PASSWORD:aegispay_dev}
     hikari:
-      maximum-pool-size: 5
+      maximum-pool-size: ${DB_POOL_SIZE:5}
+      minimum-idle: ${DB_POOL_MIN:2}
       connection-timeout: 30000
-      # Read-only pool â€” reconciliation only reads from ledger
+      keepalive-time: 30000
+      # Read-only pool — reconciliation only reads from ledger
       read-only: true
 
   jpa:
     hibernate:
       ddl-auto: validate
     show-sql: false
+    open-in-view: false
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
@@ -43,6 +48,7 @@
 
 server:
   port: ${SERVER_PORT:8087}
+  shutdown: graceful
 
 management:
   endpoints:

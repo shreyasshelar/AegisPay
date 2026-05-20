@@ -7,6 +7,7 @@ import com.aegispay.transaction.domain.dto.TransactionResponse;
 import com.aegispay.transaction.domain.dto.TransactionStatusResponse;
 import com.aegispay.transaction.service.TransactionService;
 import jakarta.validation.Valid;
+import org.springframework.validation.annotation.Validated;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -16,6 +17,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
 
+@Validated
 @RestController
 @RequestMapping("/api/v1/transactions")
 @RequiredArgsConstructor

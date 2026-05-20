@@ -1,0 +1,299 @@
+[
+  {
+    "id": "FT001",
+    "term": "IMPS",
+    "fullForm": "Immediate Payment Service",
+    "category": "payment_rail",
+    "description": "IMPS is an instant interbank electronic fund transfer service in India operated by NPCI. It is available 24x7x365 including holidays. Transactions are settled in real-time. Per-transaction limit is ₹5 lakh (RBI mandated). Uses MMID (Mobile Money Identifier) or IFSC + account number for routing.",
+    "relatedTerms": ["NEFT", "RTGS", "UPI", "NPCI"],
+    "rbiCircular": "RBI/2010-11/131"
+  },
+  {
+    "id": "FT002",
+    "term": "NEFT",
+    "fullForm": "National Electronic Funds Transfer",
+    "category": "payment_rail",
+    "description": "NEFT is a nation-wide payment system operated by RBI. Transactions are settled in half-hourly batches 24x7. No minimum amount; maximum ₹2 lakh per transaction (varies by bank). Uses IFSC code for routing. NEFT charges are regulated by RBI — individuals are not charged for outward NEFT from savings accounts.",
+    "relatedTerms": ["IMPS", "RTGS", "IFSC"],
+    "rbiCircular": "RBI/2019-20/121"
+  },
+  {
+    "id": "FT003",
+    "term": "RTGS",
+    "fullForm": "Real Time Gross Settlement",
+    "category": "payment_rail",
+    "description": "RTGS is for large-value transactions settled individually and instantaneously. Minimum transaction amount is ₹2 lakh. Available 24x7. Unlike NEFT (batch) and IMPS (retail), RTGS is specifically for high-value transfers and is operated by RBI. Used predominantly for corporate and interbank settlements.",
+    "relatedTerms": ["NEFT", "IMPS"],
+    "rbiCircular": "RBI/2020-21/69"
+  },
+  {
+    "id": "FT004",
+    "term": "UPI",
+    "fullForm": "Unified Payments Interface",
+    "category": "payment_rail",
+    "description": "UPI is a real-time payment system developed by NPCI that allows instant money transfers between bank accounts through mobile devices. Uses VPA (Virtual Payment Address) like mobile@bank. Per transaction limit is ₹1 lakh (₹5 lakh for select categories). Supports person-to-person, person-to-merchant, and QR code payments. 24x7 availability.",
+    "relatedTerms": ["IMPS", "NPCI", "VPA", "BHIM"],
+    "rbiCircular": "DPSS.CO.PD.No.1305/02.01.014/2015-16"
+  },
+  {
+    "id": "FT005",
+    "term": "KYC",
+    "fullForm": "Know Your Customer",
+    "category": "compliance",
+    "description": "KYC is a mandatory regulatory process in India where financial institutions verify the identity of their customers. RBI Master Direction on KYC (2016) mandates it for all account holders. Documents accepted: Aadhaar card, PAN card, Passport, Voter ID, Driving License. For digital/video KYC (V-KYC), liveness detection is mandatory. Non-compliance attracts penalty under PMLA 2002.",
+    "relatedTerms": ["AML", "PMLA", "Aadhaar", "PAN", "cKYC"],
+    "rbiCircular": "RBI/2015-16/42"
+  },
+  {
+    "id": "FT006",
+    "term": "PPI",
+    "fullForm": "Prepaid Payment Instrument",
+    "category": "wallet",
+    "description": "PPIs are instruments that facilitate purchase of goods and services, financial services, and funds transfer against value stored in them. Regulated by RBI under Payment and Settlement Systems Act 2007. Types: Closed-loop (single merchant), Semi-closed (multiple merchants, no cash withdrawal), Open-loop (full banking features). KYC mandatory for full-KYC PPIs above ₹10,000.",
+    "relatedTerms": ["Wallet", "KYC", "PMLA"],
+    "rbiCircular": "RBI/2021-22/117"
+  },
+  {
+    "id": "FT007",
+    "term": "NACH",
+    "fullForm": "National Automated Clearing House",
+    "category": "payment_rail",
+    "description": "NACH is a bulk payment system operated by NPCI for high volume, repetitive and periodic interbank transactions — primarily EMI deductions, utility bill payments, dividend payments, and salary credits. Uses mandate-based authorization. Replaces ECS. Credit mandates processed T+1 day; Debit mandates on the mandate date.",
+    "relatedTerms": ["ECS", "NPCI", "Mandate"],
+    "rbiCircular": "DPSS.CO.CHD.No.1674/04.07.009/2015-16"
+  },
+  {
+    "id": "FT008",
+    "term": "PMLA",
+    "fullForm": "Prevention of Money Laundering Act",
+    "category": "compliance",
+    "description": "PMLA 2002 is India's primary anti-money laundering legislation. It requires reporting entities (banks, NBFCs, payment systems) to maintain records of all transactions above ₹10 lakh, report suspicious transactions to FIU-IND, and conduct enhanced due diligence on high-risk customers. Non-compliance results in seizure, forfeiture, and imprisonment.",
+    "relatedTerms": ["AML", "KYC", "FIU-IND", "CTR", "STR"],
+    "rbiCircular": "RBI/2008-09/398"
+  },
+  {
+    "id": "FT009",
+    "term": "NPA",
+    "fullForm": "Non-Performing Asset",
+    "category": "banking",
+    "description": "An NPA is a loan or advance for which the principal or interest payment has remained overdue for 90 days. Classification: Sub-Standard (NPA for less than 12 months), Doubtful (NPA for more than 12 months), Loss Asset (uncollectible). Provisioning norms: 15% for sub-standard, 25-100% for doubtful, 100% for loss. Gross NPA ratio is a key banking health indicator.",
+    "relatedTerms": ["Provisioning", "GNPA", "NNPA", "PCR"],
+    "rbiCircular": "RBI/2022-23/29"
+  },
+  {
+    "id": "FT010",
+    "term": "NBFC",
+    "fullForm": "Non-Banking Financial Company",
+    "category": "institution_type",
+    "description": "NBFCs are companies registered under Companies Act 2013 engaged in lending, investment, or deposit-taking activity but do not hold a banking license. Regulated by RBI. Types: NBFC-MFI (microfinance), NBFC-P2P (peer-to-peer lending), NBFC-AA (Account Aggregator), NBFC-IFC (infrastructure finance). Cannot accept demand deposits. SBR (Scale Based Regulation) framework classifies them into Base, Middle, Upper, Top layers.",
+    "relatedTerms": ["RBI", "SBR", "NBFC-AA", "P2P"],
+    "rbiCircular": "RBI/2021-22/112"
+  },
+  {
+    "id": "FT011",
+    "term": "SWIFT",
+    "fullForm": "Society for Worldwide Interbank Financial Telecommunication",
+    "category": "payment_rail",
+    "description": "SWIFT is the global messaging network for international payments. In India, cross-border remittances use SWIFT codes (11-character BIC codes). Inward remittances to India are subject to FEMA (Foreign Exchange Management Act). Outward remittances under LRS (Liberalised Remittance Scheme) allow up to $250,000 per financial year per resident individual.",
+    "relatedTerms": ["BIC", "FEMA", "LRS", "Wire Transfer"],
+    "rbiCircular": "RBI/2022-23/101"
+  },
+  {
+    "id": "FT012",
+    "term": "AML",
+    "fullForm": "Anti-Money Laundering",
+    "category": "compliance",
+    "description": "AML refers to laws, regulations, and procedures intended to prevent criminals from disguising illegally obtained funds as legitimate income. In India, governed by PMLA 2002 and enforced by FIU-IND. Financial institutions must file CTR (Cash Transaction Reports) for cash transactions above ₹10 lakh and STR (Suspicious Transaction Reports) for any suspicious activity regardless of amount.",
+    "relatedTerms": ["PMLA", "KYC", "CFT", "FATF", "FIU-IND"],
+    "rbiCircular": "RBI/FIDD.CO.FSD.BC.No.1/05.10.001/2022-23"
+  },
+  {
+    "id": "FT013",
+    "term": "Chargeback",
+    "fullForm": "Chargeback",
+    "category": "dispute",
+    "description": "A chargeback is a reversal of a payment initiated by the card-issuing bank on behalf of the cardholder after a dispute. Common reasons: unauthorized transaction, goods not received, duplicate charge, quality dispute. Chargeback window for domestic transactions is 120 days from transaction date. Card networks (Visa, Mastercard, RuPay) have specific dispute resolution timelines. High chargeback rate triggers merchant account review or termination.",
+    "relatedTerms": ["Dispute", "Refund", "RuPay", "Representment"],
+    "rbiCircular": "RBI/2020-21/77"
+  },
+  {
+    "id": "FT014",
+    "term": "Escrow",
+    "fullForm": "Escrow Account",
+    "category": "account_type",
+    "description": "An escrow account holds funds on behalf of two parties during a transaction until specified conditions are met. In Indian fintech, payment aggregators are mandated by RBI to maintain a nodal/escrow account to hold customer funds. Settlement to merchants must happen within T+1 day for Tier-1 merchants. Escrow accounts cannot earn interest (unlike nodal accounts which can with RBI permission).",
+    "relatedTerms": ["Nodal Account", "Payment Aggregator", "T+1 Settlement"],
+    "rbiCircular": "RBI/2020-21/2"
+  },
+  {
+    "id": "FT015",
+    "term": "Interchange",
+    "fullForm": "Interchange Fee",
+    "category": "fee_structure",
+    "description": "Interchange is the fee paid by the acquiring bank to the issuing bank when a card transaction is processed. In India, RBI regulates interchange for RuPay cards and UPI. For debit cards, interchange is capped by RBI. For credit cards, it is set by card networks. MDR (Merchant Discount Rate) = Interchange + Scheme Fee + Acquirer Margin. RBI mandated zero MDR for RuPay debit and UPI since January 2020.",
+    "relatedTerms": ["MDR", "Acquirer", "Issuer", "RuPay"],
+    "rbiCircular": "RBI/2019-20/110"
+  },
+  {
+    "id": "FT016",
+    "term": "Tokenisation",
+    "fullForm": "Card Tokenisation",
+    "category": "security",
+    "description": "Tokenisation replaces a card's 16-digit PAN with a unique token specific to device and merchant, enhancing security. RBI mandated all Card-on-File (CoF) storage to be replaced by tokens by October 2022. Token Requestor (merchant or payment aggregator) must be certified by card networks. AegisPay uses tokenisation to avoid storing raw card numbers per PCI DSS requirements.",
+    "relatedTerms": ["PAN", "CoF", "PCI DSS", "Card Network"],
+    "rbiCircular": "RBI/2021-22/176"
+  },
+  {
+    "id": "FT017",
+    "term": "CIBIL Score",
+    "fullForm": "Credit Information Bureau (India) Limited Score",
+    "category": "credit",
+    "description": "CIBIL score is India's primary credit score ranging from 300 to 900. Score ≥750 is considered good. Calculated based on: payment history (35%), credit utilisation (30%), credit history length (15%), credit mix (10%), new credit inquiries (10%). Hard inquiries temporarily reduce score. Lenders use it for loan and credit card approval decisions. RBI mandates all credit institutions to submit data to credit bureaus.",
+    "relatedTerms": ["Experian", "Equifax", "CRIF", "Credit Bureau"],
+    "rbiCircular": "RBI/2021-22/95"
+  },
+  {
+    "id": "FT018",
+    "term": "Float",
+    "fullForm": "Payment Float",
+    "category": "settlement",
+    "description": "Float is money in transit — the time gap between when a payment is debited from the sender and credited to the receiver. In NEFT, batch processing creates float. In IMPS/UPI, float is near-zero. Payment aggregators hold settlement float which creates regulatory obligations. RBI limits the time funds can be held in nodal accounts before settlement to merchants.",
+    "relatedTerms": ["Settlement", "Nodal Account", "T+1"],
+    "rbiCircular": "DPSS.CO.PD.No.757/02.14.003/2009-10"
+  },
+  {
+    "id": "FT019",
+    "term": "Lien",
+    "fullForm": "Account Lien / Hold",
+    "category": "account_operation",
+    "description": "A lien is a hold placed on funds in an account that prevents the account holder from using those funds. In AegisPay context, when a transaction is in PROCESSING state, the corresponding amount is placed under a lien (reserved balance). The lien is released if the transaction fails (balance rollback) or converted to a debit if it succeeds (balance commit). Banks also place liens for FD collateral, EMI mandates, and legal orders.",
+    "relatedTerms": ["Reserved Balance", "Hold", "Encumbrance"],
+    "rbiCircular": "N/A - internal banking practice"
+  },
+  {
+    "id": "FT020",
+    "term": "Reconciliation",
+    "fullForm": "Payment Reconciliation",
+    "category": "operations",
+    "description": "Reconciliation is the process of matching payment records between two systems (e.g. ledger vs payment gateway, or internal vs bank statement) to identify discrepancies. In AegisPay, the reconciliation service compares the internal ledger with external settlement reports. Types: Intraday (real-time), End-of-Day (EOD), Exception reconciliation. Common breaks: timing differences, failed settlements, duplicate entries, fee deductions.",
+    "relatedTerms": ["Ledger", "Settlement", "Breaks", "EOD"],
+    "rbiCircular": "N/A - operational best practice"
+  },
+  {
+    "id": "FT021",
+    "term": "3DS",
+    "fullForm": "3D Secure",
+    "category": "authentication",
+    "description": "3D Secure is an authentication protocol that adds an extra layer of verification for online card transactions. In India, RBI mandates Additional Factor of Authentication (AFA) — 2FA — for all card-not-present (CNP) transactions. 3DS 2.0 supports frictionless flow (risk-based authentication without OTP) and challenge flow (OTP or biometric). RBI's tokenisation mandate and 3DS work together to reduce card fraud.",
+    "relatedTerms": ["AFA", "OTP", "CNP", "EMVCo"],
+    "rbiCircular": "RBI/2011-12/224"
+  },
+  {
+    "id": "FT022",
+    "term": "IBAN",
+    "fullForm": "International Bank Account Number",
+    "category": "account_identifier",
+    "description": "IBAN is an internationally agreed system for identifying bank accounts across borders. India does not use IBAN domestically — Indian accounts use IFSC + account number. However, for inward SWIFT remittances to India from IBAN-based countries, correspondent banks translate IBANs to local account identifiers. AegisPay cross-border features would need to handle IBAN for European transfers.",
+    "relatedTerms": ["IFSC", "BIC", "SWIFT"],
+    "rbiCircular": "N/A - international standard"
+  },
+  {
+    "id": "FT023",
+    "term": "MDR",
+    "fullForm": "Merchant Discount Rate",
+    "category": "fee_structure",
+    "description": "MDR is the fee charged to merchants by acquirers for processing card/digital payments, expressed as a percentage of transaction value. MDR breakdown: Interchange (to issuer) + Scheme fee (to card network) + Acquirer margin. RBI mandated zero MDR for UPI and RuPay debit card transactions since Jan 1, 2020, to encourage digital payments. For credit cards, MDR is typically 1.5-3% and is regulated by card networks.",
+    "relatedTerms": ["Interchange", "Acquirer", "RuPay", "UPI"],
+    "rbiCircular": "RBI/2019-20/110"
+  },
+  {
+    "id": "FT024",
+    "term": "Payment Aggregator",
+    "fullForm": "Payment Aggregator (PA)",
+    "category": "institution_type",
+    "description": "A Payment Aggregator facilitates merchants to accept various payment instruments from customers without the merchant setting up direct relationships with banks/card networks. PAs are licensed by RBI under Payment and Settlement Systems Act 2007. They must maintain a nodal account, comply with data localisation norms, and ensure PCI DSS compliance. Examples: Razorpay, PayU, Cashfree. AegisPay operates as a PA.",
+    "relatedTerms": ["Payment Gateway", "Nodal Account", "PCI DSS", "PSP"],
+    "rbiCircular": "RBI/2020-21/2"
+  },
+  {
+    "id": "FT025",
+    "term": "SLA",
+    "fullForm": "Service Level Agreement",
+    "category": "operations",
+    "description": "In payments context, SLA defines the maximum time allowed for each stage of payment processing. RBI mandates: IMPS settlement within seconds, UPI within 30 seconds. Internal AegisPay SLAs: transaction initiation → COMPLETED in < 5 seconds (P95), saga timeout at 10 minutes. Breach of SLA triggers automated Kafka event for Grafana alerting and triage investigation.",
+    "relatedTerms": ["P95", "P99", "Latency", "Saga"],
+    "rbiCircular": "DPSS.CO.PD.No.740/02.14.003/2021-22"
+  },
+  {
+    "id": "FT026",
+    "term": "BBPS",
+    "fullForm": "Bharat Bill Payment System",
+    "category": "payment_rail",
+    "description": "BBPS is an RBI-authorised integrated bill payment system operated by NPCI. It provides a unified platform for bill payments across 20,000+ billers including electricity, gas, water, telecom, DTH, insurance, education, and municipal taxes. Transactions are interoperable across all BBPS-enabled apps. Billers are categorised as: Biller Operating Unit (BOU) and Customer Operating Unit (COU). Settlement is T+1. Annual BBPS volume exceeds ₹1 lakh crore.",
+    "relatedTerms": ["NPCI", "NACH", "UPI", "Bill Payment"],
+    "rbiCircular": "DPSS.CO.OD.No.2060/06.08.005/2018-19"
+  },
+  {
+    "id": "FT027",
+    "term": "Bharat QR",
+    "fullForm": "Bharat QR Code",
+    "category": "payment_rail",
+    "description": "Bharat QR is India's interoperable QR code payment standard jointly developed by NPCI, Visa, Mastercard, and American Express. A single QR code at merchant can accept payments via UPI, RuPay, Visa, Mastercard, and Amex without separate QR codes per network. Merchants receive T+1 settlement. Per-transaction limits: ₹50,000 for debit cards, ₹2 lakh for UPI through Bharat QR. Merchant onboarded by acquirer bank.",
+    "relatedTerms": ["UPI", "RuPay", "QR Code", "MDR"],
+    "rbiCircular": "RBI/2016-17/294"
+  },
+  {
+    "id": "FT028",
+    "term": "Account Aggregator",
+    "fullForm": "Account Aggregator (NBFC-AA)",
+    "category": "institution_type",
+    "description": "Account Aggregator is an RBI-licensed NBFC that enables secure, consent-based sharing of financial data between Financial Information Providers (FIPs) and Financial Information Users (FIUs). Part of India Stack. Regulated by RBI under AA framework (2016). Data shared is encrypted end-to-end; the AA itself cannot read the data. Use cases: instant loan underwriting, personal finance management, insurance premium calculation. Live AAs: Finvu, OneMoney, NADL, CAMSfinServ.",
+    "relatedTerms": ["NBFC", "DEPA", "FIP", "FIU", "Consent Manager"],
+    "rbiCircular": "RBI/2016-17/103"
+  },
+  {
+    "id": "FT029",
+    "term": "FEMA",
+    "fullForm": "Foreign Exchange Management Act",
+    "category": "compliance",
+    "description": "FEMA 1999 replaced FERA and governs foreign exchange transactions in India. Administered by RBI and enforced by Directorate of Enforcement (ED). Key provisions for payment companies: all cross-border payments require purpose code declaration, inward remittances must be reported to RBI's XBRL portal, outward remittances above $25,000 require CA certificate. LRS (Liberalised Remittance Scheme) limits outward individual remittances to $250,000 per financial year.",
+    "relatedTerms": ["LRS", "SWIFT", "RBI", "ED", "Remittance"],
+    "rbiCircular": "RBI/2022-23/101"
+  },
+  {
+    "id": "FT030",
+    "term": "LRS",
+    "fullForm": "Liberalised Remittance Scheme",
+    "category": "forex",
+    "description": "LRS is an RBI scheme allowing resident individuals to remit up to $250,000 per financial year (April-March) for permissible current and capital account transactions. Uses: education, travel, investment, gifts, maintenance of relatives abroad. TCS (Tax Collected at Source) at 5% on LRS remittances above ₹7 lakh per year per Budget 2023 amendment. Purpose codes must be specified. Corporate entities are not eligible for LRS. AegisPay international transfers fall under LRS for individual customers.",
+    "relatedTerms": ["FEMA", "TCS", "SWIFT", "Cross-border"],
+    "rbiCircular": "RBI/2023-24/92"
+  },
+  {
+    "id": "FT031",
+    "term": "TDS",
+    "fullForm": "Tax Deducted at Source",
+    "category": "taxation",
+    "description": "TDS is India's mechanism for collecting income tax at the source of income. For digital payment companies: Section 194N mandates TDS at 2% on cash withdrawals above ₹1 crore per year (5% if ITR not filed). Section 206AB/206CCA mandate higher TDS rates for non-filers. Payment companies act as Tax Deductors and must deposit TDS to government within 7 days of month end, file quarterly returns (Form 26Q), and issue TDS certificates (Form 16A).",
+    "relatedTerms": ["PAN", "Form 26Q", "Form 16A", "Income Tax"],
+    "rbiCircular": "N/A - Income Tax Act 1961, Section 194N"
+  },
+  {
+    "id": "FT032",
+    "term": "UPI Lite",
+    "fullForm": "UPI Lite",
+    "category": "payment_rail",
+    "description": "UPI Lite is an on-device payment feature enabling offline and low-value UPI transactions without PIN for amounts up to ₹500. Introduced by NPCI in 2022. Maximum wallet balance: ₹2,000. Transactions do not require internet connectivity (uses NFC/Bluetooth for proximity payments). Bank account is debited in batch when wallet is replenished. No debit notification per transaction — only wallet top-up notification. Reduces load on banking system for micro-payments.",
+    "relatedTerms": ["UPI", "NPCI", "CBDC", "Offline Payment"],
+    "rbiCircular": "RBI/2022-23/151"
+  },
+  {
+    "id": "FT033",
+    "term": "RuPay",
+    "fullForm": "RuPay",
+    "category": "payment_rail",
+    "description": "RuPay is India's domestic card payment network developed by NPCI, launched in 2012. Positioned as the Indian alternative to Visa/Mastercard. RuPay cards are accepted at all ATMs and PoS terminals in India and selected international networks (Discover, JCB, UnionPay). Zero MDR mandated by RBI for RuPay debit cards since Jan 2020. RuPay credit cards on UPI launched in 2022 — linked to UPI ID for card-on-UPI payments. Government's Jan Dhan accounts predominantly use RuPay.",
+    "relatedTerms": ["NPCI", "MDR", "UPI", "Interchange"],
+    "rbiCircular": "RBI/2019-20/110"
+  }
+]

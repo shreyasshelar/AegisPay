@@ -670,5 +670,141 @@
       "Scheduled disk cleanup cron for old logs"
     ],
     "tags": ["k3s", "disk-full", "eviction", "log-rotation", "on-prem", "infrastructure"]
+  },
+  {
+    "id": "INC-2025-001",
+    "title": "TLS certificate expiry causing HTTPS failures on production ingress",
+    "severity": "P1",
+    "service": "infrastructure",
+    "startTime": "2025-02-10T00:00:00Z",
+    "resolvedTime": "2025-02-10T00:35:00Z",
+    "symptoms": [
+      "All HTTPS requests to aegispay.shreyasshelar.uk returning SSL certificate error",
+      "Mobile app showing 'Connection not secure' error to all users",
+      "cert-manager logs: CertificateRequest expired before renewal",
+      "Let's Encrypt ACME challenge failing for domain validation"
+    ],
+    "rootCause": "cert-manager's ACME HTTP-01 challenge was blocked because a new WAF rule deployed 3 days earlier was stripping the .well-known/acme-challenge path. Certificate expired at midnight before auto-renewal completed.",
+    "investigation": [
+      "kubectl describe certificate aegispay-tls showed Not Ready and Last Failure: ACME challenge failed",
+      "Cloudflare WAF logs showed 403 responses for /.well-known/acme-challenge/*",
+      "WAF rule added 3 days ago had a catch-all block rule for dot-files",
+      "cert-manager had been silently failing renewals for 3 days"
+    ],
+    "resolution": [
+      "Added WAF exception for /.well-known/acme-challenge/* path",
+      "Triggered manual certificate renewal: kubectl annotate certificate aegispay-tls cert-manager.io/issue-once=true",
+      "Certificate renewed within 2 minutes after WAF exception applied",
+      "HTTPS restored for all users"
+    ],
+    "prevention": [
+      "Alert on certificate expiry < 30 days",
+      "Test ACME challenge path in CI after any WAF/Ingress rule change",
+      "Consider using DNS-01 challenge instead of HTTP-01 to avoid WAF dependency",
+      "cert-manager renewal failure should trigger alert, not just log"
+    ],
+    "tags": ["tls", "cert-manager", "letsencrypt", "waf", "certificate-expiry", "ingress"]
+  },
+  {
+    "id": "INC-2025-002",
+    "title": "Stripe webhook replay storm after Vault recovery",
+    "severity": "P2",
+    "service": "payment-orchestrator",
+    "startTime": "2025-02-20T04:00:00Z",
+    "resolvedTime": "2025-02-20T05:30:00Z",
+    "symptoms": [
+      "payment-orchestrator processing 500+ sagas/minute (10x normal)",
+      "Duplicate COMPLETED and FAILED events for same transactions",
+      "Stripe dashboard showing 3,000+ webhook replays queued",
+      "DLQ depth rising on balance.commit.requested topic"
+    ],
+    "rootCause": "Vault sealed at 3 AM (node restart), payment-orchestrator pods couldn't start for 1 hour. During downtime, Stripe's webhook retry mechanism queued all failed delivery attempts. When Vault was unsealed and pods came back up at 4 AM, Stripe replayed all 3,000 queued webhooks simultaneously. Idempotency check only covered in-flight requests, not persisted saga state.",
+    "investigation": [
+      "Stripe webhook events dashboard showed burst of 3,000 deliveries at 04:01",
+      "payment-orchestrator saga table had duplicate sagas for 47 transactions",
+      "Idempotency table checked by SagaOrchestrator.startSaga() but not by onPaymentProcessed()",
+      "Saga state transitions lacked unique constraint - allowed duplicate COMPLETED events"
+    ],
+    "resolution": [
+      "Added unique constraint on saga_id + status in saga_events table",
+      "Added idempotency check at every saga step transition, not just start",
+      "Rolled back 47 duplicate balance operations manually",
+      "Stripe webhook replay is now idempotent end-to-end"
+    ],
+    "prevention": [
+      "All saga event transitions must be idempotent at DB level",
+      "Webhook idempotency: use Stripe event ID as idempotency key, store in processed_events table",
+      "Slow down Stripe webhook consumption rate on startup using a token bucket",
+      "Vault auto-unseal via AWS KMS (prevents 1-hour downtime window)"
+    ],
+    "tags": ["stripe", "webhook", "payment-orchestrator", "vault", "replay", "idempotency", "saga"]
+  },
+  {
+    "id": "INC-2025-003",
+    "title": "HPA scale-down during peak causing DLQ accumulation",
+    "severity": "P2",
+    "service": "risk-engine",
+    "startTime": "2025-03-01T18:30:00Z",
+    "resolvedTime": "2025-03-01T19:30:00Z",
+    "symptoms": [
+      "Alert: KafkaDlqDepthNonZero for risk.assessment.requested.DLQ",
+      "DLQ depth: 1,200 messages over 1 hour",
+      "risk-engine processing latency jumped from 80ms to 8 seconds",
+      "HPA scaled risk-engine from 4 pods to 2 pods at 18:25"
+    ],
+    "rootCause": "HPA scale-down from 4 to 2 pods coincided with late-evening transaction spike (payday). Two risk-engine pods were terminated while they had active Kafka message processing in flight. preStop hook was not configured — SIGTERM immediately killed threads mid-processing, sending uncommitted messages to DLQ after retry exhaustion.",
+    "investigation": [
+      "HPA event log showed scale-down at 18:25, DLQ accumulation started at 18:27",
+      "Consumer group showed two pods leaving abruptly (no graceful close)",
+      "DLQ messages had header dlq-failure-reason: Consumer was shut down",
+      "HPA stabilization window was 0 seconds - allowed immediate aggressive scale-down"
+    ],
+    "resolution": [
+      "Added preStop: exec: command: ['sleep', '30'] to risk-engine pods",
+      "Increased terminationGracePeriodSeconds to 60 for risk-engine",
+      "Set HPA scaleDown stabilizationWindowSeconds to 300 to prevent scale-down during traffic spikes",
+      "Replayed 1,200 DLQ messages after stabilization via admin endpoint"
+    ],
+    "prevention": [
+      "All Kafka consumer pods must have preStop sleep hook",
+      "HPA scaleDown.stabilizationWindowSeconds >= 300 for Kafka consumers",
+      "Alert when DLQ depth > 0 within 5 minutes of HPA scale-down event",
+      "Consider max.poll.records reduction to ensure poll interval fits within grace period"
+    ],
+    "tags": ["hpa", "scale-down", "kafka", "dlq", "risk-engine", "prestop", "graceful-shutdown"]
+  },
+  {
+    "id": "INC-2025-004",
+    "title": "Split-brain in Redis Sentinel causing double rate-limit bypass",
+    "severity": "P2",
+    "service": "api-gateway",
+    "startTime": "2025-03-15T11:00:00Z",
+    "resolvedTime": "2025-03-15T11:45:00Z",
+    "symptoms": [
+      "Rate limiter counters inconsistent across api-gateway pods",
+      "Some users able to make 200+ requests per minute (limit: 100)",
+      "Redis Sentinel showing two primaries simultaneously",
+      "api-gateway logs: Jedis connection switching between two primaries"
+    ],
+    "rootCause": "Network partition between sentinel-0 and sentinel-1/sentinel-2. sentinel-0 (connected to original primary) could not reach the other sentinels and did not trigger failover. sentinel-1 and sentinel-2 quorum-elected the replica as new primary. Both primaries accepted writes for 8 minutes. Different api-gateway pods connected to different primaries, getting divergent rate limit counters.",
+    "investigation": [
+      "Redis SENTINEL masters showed two different IPs reported as primary",
+      "Network trace showed packet loss between sentinel-0 and the rest of the cluster",
+      "Lettuce client reconnected to new primary after sentinel-1/2 announcement",
+      "Old primary continued serving the 2 api-gateway pods still connected to it"
+    ],
+    "resolution": [
+      "Restored network connectivity - automatic sentinel election resolved split-brain",
+      "Forced SLAVEOF on original primary to become replica of new primary",
+      "Data loss: 8 minutes of rate limit counter increments lost (acceptable - safety conservatively resets counters)",
+      "api-gateway reconnected to correct primary"
+    ],
+    "prevention": [
+      "Redis Sentinel quorum should be ceil(n/2)+1 for strict majority",
+      "Monitor for multiple primaries: alert if SENTINEL masters count > 1",
+      "Consider Redis Cluster mode for production (better partition tolerance than Sentinel)",
+      "api-gateway rate limiter fail-closed on Redis unavailability (deny requests, not allow)"
+    ],
+    "tags": ["redis", "sentinel", "split-brain", "rate-limiting", "api-gateway", "network-partition"]
   }
 ]

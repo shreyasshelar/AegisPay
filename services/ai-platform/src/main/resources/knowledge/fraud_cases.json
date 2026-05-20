@@ -268,5 +268,65 @@
     "outcome": "LEGITIMATE",
     "riskScore": 47,
     "resolution": "Allow with OTP. Education payments to known universities should be in an approved list to reduce friction"
+  },
+  {
+    "id": "FC-031",
+    "title": "UPI collect request scam - fake refund",
+    "description": "Fraudster posed as a marketplace buyer and sent a UPI collect request to seller for ₹25,000, claiming it was a refund for a product return. Victim approved the collect request thinking they were receiving money but actually authorised a payment outward.",
+    "riskSignals": ["outward_collect_approval", "new_requester", "social_context_mismatch"],
+    "outcome": "FRAUD",
+    "riskScore": 78,
+    "resolution": "Display explicit 'YOU ARE PAYING' warning on UPI collect requests, add scam alert for collect requests from new requesters above ₹5,000. Educate users: receive money via QR, not collect requests",
+    "indianContextNote": "UPI collect scams increased 300% in India in 2023. NPCI issued advisory to PSPs to show clear payment direction indicators."
+  },
+  {
+    "id": "FC-032",
+    "title": "Fake government subsidy fraud",
+    "description": "Victim received WhatsApp message claiming to be from PM-KISAN/MGNREGA scheme with a ₹2,000 'subsidy payment pending'. Link to fake government portal. Victim entered bank details + UPI PIN. Fraudster used credentials to drain account.",
+    "riskSignals": ["credential_compromise", "new_device_after_link_click", "rapid_full_drain"],
+    "outcome": "FRAUD",
+    "riskScore": 89,
+    "resolution": "Block transactions from device after credential reset. Government schemes never ask for UPI PIN. Show warning popup when credential change detected and transaction follows within 10 minutes",
+    "indianContextNote": "Common seasonal fraud around subsidy disbursement periods (Kharif/Rabi seasons, festival time). NPCI Cyber Crime Cell actively tracks these patterns."
+  },
+  {
+    "id": "FC-033",
+    "title": "Real estate token fraud",
+    "description": "Homebuyer paid ₹5 lakh as 'token advance' to fraudulent builder for property that didn't exist. Fraudster had fake registration documents. Multiple victims paid for same non-existent flat.",
+    "riskSignals": ["large_amount_single_transfer", "new_corporate_payee", "real_estate_context", "no_prior_relationship"],
+    "outcome": "FRAUD",
+    "riskScore": 69,
+    "resolution": "Show high-value real estate warning for transfers above ₹1L to new corporate accounts. Verify payee GSTIN against GST portal. Suggest escrow or RERA-registered developer verification",
+    "indianContextNote": "Pre-launch property scams are common in Tier-2 cities. RERA registration check can verify legitimate developers."
+  },
+  {
+    "id": "FC-034",
+    "title": "Compromised merchant terminal - card skimming",
+    "description": "Physical card skimmer attached to a petrol pump PoS terminal. Card data of 150 customers captured over 2 weeks. Cards used for CNP transactions at international e-commerce sites.",
+    "riskSignals": ["card_not_present", "international_ecommerce", "unusual_merchant_category", "cards_used_in_batch"],
+    "outcome": "FRAUD",
+    "riskScore": 94,
+    "resolution": "Block all cards used at flagged terminal within the compromise window. Issue replacement cards. File FIR. Notify NPCI about compromised terminal location. Enhanced monitoring for international CNP transactions after terminal visit",
+    "indianContextNote": "Petrol pumps are common skimming targets in India. Physical tampering indicators: loose card slot, extra overlay on keypad."
+  },
+  {
+    "id": "FC-035",
+    "title": "OTP sharing via vishing - impersonation of bank KYC officer",
+    "description": "Fraudster called customer claiming to be from RBI/bank KYC team. Said account will be blocked unless customer shares OTP for 'KYC update'. Customer shared OTP. Multiple transactions authorised.",
+    "riskSignals": ["otp_shared_immediately_used", "multiple_transactions_post_otp", "new_beneficiaries"],
+    "outcome": "FRAUD",
+    "riskScore": 91,
+    "resolution": "RBI/banks never call to ask for OTP. Rate-limit OTP-based approvals after first use. Detect pattern: OTP used within 30 seconds of issuance for multiple transactions. Post-incident: block all pending transactions and re-issue OTP infrastructure",
+    "indianContextNote": "One of the most common fraud vectors in India. RBI's campaign 'RBI Kehta Hai' specifically addresses OTP sharing. Over 50,000 cases reported annually."
+  },
+  {
+    "id": "FC-036",
+    "title": "Reverse penny drop abuse for account enumeration",
+    "description": "Attacker used reverse penny drop (₹1 deposit) API to enumerate valid account numbers at scale. 10,000 account verification calls in 5 minutes exposed account holder names for phishing targeting.",
+    "riskSignals": ["api_rate_abuse", "penny_drop_velocity", "systematic_account_pattern"],
+    "outcome": "FRAUD",
+    "riskScore": 72,
+    "resolution": "Rate-limit penny drop API to 10 calls per hour per API key. Require explicit business justification for bulk verifications. Mask account holder name partially in API response (show only first 3 characters). Alert on velocity > 100 calls per hour from single source",
+    "indianContextNote": "Penny drop is a legitimate account validation service in India (offered by Razorpay, Cashfree, etc.). Misuse for enumeration is an API security concern specific to Indian payment infrastructure."
   }
 ]

@@ -88,6 +88,17 @@ spec:
               value: "/var/lib/grafana/plugins"
             - name: GF_PATHS_DATA
               value: "/var/lib/grafana"
+            # Alert contact-point env vars
+            {{- if .Values.grafana.alerting.slackWebhookSecretRef }}
+            - name: SLACK_WEBHOOK_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.grafana.alerting.slackWebhookSecretRef.name }}
+                  key: {{ .Values.grafana.alerting.slackWebhookSecretRef.key }}
+                  optional: true
+            {{- end }}
+            - name: OPS_EMAIL
+              value: {{ .Values.grafana.alerting.opsEmail | default "ops@aegispay.shreyasshelar.uk" | quote }}
             # ClickHouse password injected from ESO-managed secret
             - name: CLICKHOUSE_PASSWORD
               valueFrom:
@@ -106,6 +117,9 @@ spec:
               readOnly: true
             - name: dashboards
               mountPath: /var/lib/grafana/dashboards
+              readOnly: true
+            - name: alert-rules
+              mountPath: /etc/grafana/provisioning/alerting
               readOnly: true
           livenessProbe:
             httpGet:
@@ -147,5 +161,8 @@ spec:
         - name: dashboards
           configMap:
             name: grafana-dashboards
+        - name: alert-rules
+          configMap:
+            name: grafana-alert-rules
       terminationGracePeriodSeconds: 30
 {{- end }}
