@@ -1,6 +1,8 @@
 spring:
   application:
     name: api-gateway
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
 
   cloud:
     gateway:
@@ -118,9 +120,12 @@ spring:
 
 server:
   port: ${SERVER_PORT:8080}
+  shutdown: graceful
   # Netty / WebFlux — no servlet config needed
 
 management:
+  server:
+    port: ${MANAGEMENT_PORT:8090}   # ③ actuator binds to a separate port not exposed by Ingress/LB
   endpoints:
     web:
       exposure:

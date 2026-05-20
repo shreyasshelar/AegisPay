@@ -103,6 +103,14 @@ public class PaymentSagaOrchestrator {
             return;
         }
 
+        // REVIEW: flag it in the saga for back-office visibility but continue processing.
+        // Full manual-hold flow requires a MANUAL_REVIEW saga step (future work); for now
+        // REVIEW transactions proceed but are permanently flagged in the risk_cases table.
+        if (event.getDecision().name().equals("REVIEW")) {
+            log.warn("Risk REVIEW for txn={} score={} — continuing with manual-review flag",
+                    event.getTransactionId(), event.getRiskScore());
+        }
+
         completeStep(saga, ASSESS_RISK);
         saga.setCurrentStep(PROCESS_PAYMENT);
         createStep(saga, PROCESS_PAYMENT, "IN_PROGRESS");
@@ -348,7 +356,9 @@ public class PaymentSagaOrchestrator {
         RiskAssessmentRequestedEvent event = RiskAssessmentRequestedEvent.builder()
                 .eventId(UUID.randomUUID()).occurredAt(Instant.now()).schemaVersion(1)
                 .transactionId(saga.getTransactionId()).sagaId(saga.getId())
-                .userId(saga.getUserId()).amount(saga.getAmount()).currency(saga.getCurrency())
+                .userId(saga.getUserId()).payeeId(saga.getPayeeId())
+                .amount(saga.getAmount()).currency(saga.getCurrency())
+                .accountCreatedAt(saga.getStartedAt())   // approximation; saga start ≈ account age proxy
                 .build();
         writeOutbox(saga, "RiskAssessmentRequestedEvent", KafkaTopics.RISK_ASSESSMENT_REQUESTED, event);
     }

@@ -43,6 +43,12 @@ const nextConfig = {
       ? `connect-src 'self' http://localhost:* ${wsAllow} wss: https:`
       : "connect-src 'self' wss: https:"
 
+    // 'unsafe-eval' is required by Next.js hot-reload in development.
+    // Strip it in production so script execution is locked to same-origin + nonces.
+    const scriptSrc = isDev
+      ? "script-src 'self' 'unsafe-eval' 'unsafe-inline'"
+      : "script-src 'self' 'unsafe-inline'"
+
     return [
       {
         source: '/(.*)',
@@ -50,6 +56,12 @@ const nextConfig = {
           { key: 'X-Frame-Options', value: 'DENY' },
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          // HSTS — tell browsers to always use HTTPS for 2 years; include subdomains
+          // and allow preload-list submission. Omit in dev to avoid locking localhost.
+          ...(!isDev ? [{
+            key: 'Strict-Transport-Security',
+            value: 'max-age=63072000; includeSubDomains; preload',
+          }] : []),
           {
             key: 'Permissions-Policy',
             value: 'camera=(), microphone=(), geolocation=()',
@@ -58,7 +70,7 @@ const nextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
+              scriptSrc,
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob: https:",
               "font-src 'self' data:",

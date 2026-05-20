@@ -11,6 +11,11 @@ metadata:
     app.kubernetes.io/version: {{ .Values.services.api_gateway.image.tag | quote }}
 spec:
   replicas: {{ .Values.services.api_gateway.replicas | default 2 }}
+  strategy:                   # ④ explicit — prevents accidental Recreate on Helm version change
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       {{- include "aegispay.selectorLabels" (dict "name" "api-gateway" "context" .) | nindent 6 }}
@@ -22,7 +27,9 @@ spec:
         app.kubernetes.io/component: api-gateway
         app.kubernetes.io/version: {{ .Values.services.api_gateway.image.tag | quote }}
       annotations:
-        {{- include "aegispay.podAnnotations" (dict "port" .Values.services.api_gateway.port) | nindent 8 }}
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8090"        # ③ Prometheus scrapes management port, not public port
+        prometheus.io/path: "/actuator/prometheus"
         # Rolling restart on config change
         checksum/config: {{ include (print $.Template.BasePath "/api-gateway/configmap.yaml") . | sha256sum }}
     spec:
@@ -47,9 +54,14 @@ spec:
             - name: http
               containerPort: {{ .Values.services.api_gateway.port }}
               protocol: TCP
+            - name: management       # ③ actuator on separate port — not reachable from internet
+              containerPort: 8090
+              protocol: TCP
           env:
             - name: SERVER_PORT
               value: {{ .Values.services.api_gateway.port | quote }}
+            - name: MANAGEMENT_PORT  # ③ Spring Boot management.server.port
+              value: "8090"
             - name: REDIS_HOST
               value: {{ .Values.global.redis.host | quote }}
             - name: REDIS_PORT
@@ -73,7 +85,7 @@ spec:
           livenessProbe:
             httpGet:
               path: /actuator/health/liveness
-              port: http
+              port: management          # ③ probes also use management port
             initialDelaySeconds: 30
             periodSeconds: 15
             timeoutSeconds: 5
@@ -81,11 +93,15 @@ spec:
           readinessProbe:
             httpGet:
               path: /actuator/health/readiness
-              port: http
+              port: management
             initialDelaySeconds: 20
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 3
+          lifecycle:                    # ① preStop — gives LB 5s to drain before SIGTERM
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 5"]
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -96,7 +112,7 @@ spec:
         - name: config
           configMap:
             name: api-gateway-config
-      terminationGracePeriodSeconds: 30
+      terminationGracePeriodSeconds: 40  # ② 5s preStop + 30s Spring graceful + 5s JVM buffer
       topologySpreadConstraints:
         - maxSkew: 1
           topologyKey: kubernetes.io/hostname

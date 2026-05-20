@@ -113,10 +113,10 @@ WITH (m = 16, ef_construction = 64);
 
 | Environment | AI Provider | Model |
 |-------------|------------|-------|
-| Cloud (dev/staging/prod) | Anthropic API directly | claude-3-5-sonnet-20241022 |
-| On-Prem | OpenRouter (cost-optimised proxy) | claude-3-5-sonnet or similar |
+| Prod | Anthropic API directly | claude-3-5-sonnet-20241022 |
+| Dev (k3s) | OpenRouter (cost-optimised proxy) | meta-llama/llama-3.1-8b-instruct:free |
 
-On-prem uses `OPENROUTER_API_KEY` from Vault. The `springProfile: onprem` flag switches the Spring AI configuration to use the OpenRouter base URL.
+Dev uses `OPENROUTER_API_KEY` from Vault. The `springProfile: dev` flag activates `application-dev.yml` which switches the Spring AI configuration to use the OpenRouter base URL.
 
 ---
 

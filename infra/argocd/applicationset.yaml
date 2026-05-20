@@ -9,10 +9,14 @@ spec:
   generators:
     - list:
         elements:
-          # ── Prod (AWS / GKE — manual approval gate) ─────────────────────────
-          # On-prem (k3s) is managed by the standalone app-onprem.yaml Application.
-          # -------------------------------------------------------------------
+          # ── Dev (k3s — auto-sync on every push to dev branch) ──────────────
+          - env: dev
+            namespace: aegispay
+            revision: dev
+            syncPolicy: automated
+            valueFile: values-dev.yaml
 
+          # ── Prod (AWS EKS — manual approval gate) ───────────────────────────
           - env: prod
             namespace: aegispay-prod
             revision: main

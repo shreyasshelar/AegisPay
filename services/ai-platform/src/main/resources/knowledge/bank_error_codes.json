@@ -309,5 +309,94 @@
     "retryable": true,
     "retryAfterDays": "days until end of month",
     "suggestedAction": "UPGRADE_ACCOUNT_OR_WAIT"
+  },
+  {
+    "code": "NACH_MANDATE_REJECTED",
+    "category": "MANDATE",
+    "title": "NACH Mandate Rejected by Destination Bank",
+    "description": "The NPCI NACH debit mandate was rejected by the beneficiary bank. Common reasons: invalid account number, signature mismatch, account type mismatch, or account closed.",
+    "customerMessage": "Your auto-pay mandate was rejected. Please re-register the mandate with correct bank details.",
+    "resolution": "Check mandate registration details. Common issues: savings vs current account mismatch, account number changed after bank merger. Re-register mandate via NPCI NACH portal.",
+    "retryable": false,
+    "suggestedAction": "REREGISTER_MANDATE",
+    "npciCode": "U010"
+  },
+  {
+    "code": "UPI_LITE_BALANCE_EXCEEDED",
+    "category": "UPI",
+    "title": "UPI Lite Balance Insufficient",
+    "description": "UPI Lite (offline UPI) wallet balance is insufficient. UPI Lite holds a small prepaid balance on-device (max ₹2,000 per RBI circular). Transactions above the UPI Lite balance fall back to full UPI.",
+    "customerMessage": "Your UPI Lite balance is low. Top up your UPI Lite wallet or switch to regular UPI for this payment.",
+    "resolution": "UPI Lite auto-refills from linked account when balance drops below threshold. Manual refill available in UPI app. Transactions > ₹500 automatically use regular UPI.",
+    "retryable": true,
+    "retryAfterSeconds": 0,
+    "suggestedAction": "TOPUP_UPI_LITE_OR_USE_REGULAR_UPI",
+    "rbiCircular": "RBI/2022-23/151"
+  },
+  {
+    "code": "TPAP_BLOCKED",
+    "category": "UPI",
+    "title": "Third-Party App Provider Blocked",
+    "description": "The UPI Third-Party Application Provider (TPAP — e.g. PhonePe, GPay, Paytm) has been temporarily blocked by NPCI or RBI for compliance issues.",
+    "customerMessage": "Payments via this UPI app are temporarily unavailable. Please try another UPI app or payment method.",
+    "resolution": "Use a different UPI-enabled app or bank's own UPI. TPAP blocks are typically resolved within hours. Check NPCI website for updates.",
+    "retryable": true,
+    "retryAfterHours": 4,
+    "suggestedAction": "USE_ALTERNATE_UPI_APP"
+  },
+  {
+    "code": "AML_FREEZE",
+    "category": "COMPLIANCE",
+    "title": "Account Frozen - AML Review",
+    "description": "The account has been frozen by the compliance team under Prevention of Money Laundering Act (PMLA) provisions pending investigation. FIU-IND report may have been filed.",
+    "customerMessage": "Your account has been temporarily frozen for a mandatory compliance review. Please contact support with your identity documents.",
+    "resolution": "Customer must contact compliance team. STR (Suspicious Transaction Report) may have been filed with FIU-IND. Resolution requires compliance review which may take 3-30 business days. Regulatory hold cannot be bypassed.",
+    "retryable": false,
+    "suggestedAction": "CONTACT_COMPLIANCE_TEAM"
+  },
+  {
+    "code": "NPCI_BENEFICIARY_BANK_OFFLINE",
+    "category": "PAYMENT_NETWORK",
+    "title": "Beneficiary Bank Offline - NPCI Network",
+    "description": "NPCI reports the beneficiary bank's connection to the payment network is offline. This affects all UPI, IMPS, and NEFT payments to accounts at that bank.",
+    "customerMessage": "The recipient's bank is temporarily disconnected from the payment network. Please try again in a few hours.",
+    "resolution": "This is an NPCI-level connectivity issue with the beneficiary bank. Monitor NPCI status page. Retry after 2-4 hours. Consider using a different transfer method if urgent.",
+    "retryable": true,
+    "retryAfterHours": 2,
+    "suggestedAction": "RETRY_LATER_OR_ALTERNATE_METHOD",
+    "npciCode": "U28"
+  },
+  {
+    "code": "STRIPE_CARD_VELOCITY_EXCEEDED",
+    "category": "CARD",
+    "title": "Card Velocity Limit Exceeded",
+    "description": "Too many card transactions within a short time window. Card network or issuer velocity rules triggered. Common after card testing attack or legitimate high-frequency purchases.",
+    "customerMessage": "Too many card transactions. Please wait 30 minutes before trying again, or contact your bank to temporarily raise your limit.",
+    "resolution": "Wait 30-60 minutes for velocity window to reset. If due to card testing, card may be temporarily blocked. Contact issuing bank's fraud line.",
+    "retryable": true,
+    "retryAfterMinutes": 30,
+    "suggestedAction": "WAIT_AND_RETRY"
+  },
+  {
+    "code": "PAYMENT_FROZEN_FRAUD_REVIEW",
+    "category": "FRAUD",
+    "title": "Payment Held for Fraud Review",
+    "description": "AegisPay risk system has flagged this transaction for real-time fraud review. Funds are temporarily held pending manual or automated review. No deduction has occurred.",
+    "customerMessage": "This payment is under security review. You will be notified within 2 hours. No money has been deducted yet.",
+    "resolution": "Risk team reviews flagged transactions within 2 hours. Customer may be asked to provide additional verification (OTP, selfie, document). If cleared, payment processes normally. If declined, no deduction occurs.",
+    "retryable": false,
+    "suggestedAction": "AWAIT_FRAUD_REVIEW"
+  },
+  {
+    "code": "BBPS_BILLER_NOT_AVAILABLE",
+    "category": "BILL_PAYMENT",
+    "title": "BBPS Biller System Unavailable",
+    "description": "The biller (electricity board, gas company, etc.) registered on Bharat Bill Payment System (BBPS) is not responding. BBPS is NPCI's integrated bill payment platform covering 20,000+ billers.",
+    "customerMessage": "The bill payment service for this provider is temporarily unavailable. Please try again later.",
+    "resolution": "BBPS biller outages are typically resolved within 1-4 hours. Bill due date is usually still met if payment initiated before midnight. Check BBPS status page or biller's website.",
+    "retryable": true,
+    "retryAfterHours": 2,
+    "suggestedAction": "RETRY_LATER",
+    "rbiCircular": "DPSS.CO.OD.No.2060/06.08.005/2018-19"
   }
 ]

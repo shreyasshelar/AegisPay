@@ -1,6 +1,8 @@
 package com.aegispay.ai.kyc;
 
 import com.aegispay.ai.audit.AiAuditService;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
@@ -41,6 +43,19 @@ public class QualityScoreService {
     private final ChatClient.Builder chatClientBuilder;
     private final AiAuditService auditService;
 
+    /**
+     * Score image quality before OCR; rejects blurry / overexposed images early.
+     *
+     * <p>Resilience decorators:
+     * <ul>
+     *   <li>{@code @CircuitBreaker} — fallback returns {@code acceptable=true} (optimistic pass-through)
+     *       so a transient AI outage doesn't block all KYC submissions. The subsequent validation and
+     *       OCR steps provide independent safety nets.
+     *   <li>{@code @Retry} — 2 retries with exponential backoff.
+     * </ul>
+     */
+    @CircuitBreaker(name = "kyc-ai", fallbackMethod = "scoreFallback")
+    @Retry(name = "kyc-ai")
     public QualityResult score(String base64ImageData, String mimeType) {
         long start = System.currentTimeMillis();
         String output = null;
@@ -63,12 +78,22 @@ public class QualityScoreService {
         } catch (Exception e) {
             error = e.getMessage();
             log.error("Quality scoring failed: {}", e.getMessage(), e);
+            // Re-throw so @Retry can attempt again and @CircuitBreaker can track the failure.
             throw new RuntimeException("Quality scoring failed: " + e.getMessage(), e);
         } finally {
             long latencyMs = System.currentTimeMillis() - start;
             auditService.log("QUALITY_SCORE", "document image (" + mimeType + ")",
                     output, "claude-sonnet-4-6", latencyMs, error);
         }
+    }
+
+    @SuppressWarnings("unused")   // called reflectively by Resilience4j
+    QualityResult scoreFallback(String base64ImageData, String mimeType, Throwable cause) {
+        log.warn("Quality score fallback triggered (circuit open or retries exhausted): {}",
+                cause != null ? cause.getMessage() : "unknown");
+        // Optimistic pass-through: let OCR and validation decide; score as "unknown quality"
+        return new QualityResult(1.0, 1.0, 1.0, 1.0, 1.0, true,
+                "Quality check bypassed — AI service temporarily unavailable");
     }
 
     private QualityResult parseResult(String json) {

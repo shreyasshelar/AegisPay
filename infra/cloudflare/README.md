@@ -10,7 +10,7 @@ Cloudflare's edge. No static IP required. No open firewall ports. Free.
 1. Go to [dash.cloudflare.com](https://dash.cloudflare.com)
 2. Select your domain → **Zero Trust** (left sidebar)
 3. **Networks → Tunnels → Create a tunnel**
-4. Choose **Cloudflared** → name it `aegispay-onprem`
+4. Choose **Cloudflared** → name it `aegispay-dev`
 5. Copy the **tunnel token** shown on screen (long string starting with `eyJ...`)
 
 ### 2. Store the token in Vault
@@ -95,7 +95,7 @@ Your AegisPay pods
 kubectl get pods -n kube-system -l app=cloudflared
 
 # Check tunnel is connected in Cloudflare dashboard
-# Zero Trust → Networks → Tunnels → aegispay-onprem → should show "Healthy"
+# Zero Trust → Networks → Tunnels → aegispay-dev → should show "Healthy"
 
 # Test from outside
 curl https://api.aegispay.yourdomain.com/actuator/health

@@ -41,11 +41,21 @@ public class RiskScoringService {
             return;
         }
 
-        RuleResult ruleResult = rulesEngine.evaluate(event);
+        RuleResult ruleResult;
+        try {
+            ruleResult = rulesEngine.evaluate(event);
+        } catch (Exception e) {
+            // Rules engine failure must never stall the saga — approve conservatively and log.
+            log.error("RulesEngine threw unexpected exception for txn={}: {} — defaulting to APPROVED",
+                    event.getTransactionId(), e.getMessage(), e);
+            ruleResult = new RuleResult(0, java.util.List.of("RULES_ENGINE_ERROR"));
+        }
+
         RiskDecision decision = resolveDecision(ruleResult.getTotalScore());
 
         String ragExplanation = null;
         if (!ruleResult.getFlaggedRules().isEmpty()) {
+            // FraudCopilotClient already has a @CircuitBreaker fallback — this call is safe.
             ragExplanation = fraudCopilotClient.explain(
                     event.getTransactionId(), ruleResult.getTotalScore(), ruleResult.getFlaggedRules());
         }
@@ -53,6 +63,7 @@ public class RiskScoringService {
         RiskCase riskCase = RiskCase.builder()
                 .transactionId(event.getTransactionId())
                 .userId(event.getUserId())
+                .payeeId(event.getPayeeId())
                 .riskScore(ruleResult.getTotalScore())
                 .decision(decision)
                 .ruleFlags(ruleResult.getFlaggedRules())

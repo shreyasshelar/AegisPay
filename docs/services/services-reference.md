@@ -199,7 +199,7 @@ Any state → FAILED (with failureCode + failureReason)
 
 **DB**: PostgreSQL `aegispay_ai` (pgvector for embeddings), MongoDB (conversation history)  
 **Kafka**: none (called via REST from other services and frontend)  
-**External calls**: Anthropic Claude API (or OpenRouter on on-prem)
+**External calls**: Anthropic Claude API (prod) or OpenRouter free tier (dev)
 
 ### What it does
 - **Fraud Copilot**: RAG query over historical fraud case embeddings → explain why a transaction was flagged

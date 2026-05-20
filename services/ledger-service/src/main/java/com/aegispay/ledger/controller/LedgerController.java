@@ -9,6 +9,7 @@ import com.aegispay.ledger.domain.dto.TopUpIntentResponse;
 import com.aegispay.ledger.service.LedgerService;
 import com.aegispay.ledger.service.TopUpService;
 import jakarta.validation.Valid;
+import org.springframework.validation.annotation.Validated;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.UUID;
 
+@Validated
 @RestController
 @RequestMapping("/api/v1/ledger")
 @RequiredArgsConstructor

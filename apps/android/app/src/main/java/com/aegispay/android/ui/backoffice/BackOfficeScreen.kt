@@ -33,8 +33,10 @@ import com.aegispay.android.ui.theme.AegisColor
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BackOfficeScreen(
-    viewModel:   BackOfficeViewModel,
-    onNavigateUp: () -> Unit,
+    viewModel:          BackOfficeViewModel,
+    onNavigateUp:       () -> Unit,
+    /** Non-null only when the calling user is ADMIN — shows "Open AI Triage" button in the incident tab. */
+    onNavigateToTriage: ((txId: String?, service: String?) -> Unit)? = null,
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var selectedTab by remember { mutableIntStateOf(0) }
@@ -104,7 +106,11 @@ fun BackOfficeScreen(
             ) { tab ->
                 when (tab) {
                     0 -> RiskCasesTab(uiState = uiState, viewModel = viewModel)
-                    else -> IncidentTriageTab(uiState = uiState, viewModel = viewModel)
+                    else -> IncidentTriageTab(
+                        uiState = uiState,
+                        viewModel = viewModel,
+                        onNavigateToFullTriage = onNavigateToTriage,
+                    )
                 }
             }
         }
@@ -325,8 +331,9 @@ private fun RiskCaseDetailPanel(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun IncidentTriageTab(
-    uiState:   BackOfficeUiState,
-    viewModel: BackOfficeViewModel,
+    uiState:              BackOfficeUiState,
+    viewModel:            BackOfficeViewModel,
+    onNavigateToFullTriage: ((txId: String?, service: String?) -> Unit)? = null,
 ) {
     Column(
         modifier            = Modifier
@@ -393,6 +400,19 @@ private fun IncidentTriageTab(
                         Icon(Icons.Default.AutoAwesome, null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(8.dp))
                         Text("Run AI Triage", fontWeight = FontWeight.SemiBold)
+                    }
+                }
+
+                // ADMIN shortcut — opens the dedicated full-featured triage screen
+                if (onNavigateToFullTriage != null) {
+                    OutlinedButton(
+                        onClick  = { onNavigateToFullTriage(null, uiState.serviceName.ifBlank { null }) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape    = RoundedCornerShape(10.dp),
+                    ) {
+                        Icon(Icons.Default.OpenInNew, null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Open Full Triage Agent")
                     }
                 }
             }

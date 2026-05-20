@@ -60,6 +60,11 @@ metadata:
     app.kubernetes.io/version: {{ $svc.image.tag | quote }}
 spec:
   replicas: {{ $svc.replicas | default 2 }}
+  strategy:                   # ④ explicit — prevents accidental Recreate on Helm version change
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1             # one extra pod while old ones drain
+      maxUnavailable: 0       # never take a replica below desired count
   selector:
     matchLabels:
       {{- include "aegispay.selectorLabels" (dict "name" $name "context" $ctx) | nindent 6 }}
@@ -139,6 +144,10 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 3
+          lifecycle:           # ① preStop — gives LB 5s to drain connections before SIGTERM
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 5"]
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -149,7 +158,7 @@ spec:
         - name: config
           configMap:
             name: {{ $name }}-config
-      terminationGracePeriodSeconds: 30
+      terminationGracePeriodSeconds: 40  # ② 5s preStop + 30s Spring graceful + 5s JVM buffer
       topologySpreadConstraints:
         - maxSkew: 1
           topologyKey: kubernetes.io/hostname

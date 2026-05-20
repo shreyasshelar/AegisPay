@@ -534,6 +534,43 @@ private fun ColumnScope.StatusStep(
     viewModel:          SendMoneyViewModel,
     onNavigateToDetail: (String) -> Unit,
 ) {
+    // ── Offline-queued state ──────────────────────────────────────────────────
+    if (uiState.isQueuedOffline) {
+        AegisCard {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(
+                    imageVector        = Icons.Default.WifiOff,
+                    contentDescription = null,
+                    tint     = AegisColor.Warning,
+                    modifier = Modifier.size(64.dp),
+                )
+                Text(
+                    text  = "Payment Queued",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = AegisColor.Text,
+                )
+                Text(
+                    text  = "You're offline. Your payment has been saved and will be sent automatically once you're back online.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = AegisColor.TextMuted,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                )
+                Button(
+                    onClick  = { viewModel.reset() },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors   = ButtonDefaults.buttonColors(containerColor = AegisColor.Primary),
+                ) {
+                    Text("Done", color = Color.White)
+                }
+            }
+        }
+        return
+    }
+
     val tx = uiState.createdTransaction
 
     if (tx == null) {

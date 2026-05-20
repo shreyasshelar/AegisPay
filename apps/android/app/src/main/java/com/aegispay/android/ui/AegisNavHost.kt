@@ -10,6 +10,7 @@ import com.aegispay.android.auth.BiometricAuthManager
 import com.aegispay.android.ui.auth.AuthViewModel
 import com.aegispay.android.ui.auth.LoginScreen
 import com.aegispay.android.ui.backoffice.BackOfficeScreen
+import com.aegispay.android.ui.triage.TriageScreen
 import com.aegispay.android.ui.dashboard.DashboardScreen
 import com.aegispay.android.ui.notifications.NotificationsScreen
 import com.aegispay.android.ui.onboarding.OnboardingScreen
@@ -32,11 +33,15 @@ object Route {
     const val PROFILE            = "profile"
     const val BACK_OFFICE        = "backoffice"
     const val WALLET             = "wallet"
+    const val TRIAGE             = "triage?txId={txId}&service={service}"
 
     fun transactionDetail(id: String) = "transactions/$id"
+    fun triage(txId: String? = null, service: String? = null) =
+        "triage?txId=${txId ?: ""}&service=${service ?: ""}"
 }
 
 private val BACK_OFFICE_ROLES = setOf("BACK_OFFICE", "ADMIN")
+private val ADMIN_ROLES        = setOf("ADMIN")
 
 // ── Nav host ──────────────────────────────────────────────────────────────────
 
@@ -53,6 +58,7 @@ fun AegisNavHost(
     // Derive role from auth state (safe — doesn't hit the token store on every recomposition)
     val userRole = (authState as? AuthState.Authenticated)?.user?.role ?: ""
     val isBackOfficeUser = userRole in BACK_OFFICE_ROLES
+    val isAdminUser      = userRole in ADMIN_ROLES
 
     // React to auth state changes
     LaunchedEffect(authState) {
@@ -151,9 +157,12 @@ fun AegisNavHost(
                 return@composable
             }
             TransactionDetailScreen(
-                transactionId = txId,
-                viewModel     = hiltViewModel(),
-                onNavigateUp  = { navController.navigateUp() },
+                transactionId      = txId,
+                viewModel          = hiltViewModel(),
+                onNavigateUp       = { navController.navigateUp() },
+                onNavigateToTriage = if (isAdminUser) {
+                    { id, svc -> navController.navigate(Route.triage(id, svc)) }
+                } else null,
             )
         }
 
@@ -198,6 +207,29 @@ fun AegisNavHost(
                 BackOfficeScreen(
                     viewModel    = hiltViewModel(),
                     onNavigateUp = { navController.navigateUp() },
+                    onNavigateToTriage = if (isAdminUser) {
+                        { txId, svc -> navController.navigate(Route.triage(txId, svc)) }
+                    } else null,
+                )
+            }
+        }
+
+        // ── AI Triage Agent (ADMIN only) ─────────────────────────────────────
+        if (isAdminUser) {
+            composable(
+                route     = Route.TRIAGE,
+                arguments = listOf(
+                    navArgument("txId")    { type = NavType.StringType; defaultValue = "" },
+                    navArgument("service") { type = NavType.StringType; defaultValue = "" },
+                ),
+            ) { back ->
+                val txId    = back.arguments?.getString("txId")?.ifBlank { null }
+                val service = back.arguments?.getString("service")?.ifBlank { null }
+                TriageScreen(
+                    prefillTransactionId = txId,
+                    prefillService       = service,
+                    onBack               = { navController.navigateUp() },
+                    viewModel            = hiltViewModel(),
                 )
             }
         }

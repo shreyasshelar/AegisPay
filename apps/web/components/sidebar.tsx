@@ -17,6 +17,7 @@ import {
   ChevronRight,
   Users2,
   Wallet,
+  Stethoscope,
 } from 'lucide-react'
 import { useTransactionSocket } from '@aegispay/api-client'
 import { useNotificationStore } from '@/lib/useNotificationStore'
@@ -45,6 +46,8 @@ const BACKOFFICE_ITEMS: NavItem[] = [
   { label: 'Risk Cases', href: '/back-office/risk',      icon: AlertTriangle, roles: ['BACK_OFFICE', 'ADMIN'] },
   { label: 'Incidents',  href: '/back-office/incidents', icon: ShieldCheck,   roles: ['BACK_OFFICE', 'ADMIN'] },
   { label: 'Ledger',     href: '/back-office/ledger',    icon: Database,      roles: ['BACK_OFFICE', 'ADMIN'] },
+  // ── ADMIN-only ─────────────────────────────────────────────────────────────
+  { label: 'AI Triage',  href: '/back-office/triage',    icon: Stethoscope,   roles: ['ADMIN'] },
 ]
 
 export function Sidebar() {

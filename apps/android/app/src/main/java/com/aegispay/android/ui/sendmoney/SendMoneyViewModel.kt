@@ -11,10 +11,12 @@ import com.aegispay.android.network.ErrorResolutionResponse
 import com.aegispay.android.network.KycStatus
 import com.aegispay.android.network.StompWebSocketClient
 import com.aegispay.android.network.Transaction
+import com.aegispay.android.offline.OfflinePaymentQueue
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import okhttp3.OkHttpClient
+import java.io.IOException
 import java.util.UUID
 import javax.inject.Inject
 
@@ -49,15 +51,19 @@ data class SendMoneyUiState(
     // AI error resolution
     val errorResolution:    ErrorResolutionResponse? = null,
     val isResolvingError:   Boolean               = false,
+
+    // Offline queue
+    val isQueuedOffline:    Boolean               = false,
 )
 
 // ── ViewModel ─────────────────────────────────────────────────────────────────
 
 @HiltViewModel
 class SendMoneyViewModel @Inject constructor(
-    private val api:            AegisApiService,
-    private val authRepository: AuthRepository,
-    private val okHttpClient:   OkHttpClient,
+    private val api:                AegisApiService,
+    private val authRepository:     AuthRepository,
+    private val okHttpClient:       OkHttpClient,
+    private val offlinePaymentQueue: OfflinePaymentQueue,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SendMoneyUiState())
@@ -154,8 +160,29 @@ class SendMoneyViewModel @Inject constructor(
                     startLiveUpdates(tx.transactionId)
                 }
                 .onFailure { e ->
-                    // idempotencyKey preserved so the user can retry safely
-                    _uiState.update { it.copy(isSubmitting = false, submissionError = e.message) }
+                    if (e is IOException || e.cause is IOException) {
+                        // Network unreachable — queue for automatic retry when back online
+                        val state = _uiState.value
+                        runCatching {
+                            offlinePaymentQueue.enqueue(
+                                payeeId  = state.payeeId.trim(),
+                                amount   = state.amountText.toBigDecimal(),
+                                currency = state.currency,
+                                note     = state.note.ifBlank { null },
+                            )
+                        }
+                        _uiState.update {
+                            it.copy(
+                                isSubmitting    = false,
+                                isQueuedOffline = true,
+                                step            = SendStep.STATUS,
+                            )
+                        }
+                    } else {
+                        // Server-side or auth error — surface to user for manual action
+                        // idempotencyKey preserved so the user can retry safely
+                        _uiState.update { it.copy(isSubmitting = false, submissionError = e.message) }
+                    }
                 }
         }
     }
@@ -219,7 +246,7 @@ class SendMoneyViewModel @Inject constructor(
             runCatching {
                 api.resolveError(
                     ErrorResolutionRequest(
-                        errorCode    = failureReason.split(":").first().trim(),
+                        errorCode    = failureReason.split(":").last().trim(),
                         errorMessage = failureReason,
                     )
                 )
@@ -241,7 +268,7 @@ class SendMoneyViewModel @Inject constructor(
     fun reset() {
         stopLiveUpdates()
         idempotencyKey = UUID.randomUUID().toString()
-        _uiState.value = SendMoneyUiState()
+        _uiState.value = SendMoneyUiState()   // resets isQueuedOffline too
     }
 
     override fun onCleared() {

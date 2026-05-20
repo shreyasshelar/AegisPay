@@ -52,6 +52,7 @@ public class KnowledgeBaseSeeder implements ApplicationRunner {
         documents.addAll(loadFraudCases());
         documents.addAll(loadBankErrorCodes());
         documents.addAll(loadIncidentLogs());
+        documents.addAll(loadFinanceTerminology());
 
         if (documents.isEmpty()) {
             log.warn("No seed documents found — check classpath:knowledge/*.json");
@@ -178,6 +179,43 @@ public class KnowledgeBaseSeeder implements ApplicationRunner {
         Object prevention = inc.get("prevention");
         if (prevention instanceof List<?> list) {
             sb.append("Prevention: ").append(String.join("; ", (List<String>) list)).append("\n");
+        }
+        return sb.toString().trim();
+    }
+
+    private List<Document> loadFinanceTerminology() {
+        try {
+            List<Map<String, Object>> terms = readJson("knowledge/finance_terminology.json");
+            return terms.stream().map(t -> {
+                String content = buildFinanceTermContent(t);
+                Map<String, Object> metadata = Map.of(
+                        "source", "finance_terminology",
+                        "id", t.getOrDefault("id", ""),
+                        "term", t.getOrDefault("term", ""),
+                        "category", t.getOrDefault("category", ""),
+                        "type", "finance_term"
+                );
+                return new Document(content, metadata);
+            }).toList();
+        } catch (Exception e) {
+            log.error("Failed to load finance_terminology.json: {}", e.getMessage(), e);
+            return List.of();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private String buildFinanceTermContent(Map<String, Object> t) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("FINANCE TERM: ").append(t.get("term")).append("\n");
+        if (t.containsKey("fullForm")) sb.append("Full Form: ").append(t.get("fullForm")).append("\n");
+        sb.append("Category: ").append(t.get("category")).append("\n");
+        sb.append("Description: ").append(t.get("description")).append("\n");
+        Object related = t.get("relatedTerms");
+        if (related instanceof List<?> list) {
+            sb.append("Related Terms: ").append(String.join(", ", (List<String>) list)).append("\n");
+        }
+        if (t.containsKey("rbiCircular")) {
+            sb.append("RBI Circular Reference: ").append(t.get("rbiCircular")).append("\n");
         }
         return sb.toString().trim();
     }

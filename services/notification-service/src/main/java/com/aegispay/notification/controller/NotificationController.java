@@ -4,6 +4,7 @@ import com.aegispay.common.domain.dto.ApiResponse;
 import com.aegispay.common.domain.dto.PagedResponse;
 import com.aegispay.notification.domain.dto.NotificationResponse;
 import com.aegispay.notification.repository.NotificationRepository;
+import org.springframework.validation.annotation.Validated;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+@Validated
 @RestController
 @RequestMapping("/api/v1/notifications")
 @RequiredArgsConstructor
