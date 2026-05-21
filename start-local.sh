@@ -52,7 +52,20 @@ export AI_PLATFORM_URI="http://localhost:8091"
 
 # Stripe — both keys needed: secret (backend) + publishable (mobile/web)
 export STRIPE_SECRET_KEY="${STRIPE_SECRET_KEY:-sk_test_51TTkk2CyjRW67i1DP4dcrEgzhOm9dUe61k9U5kPNoDST6Deuy9rAvgJY0ZL93kKbDmdP7SEAUXUM6M4TMMtxkWNb00eKgRIql5}"
-export STRIPE_PUBLISHABLE_KEY="${STRIPE_PUBLISHABLE_KEY:-pk_test_placeholder_local_dev}"
+export STRIPE_PUBLISHABLE_KEY="${STRIPE_PUBLISHABLE_KEY:-pk_test_51TTkk2CyjRW67i1Dr44Sfw2W1FzJ2taFP757phrJYxYlwFTThQEEdL2eUnugV6w50ySvXjHUUXO35yHd6y3HAgiP007Aa0VZdL}"
+
+# Google OAuth (Keycloak social login)
+# Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in your environment before running.
+# Get them from: https://console.cloud.google.com/apis/credentials
+[[ -z "${GOOGLE_CLIENT_ID:-}" ]]     && echo "WARNING: GOOGLE_CLIENT_ID not set — Google social login disabled"
+[[ -z "${GOOGLE_CLIENT_SECRET:-}" ]] && echo "WARNING: GOOGLE_CLIENT_SECRET not set — Google social login disabled"
+
+# Microsoft OAuth (Keycloak social login)
+# Set MICROSOFT_CLIENT_ID and MICROSOFT_CLIENT_SECRET in your environment.
+# Get them from: https://portal.azure.com/ -> App Registrations -> Certificates and Secrets
+[[ -z "${MICROSOFT_CLIENT_ID:-}" ]]     && echo "WARNING: MICROSOFT_CLIENT_ID not set — Microsoft social login disabled"
+[[ -z "${MICROSOFT_CLIENT_SECRET:-}" ]] && echo "WARNING: MICROSOFT_CLIENT_SECRET not set — Microsoft social login disabled"
+export MICROSOFT_TENANT_ID="${MICROSOFT_TENANT_ID:-common}"
 
 # Email / SMS / Slack
 export SMTP_PASSWORD="${SMTP_PASSWORD:-mcinrqrbfqayklee}"
@@ -152,6 +165,48 @@ done
 step "Configuring Keycloak client scopes via Admin API..."
 infra/local/keycloak/configure-keycloak.sh
 ok "Keycloak configured"
+
+step "Seeding Google and Microsoft OAuth identity providers in Keycloak..."
+KC_ADMIN_URL="http://localhost:8180"
+KC_REALM="aegispay"
+KC_TOKEN=$(curl -sf -X POST "${KC_ADMIN_URL}/realms/master/protocol/openid-connect/token" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=password&client_id=admin-cli&username=admin&password=admin" \
+  2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null || true)
+
+if [[ -z "$KC_TOKEN" ]]; then
+  warn "Could not obtain Keycloak admin token — skipping IDP seeding (Keycloak may not be ready yet)"
+else
+  # Google IDP
+  HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+    "${KC_ADMIN_URL}/admin/realms/${KC_REALM}/identity-provider/instances" \
+    -H "Authorization: Bearer ${KC_TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d "{\"alias\":\"google\",\"providerId\":\"google\",\"displayName\":\"Google\",\"enabled\":true,\"config\":{\"clientId\":\"${GOOGLE_CLIENT_ID}\",\"clientSecret\":\"${GOOGLE_CLIENT_SECRET}\",\"defaultScope\":\"email profile openid\"}}" \
+    2>/dev/null)
+  if [[ "$HTTP_STATUS" == "201" ]]; then
+    ok "Google IDP created"
+  elif [[ "$HTTP_STATUS" == "409" ]]; then
+    ok "Google IDP already exists"
+  else
+    warn "Google IDP: HTTP ${HTTP_STATUS}"
+  fi
+
+  # Microsoft IDP
+  HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+    "${KC_ADMIN_URL}/admin/realms/${KC_REALM}/identity-provider/instances" \
+    -H "Authorization: Bearer ${KC_TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d "{\"alias\":\"microsoft\",\"providerId\":\"microsoft\",\"displayName\":\"Microsoft\",\"enabled\":true,\"config\":{\"clientId\":\"${MICROSOFT_CLIENT_ID}\",\"clientSecret\":\"${MICROSOFT_CLIENT_SECRET}\",\"tenantId\":\"${MICROSOFT_TENANT_ID}\",\"defaultScope\":\"openid email profile\"}}" \
+    2>/dev/null)
+  if [[ "$HTTP_STATUS" == "201" ]]; then
+    ok "Microsoft IDP created"
+  elif [[ "$HTTP_STATUS" == "409" ]]; then
+    ok "Microsoft IDP already exists"
+  else
+    warn "Microsoft IDP: HTTP ${HTTP_STATUS}"
+  fi
+fi
 
 step "Waiting for ClickHouse to be ready..."
 printf "  ⏳  waiting for ClickHouse :8123 ..."
