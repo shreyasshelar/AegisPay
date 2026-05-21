@@ -197,8 +197,22 @@ IF "%OPENROUTER_API_KEY%"=="" set OPENROUTER_API_KEY=sk-ant-placeholder-local-de
 REM AI Platform — Anthropic Claude (prod profile). Set for real KYC/fraud AI with Claude.
 IF "%ANTHROPIC_API_KEY%"=="" set ANTHROPIC_API_KEY=sk-ant-placeholder-local-dev
 IF "%STRIPE_SECRET_KEY%"=="" set STRIPE_SECRET_KEY=sk_test_51TTkk2CyjRW67i1DP4dcrEgzhOm9dUe61k9U5kPNoDST6Deuy9rAvgJY0ZL93kKbDmdP7SEAUXUM6M4TMMtxkWNb00eKgRIql5
-IF "%STRIPE_PUBLISHABLE_KEY%"=="" set STRIPE_PUBLISHABLE_KEY=pk_test_placeholder_local_dev
+IF "%STRIPE_PUBLISHABLE_KEY%"=="" set STRIPE_PUBLISHABLE_KEY=pk_test_51TTkk2CyjRW67i1Dr44Sfw2W1FzJ2taFP757phrJYxYlwFTThQEEdL2eUnugV6w50ySvXjHUUXO35yHd6y3HAgiP007Aa0VZdL
 IF "%SMTP_PASSWORD%"=="" set SMTP_PASSWORD=mcinrqrbfqayklee
+
+REM ── Google OAuth (Keycloak social login) ──────────────────────────────────
+REM Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in your environment before
+REM running this script.  Get them from:
+REM   https://console.cloud.google.com/apis/credentials
+IF "%GOOGLE_CLIENT_ID%"==""     echo WARNING: GOOGLE_CLIENT_ID not set — Google social login will be disabled
+IF "%GOOGLE_CLIENT_SECRET%"=""  echo WARNING: GOOGLE_CLIENT_SECRET not set — Google social login will be disabled
+
+REM ── Microsoft OAuth (Keycloak social login) ───────────────────────────────
+REM Set MICROSOFT_CLIENT_ID and MICROSOFT_CLIENT_SECRET in your environment.
+REM   https://portal.azure.com/ -> App Registrations -> your app -> Certificates and Secrets
+IF "%MICROSOFT_CLIENT_ID%"==""    echo WARNING: MICROSOFT_CLIENT_ID not set — Microsoft social login will be disabled
+IF "%MICROSOFT_CLIENT_SECRET%"="" echo WARNING: MICROSOFT_CLIENT_SECRET not set — Microsoft social login will be disabled
+IF "%MICROSOFT_TENANT_ID%"==""    set MICROSOFT_TENANT_ID=common
 IF "%SLACK_WEBHOOK_URL%"=="" set SLACK_WEBHOOK_URL=https://hooks.slack.com/services/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
 IF "%FAST2SMS_API_KEY%"=="" set FAST2SMS_API_KEY=ZNd8Xx4lqrERbj67Unwi1LHvB0smOFDayTCkgczIYKM9oPAfV2jDTskbhao0QZ3luvA7VfiLdWM2KNOe
 IF "%STRIPE_WEBHOOK_SECRET%"=="" set STRIPE_WEBHOOK_SECRET=whsec_a832f229a3955efe1399cef8e1e858e598b2d5e8c01a4b0417a0684419e7b176
@@ -351,6 +365,24 @@ IF EXIST infra\local\keycloak\configure-keycloak.bat (
     echo WARNING: infra\local\keycloak\configure-keycloak.bat not found, skipping
 )
 
+REM ── Seed Google + Microsoft identity providers in Keycloak ────────────────
+REM    Uses a temp PowerShell file to avoid for/f backtick quoting issues
+echo.
+echo Seeding Google and Microsoft OAuth identity providers in Keycloak...
+set "KC_SEED_PS=%TEMP%\aegispay_kc_seed.ps1"
+echo $ErrorActionPreference = 'SilentlyContinue' > "!KC_SEED_PS!"
+echo $url = 'http://localhost:8180'; $realm = 'aegispay' >> "!KC_SEED_PS!"
+echo try { $r = Invoke-RestMethod -Method Post -Uri ($url+'/realms/master/protocol/openid-connect/token') -Body @{grant_type='password';client_id='admin-cli';username='admin';password='admin'} -ErrorAction Stop } catch { Write-Host '  Keycloak not reachable - IDP seed skipped'; exit 0 } >> "!KC_SEED_PS!"
+echo if (-not $r -or -not $r.access_token) { Write-Host '  No admin token - IDP seed skipped'; exit 0 } >> "!KC_SEED_PS!"
+echo $h = @{ Authorization = "Bearer $($r.access_token)"; 'Content-Type' = 'application/json' } >> "!KC_SEED_PS!"
+echo $idps = @( >> "!KC_SEED_PS!"
+echo @{ n='Google';    b='{"alias":"google","providerId":"google","displayName":"Google","enabled":true,"config":{"clientId":"!GOOGLE_CLIENT_ID!","clientSecret":"!GOOGLE_CLIENT_SECRET!","defaultScope":"email profile openid"}}' }, >> "!KC_SEED_PS!"
+echo @{ n='Microsoft'; b='{"alias":"microsoft","providerId":"microsoft","displayName":"Microsoft","enabled":true,"config":{"clientId":"!MICROSOFT_CLIENT_ID!","clientSecret":"!MICROSOFT_CLIENT_SECRET!","tenantId":"!MICROSOFT_TENANT_ID!","defaultScope":"openid email profile"}}' } >> "!KC_SEED_PS!"
+echo ) >> "!KC_SEED_PS!"
+echo foreach ($idp in $idps) { try { Invoke-RestMethod -Method Post -Uri ($url+'/admin/realms/'+$realm+'/identity-provider/instances') -Headers $h -Body $idp.b -ErrorAction Stop ^| Out-Null; Write-Host ("  "+$idp.n+" IDP created") } catch { if ($_.Exception.Response -and $_.Exception.Response.StatusCode.value__ -eq 409) { Write-Host ("  "+$idp.n+" IDP already exists") } else { Write-Host ("  "+$idp.n+" IDP: "+$_.Exception.Message) } } } >> "!KC_SEED_PS!"
+powershell -NoProfile -ExecutionPolicy Bypass -File "!KC_SEED_PS!"
+del "!KC_SEED_PS!" >nul 2>&1
+
 REM =========================================================
 REM WAIT FOR CLICKHOUSE
 REM =========================================================
@@ -465,6 +497,27 @@ IF %ERRORLEVEL% NEQ 0 (
 echo PostgreSQL credentials verified
 
 REM =========================================================
+REM WAIT FOR REDIS  (api-gateway + risk-engine connect eagerly)
+REM =========================================================
+
+echo.
+echo Waiting for Redis...
+
+set _RD_TRIES=0
+:wait_redis
+powershell -NoProfile -Command "try{$c=New-Object System.Net.Sockets.TcpClient('localhost',6379);$c.Close();exit 0}catch{exit 1}" >nul 2>&1
+IF %ERRORLEVEL% EQU 0 goto :redis_ready
+set /a _RD_TRIES+=1
+IF !_RD_TRIES! GEQ 30 (
+    echo WARNING: Redis did not respond after 30 tries, continuing...
+    goto :redis_ready
+)
+timeout /t 2 >nul
+goto wait_redis
+:redis_ready
+echo Redis ready
+
+REM =========================================================
 REM CREATE LOG DIRECTORY
 REM =========================================================
 
@@ -499,7 +552,7 @@ start "notification-service" /MIN cmd /c ^
 "java -jar services\notification-service\target\notification-service-1.0.0-SNAPSHOT.jar > logs\notification-service.log 2>&1"
 
 start "ai-platform" /MIN cmd /c ^
-"java -Dspring.profiles.active=onprem -jar services\ai-platform\target\ai-platform-1.0.0-SNAPSHOT.jar > logs\ai-platform.log 2>&1"
+"java -Dspring.profiles.active=dev -jar services\ai-platform\target\ai-platform-1.0.0-SNAPSHOT.jar > logs\ai-platform.log 2>&1"
 
 start "data-pipeline" /MIN cmd /c ^
 "java -jar services\data-pipeline\target\data-pipeline-1.0.0-SNAPSHOT.jar > logs\data-pipeline.log 2>&1"
