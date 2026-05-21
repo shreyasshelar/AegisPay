@@ -109,3 +109,6 @@ Runbook execution — agent calling Kubernetes (kubectl rollout restart), PagerD
 Real incident history ingestion — needs actual production incidents to build a meaningful KB; synthetic ones produce hallucinated root causes
 
 
+taskkill /F /IM "com.docker.build.exe"
+
+taskkill /F /IM "Docker Desktop.exe"
