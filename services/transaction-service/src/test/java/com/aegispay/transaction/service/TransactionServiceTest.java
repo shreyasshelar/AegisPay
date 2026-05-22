@@ -9,6 +9,7 @@ import com.aegispay.transaction.domain.entity.OutboxEntry;
 import com.aegispay.transaction.domain.entity.Transaction;
 import com.aegispay.transaction.domain.mapper.TransactionMapperImpl;
 import com.aegispay.transaction.idempotency.IdempotencyService;
+import com.aegispay.transaction.client.UserServiceClient;
 import com.aegispay.transaction.kafka.TransactionEventProducer;
 import com.aegispay.transaction.readmodel.TransactionView;
 import com.aegispay.transaction.readmodel.TransactionViewRepository;
@@ -42,6 +43,7 @@ class TransactionServiceTest {
     @Mock private IdempotencyService idempotencyService;
     @Mock private TransactionEventProducer eventProducer;
     @Mock private MongoTemplate mongoTemplate;
+    @Mock private UserServiceClient userServiceClient;
 
     @InjectMocks
     private TransactionService transactionService;
@@ -53,6 +55,7 @@ class TransactionServiceTest {
     @Test
     void createBuildsTransactionAndOutboxEntry() {
         when(transactionRepository.findByIdempotencyKey("key-1")).thenReturn(Optional.empty());
+        doNothing().when(userServiceClient).assertKycAllowsTransaction(any());
 
         Transaction saved = buildTransaction();
         when(transactionRepository.save(any(Transaction.class))).thenReturn(saved);
