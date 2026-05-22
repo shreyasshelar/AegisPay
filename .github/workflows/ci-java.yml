@@ -2,13 +2,13 @@
 # AegisPay — Smart Java CI
 #
 # Change-detection strategy:
-#   • Runs on direct push to main OR dev only (no PR triggers)
+#   • Runs on push to main/dev AND on pull_requests targeting main/dev
 #   • dorny/paths-filter detects WHICH services changed
 #   • Each service job only runs if its own files changed, OR if shared libs
 #     changed (because every service imports common-*)
 #   • Docker images are built & pushed to GHCR only on push to main
-#     (prod branch); dev branch skips Docker push to save registry costs
-#   • data-pipeline and reconciliation-service included as Phase 11 services
+#     (prod branch); PRs and dev branch skip Docker push
+#   • Helm tag update only runs on push to main after all Docker jobs succeed
 # ─────────────────────────────────────────────────────────────────────────────
 name: CI — Java (Smart)
 
@@ -22,11 +22,25 @@ on:
       - 'services/**'
       - 'pom.xml'
       - '.github/workflows/ci-java.yml'
+  pull_request:
+    branches:
+      - main
+      - dev
+    paths:
+      - 'libs/**'
+      - 'services/**'
+      - 'pom.xml'
+      - '.github/workflows/ci-java.yml'
 
 env:
   JAVA_VERSION: "21"
   REGISTRY: ghcr.io
   IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/aegispay
+
+# Cancel in-flight runs for the same branch/PR when a new push arrives
+concurrency:
+  group: ci-java-${{ github.ref }}
+  cancel-in-progress: true
 
 # ─────────────────────────────────────────────────────────────────────────────
 jobs:
@@ -51,7 +65,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # fetch-depth 0 gives full history so dorny can compare base refs on PRs
+          # full history so dorny can compare base refs on PRs
           fetch-depth: 0
 
       - name: Detect changed paths
@@ -85,8 +99,10 @@ jobs:
             helm:
               - 'infra/helm/**'
 
-  # ── Step 1: Build shared libs (needed by all services) ─────────────────────
-  # Runs whenever ANY java code changed (libs or any service)
+  # ── Step 1: Build + install shared libs ────────────────────────────────────
+  # Runs whenever ANY java code changed (libs or any service).
+  # Saves the installed aegispay JARs to a per-SHA cache so service jobs
+  # can restore them without recompiling.
   build-libs:
     name: Build Shared Libs
     runs-on: ubuntu-latest
@@ -118,17 +134,19 @@ jobs:
             -pl libs/common-domain,libs/common-security,libs/common-kafka,libs/common-observability \
             -DskipTests
 
-      - name: Cache libs into Maven local repo
+      # Save the installed aegispay JARs so service jobs don't recompile them
+      - name: Save libs cache
         uses: actions/cache/save@v4
         with:
           path: ~/.m2/repository/com/aegispay
           key: aegispay-libs-${{ github.sha }}
 
   # ── Step 2: Build + test each changed service ───────────────────────────────
-  # Template used by all 10 service jobs below.
   # A service runs if:
   #   (a) its own files changed, OR
-  #   (b) shared libs changed (because all services depend on them)
+  #   (b) shared libs changed (every service depends on them)
+  # Cache restore uses the per-SHA key with a branch-level fallback so the
+  # first run on a new SHA still gets a warm cache from the previous commit.
 
   build-api-gateway:
     name: Build api-gateway
@@ -142,9 +160,12 @@ jobs:
       - uses: actions/setup-java@v4
         with: { java-version: "${{ env.JAVA_VERSION }}", distribution: temurin, cache: maven }
       - uses: actions/cache/restore@v4
-        with: { path: ~/.m2/repository/com/aegispay, key: "aegispay-libs-${{ github.sha }}" }
+        with:
+          path: ~/.m2/repository/com/aegispay
+          key: aegispay-libs-${{ github.sha }}
+          restore-keys: aegispay-libs-
       - name: Build & test
-        run: mvn --batch-mode --no-transfer-progress verify -pl services/api-gateway --also-make -Dspring.profiles.active=test
+        run: mvn --batch-mode --no-transfer-progress verify -pl services/api-gateway -Dspring.profiles.active=test
       - uses: actions/upload-artifact@v4
         if: always()
         with: { name: test-results-api-gateway, path: services/api-gateway/target/surefire-reports/ }
@@ -161,9 +182,12 @@ jobs:
       - uses: actions/setup-java@v4
         with: { java-version: "${{ env.JAVA_VERSION }}", distribution: temurin, cache: maven }
       - uses: actions/cache/restore@v4
-        with: { path: ~/.m2/repository/com/aegispay, key: "aegispay-libs-${{ github.sha }}" }
+        with:
+          path: ~/.m2/repository/com/aegispay
+          key: aegispay-libs-${{ github.sha }}
+          restore-keys: aegispay-libs-
       - name: Build & test
-        run: mvn --batch-mode --no-transfer-progress verify -pl services/user-service --also-make -Dspring.profiles.active=test
+        run: mvn --batch-mode --no-transfer-progress verify -pl services/user-service -Dspring.profiles.active=test
       - uses: actions/upload-artifact@v4
         if: always()
         with: { name: test-results-user-service, path: services/user-service/target/surefire-reports/ }
@@ -180,9 +204,12 @@ jobs:
       - uses: actions/setup-java@v4
         with: { java-version: "${{ env.JAVA_VERSION }}", distribution: temurin, cache: maven }
       - uses: actions/cache/restore@v4
-        with: { path: ~/.m2/repository/com/aegispay, key: "aegispay-libs-${{ github.sha }}" }
+        with:
+          path: ~/.m2/repository/com/aegispay
+          key: aegispay-libs-${{ github.sha }}
+          restore-keys: aegispay-libs-
       - name: Build & test
-        run: mvn --batch-mode --no-transfer-progress verify -pl services/transaction-service --also-make -Dspring.profiles.active=test
+        run: mvn --batch-mode --no-transfer-progress verify -pl services/transaction-service -Dspring.profiles.active=test
       - uses: actions/upload-artifact@v4
         if: always()
         with: { name: test-results-transaction-service, path: services/transaction-service/target/surefire-reports/ }
@@ -199,9 +226,12 @@ jobs:
       - uses: actions/setup-java@v4
         with: { java-version: "${{ env.JAVA_VERSION }}", distribution: temurin, cache: maven }
       - uses: actions/cache/restore@v4
-        with: { path: ~/.m2/repository/com/aegispay, key: "aegispay-libs-${{ github.sha }}" }
+        with:
+          path: ~/.m2/repository/com/aegispay
+          key: aegispay-libs-${{ github.sha }}
+          restore-keys: aegispay-libs-
       - name: Build & test
-        run: mvn --batch-mode --no-transfer-progress verify -pl services/ledger-service --also-make -Dspring.profiles.active=test
+        run: mvn --batch-mode --no-transfer-progress verify -pl services/ledger-service -Dspring.profiles.active=test
       - uses: actions/upload-artifact@v4
         if: always()
         with: { name: test-results-ledger-service, path: services/ledger-service/target/surefire-reports/ }
@@ -218,9 +248,12 @@ jobs:
       - uses: actions/setup-java@v4
         with: { java-version: "${{ env.JAVA_VERSION }}", distribution: temurin, cache: maven }
       - uses: actions/cache/restore@v4
-        with: { path: ~/.m2/repository/com/aegispay, key: "aegispay-libs-${{ github.sha }}" }
+        with:
+          path: ~/.m2/repository/com/aegispay
+          key: aegispay-libs-${{ github.sha }}
+          restore-keys: aegispay-libs-
       - name: Build & test
-        run: mvn --batch-mode --no-transfer-progress verify -pl services/payment-orchestrator --also-make -Dspring.profiles.active=test
+        run: mvn --batch-mode --no-transfer-progress verify -pl services/payment-orchestrator -Dspring.profiles.active=test
       - uses: actions/upload-artifact@v4
         if: always()
         with: { name: test-results-payment-orchestrator, path: services/payment-orchestrator/target/surefire-reports/ }
@@ -237,9 +270,12 @@ jobs:
       - uses: actions/setup-java@v4
         with: { java-version: "${{ env.JAVA_VERSION }}", distribution: temurin, cache: maven }
       - uses: actions/cache/restore@v4
-        with: { path: ~/.m2/repository/com/aegispay, key: "aegispay-libs-${{ github.sha }}" }
+        with:
+          path: ~/.m2/repository/com/aegispay
+          key: aegispay-libs-${{ github.sha }}
+          restore-keys: aegispay-libs-
       - name: Build & test
-        run: mvn --batch-mode --no-transfer-progress verify -pl services/risk-engine --also-make -Dspring.profiles.active=test
+        run: mvn --batch-mode --no-transfer-progress verify -pl services/risk-engine -Dspring.profiles.active=test
       - uses: actions/upload-artifact@v4
         if: always()
         with: { name: test-results-risk-engine, path: services/risk-engine/target/surefire-reports/ }
@@ -256,9 +292,12 @@ jobs:
       - uses: actions/setup-java@v4
         with: { java-version: "${{ env.JAVA_VERSION }}", distribution: temurin, cache: maven }
       - uses: actions/cache/restore@v4
-        with: { path: ~/.m2/repository/com/aegispay, key: "aegispay-libs-${{ github.sha }}" }
+        with:
+          path: ~/.m2/repository/com/aegispay
+          key: aegispay-libs-${{ github.sha }}
+          restore-keys: aegispay-libs-
       - name: Build & test
-        run: mvn --batch-mode --no-transfer-progress verify -pl services/notification-service --also-make -Dspring.profiles.active=test
+        run: mvn --batch-mode --no-transfer-progress verify -pl services/notification-service -Dspring.profiles.active=test
       - uses: actions/upload-artifact@v4
         if: always()
         with: { name: test-results-notification-service, path: services/notification-service/target/surefire-reports/ }
@@ -275,9 +314,12 @@ jobs:
       - uses: actions/setup-java@v4
         with: { java-version: "${{ env.JAVA_VERSION }}", distribution: temurin, cache: maven }
       - uses: actions/cache/restore@v4
-        with: { path: ~/.m2/repository/com/aegispay, key: "aegispay-libs-${{ github.sha }}" }
+        with:
+          path: ~/.m2/repository/com/aegispay
+          key: aegispay-libs-${{ github.sha }}
+          restore-keys: aegispay-libs-
       - name: Build & test
-        run: mvn --batch-mode --no-transfer-progress verify -pl services/ai-platform --also-make -Dspring.profiles.active=test
+        run: mvn --batch-mode --no-transfer-progress verify -pl services/ai-platform -Dspring.profiles.active=test
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY_TEST }}
       - uses: actions/upload-artifact@v4
@@ -296,9 +338,12 @@ jobs:
       - uses: actions/setup-java@v4
         with: { java-version: "${{ env.JAVA_VERSION }}", distribution: temurin, cache: maven }
       - uses: actions/cache/restore@v4
-        with: { path: ~/.m2/repository/com/aegispay, key: "aegispay-libs-${{ github.sha }}" }
+        with:
+          path: ~/.m2/repository/com/aegispay
+          key: aegispay-libs-${{ github.sha }}
+          restore-keys: aegispay-libs-
       - name: Build & test
-        run: mvn --batch-mode --no-transfer-progress verify -pl services/reconciliation-service --also-make -Dspring.profiles.active=test
+        run: mvn --batch-mode --no-transfer-progress verify -pl services/reconciliation-service -Dspring.profiles.active=test
       - uses: actions/upload-artifact@v4
         if: always()
         with: { name: test-results-reconciliation-service, path: services/reconciliation-service/target/surefire-reports/ }
@@ -315,9 +360,12 @@ jobs:
       - uses: actions/setup-java@v4
         with: { java-version: "${{ env.JAVA_VERSION }}", distribution: temurin, cache: maven }
       - uses: actions/cache/restore@v4
-        with: { path: ~/.m2/repository/com/aegispay, key: "aegispay-libs-${{ github.sha }}" }
+        with:
+          path: ~/.m2/repository/com/aegispay
+          key: aegispay-libs-${{ github.sha }}
+          restore-keys: aegispay-libs-
       - name: Build & test
-        run: mvn --batch-mode --no-transfer-progress verify -pl services/data-pipeline --also-make -Dspring.profiles.active=test
+        run: mvn --batch-mode --no-transfer-progress verify -pl services/data-pipeline -Dspring.profiles.active=test
       - uses: actions/upload-artifact@v4
         if: always()
         with: { name: test-results-data-pipeline, path: services/data-pipeline/target/surefire-reports/ }
@@ -335,13 +383,9 @@ jobs:
       - name: Lint Helm chart
         run: helm lint infra/helm/aegispay
 
-  # ── Step 4: Docker build & push (prod branch only, push events only) ────────
-  # Only runs for services that were built (changed or libs changed).
-  # Uses a reusable pattern: each service has its own docker job that only
-  # fires if the corresponding build job ran (via 'needs' + 'if' combo).
-  #
-  # We use `always()` + check the build job result so skipped builds don't
-  # block Docker push for services that DID change.
+  # ── Step 4: Docker build & push (prod branch push only) ─────────────────────
+  # Skipped entirely on PRs and dev branch.
+  # Each docker job only fires if its corresponding build job succeeded.
 
   docker-api-gateway:
     name: Docker — api-gateway
@@ -357,8 +401,11 @@ jobs:
       - uses: actions/setup-java@v4
         with: { java-version: "${{ env.JAVA_VERSION }}", distribution: temurin, cache: maven }
       - uses: actions/cache/restore@v4
-        with: { path: ~/.m2/repository/com/aegispay, key: "aegispay-libs-${{ github.sha }}" }
-      - run: mvn --batch-mode --no-transfer-progress package -pl services/api-gateway --also-make -DskipTests
+        with:
+          path: ~/.m2/repository/com/aegispay
+          key: aegispay-libs-${{ github.sha }}
+          restore-keys: aegispay-libs-
+      - run: mvn --batch-mode --no-transfer-progress package -pl services/api-gateway -DskipTests
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with: { registry: "${{ env.REGISTRY }}", username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}" }
@@ -389,8 +436,8 @@ jobs:
       - uses: actions/setup-java@v4
         with: { java-version: "${{ env.JAVA_VERSION }}", distribution: temurin, cache: maven }
       - uses: actions/cache/restore@v4
-        with: { path: ~/.m2/repository/com/aegispay, key: "aegispay-libs-${{ github.sha }}" }
-      - run: mvn --batch-mode --no-transfer-progress package -pl services/user-service --also-make -DskipTests
+        with: { path: ~/.m2/repository/com/aegispay, key: "aegispay-libs-${{ github.sha }}", restore-keys: "aegispay-libs-" }
+      - run: mvn --batch-mode --no-transfer-progress package -pl services/user-service -DskipTests
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with: { registry: "${{ env.REGISTRY }}", username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}" }
@@ -415,8 +462,8 @@ jobs:
       - uses: actions/setup-java@v4
         with: { java-version: "${{ env.JAVA_VERSION }}", distribution: temurin, cache: maven }
       - uses: actions/cache/restore@v4
-        with: { path: ~/.m2/repository/com/aegispay, key: "aegispay-libs-${{ github.sha }}" }
-      - run: mvn --batch-mode --no-transfer-progress package -pl services/transaction-service --also-make -DskipTests
+        with: { path: ~/.m2/repository/com/aegispay, key: "aegispay-libs-${{ github.sha }}", restore-keys: "aegispay-libs-" }
+      - run: mvn --batch-mode --no-transfer-progress package -pl services/transaction-service -DskipTests
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with: { registry: "${{ env.REGISTRY }}", username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}" }
@@ -441,8 +488,8 @@ jobs:
       - uses: actions/setup-java@v4
         with: { java-version: "${{ env.JAVA_VERSION }}", distribution: temurin, cache: maven }
       - uses: actions/cache/restore@v4
-        with: { path: ~/.m2/repository/com/aegispay, key: "aegispay-libs-${{ github.sha }}" }
-      - run: mvn --batch-mode --no-transfer-progress package -pl services/ledger-service --also-make -DskipTests
+        with: { path: ~/.m2/repository/com/aegispay, key: "aegispay-libs-${{ github.sha }}", restore-keys: "aegispay-libs-" }
+      - run: mvn --batch-mode --no-transfer-progress package -pl services/ledger-service -DskipTests
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with: { registry: "${{ env.REGISTRY }}", username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}" }
@@ -467,8 +514,8 @@ jobs:
       - uses: actions/setup-java@v4
         with: { java-version: "${{ env.JAVA_VERSION }}", distribution: temurin, cache: maven }
       - uses: actions/cache/restore@v4
-        with: { path: ~/.m2/repository/com/aegispay, key: "aegispay-libs-${{ github.sha }}" }
-      - run: mvn --batch-mode --no-transfer-progress package -pl services/payment-orchestrator --also-make -DskipTests
+        with: { path: ~/.m2/repository/com/aegispay, key: "aegispay-libs-${{ github.sha }}", restore-keys: "aegispay-libs-" }
+      - run: mvn --batch-mode --no-transfer-progress package -pl services/payment-orchestrator -DskipTests
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with: { registry: "${{ env.REGISTRY }}", username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}" }
@@ -493,8 +540,8 @@ jobs:
       - uses: actions/setup-java@v4
         with: { java-version: "${{ env.JAVA_VERSION }}", distribution: temurin, cache: maven }
       - uses: actions/cache/restore@v4
-        with: { path: ~/.m2/repository/com/aegispay, key: "aegispay-libs-${{ github.sha }}" }
-      - run: mvn --batch-mode --no-transfer-progress package -pl services/risk-engine --also-make -DskipTests
+        with: { path: ~/.m2/repository/com/aegispay, key: "aegispay-libs-${{ github.sha }}", restore-keys: "aegispay-libs-" }
+      - run: mvn --batch-mode --no-transfer-progress package -pl services/risk-engine -DskipTests
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with: { registry: "${{ env.REGISTRY }}", username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}" }
@@ -519,8 +566,8 @@ jobs:
       - uses: actions/setup-java@v4
         with: { java-version: "${{ env.JAVA_VERSION }}", distribution: temurin, cache: maven }
       - uses: actions/cache/restore@v4
-        with: { path: ~/.m2/repository/com/aegispay, key: "aegispay-libs-${{ github.sha }}" }
-      - run: mvn --batch-mode --no-transfer-progress package -pl services/notification-service --also-make -DskipTests
+        with: { path: ~/.m2/repository/com/aegispay, key: "aegispay-libs-${{ github.sha }}", restore-keys: "aegispay-libs-" }
+      - run: mvn --batch-mode --no-transfer-progress package -pl services/notification-service -DskipTests
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with: { registry: "${{ env.REGISTRY }}", username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}" }
@@ -545,8 +592,8 @@ jobs:
       - uses: actions/setup-java@v4
         with: { java-version: "${{ env.JAVA_VERSION }}", distribution: temurin, cache: maven }
       - uses: actions/cache/restore@v4
-        with: { path: ~/.m2/repository/com/aegispay, key: "aegispay-libs-${{ github.sha }}" }
-      - run: mvn --batch-mode --no-transfer-progress package -pl services/ai-platform --also-make -DskipTests
+        with: { path: ~/.m2/repository/com/aegispay, key: "aegispay-libs-${{ github.sha }}", restore-keys: "aegispay-libs-" }
+      - run: mvn --batch-mode --no-transfer-progress package -pl services/ai-platform -DskipTests
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with: { registry: "${{ env.REGISTRY }}", username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}" }
@@ -571,8 +618,8 @@ jobs:
       - uses: actions/setup-java@v4
         with: { java-version: "${{ env.JAVA_VERSION }}", distribution: temurin, cache: maven }
       - uses: actions/cache/restore@v4
-        with: { path: ~/.m2/repository/com/aegispay, key: "aegispay-libs-${{ github.sha }}" }
-      - run: mvn --batch-mode --no-transfer-progress package -pl services/reconciliation-service --also-make -DskipTests
+        with: { path: ~/.m2/repository/com/aegispay, key: "aegispay-libs-${{ github.sha }}", restore-keys: "aegispay-libs-" }
+      - run: mvn --batch-mode --no-transfer-progress package -pl services/reconciliation-service -DskipTests
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with: { registry: "${{ env.REGISTRY }}", username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}" }
@@ -597,8 +644,8 @@ jobs:
       - uses: actions/setup-java@v4
         with: { java-version: "${{ env.JAVA_VERSION }}", distribution: temurin, cache: maven }
       - uses: actions/cache/restore@v4
-        with: { path: ~/.m2/repository/com/aegispay, key: "aegispay-libs-${{ github.sha }}" }
-      - run: mvn --batch-mode --no-transfer-progress package -pl services/data-pipeline --also-make -DskipTests
+        with: { path: ~/.m2/repository/com/aegispay, key: "aegispay-libs-${{ github.sha }}", restore-keys: "aegispay-libs-" }
+      - run: mvn --batch-mode --no-transfer-progress package -pl services/data-pipeline -DskipTests
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with: { registry: "${{ env.REGISTRY }}", username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}" }
@@ -612,11 +659,11 @@ jobs:
       - uses: docker/build-push-action@v5
         with: { context: ., file: services/data-pipeline/Dockerfile, push: true, tags: "${{ steps.meta.outputs.tags }}", cache-from: "type=gha", cache-to: "type=gha,mode=max" }
 
-  # ── Step 5: Patch Helm values & trigger ArgoCD (prod branch only) ───────────
+  # ── Step 5: Patch Helm values & trigger ArgoCD (prod branch push only) ───────
+  # Only runs when at least one Docker job actually pushed a new image.
   update-helm-tags:
     name: Update Helm Image Tags
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs:
       - docker-api-gateway
       - docker-user-service
@@ -628,7 +675,6 @@ jobs:
       - docker-ai-platform
       - docker-reconciliation-service
       - docker-data-pipeline
-    # Run even if some docker jobs were skipped (service didn't change)
     if: |
       github.event_name == 'push' &&
       github.ref == 'refs/heads/main' &&
@@ -658,23 +704,22 @@ jobs:
         env:
           SHA: ${{ github.sha }}
         run: |
-          # Only patch services whose docker job succeeded
           patch_tag() {
             local svc="$1"
             local key="$2"
             yq e ".services.${key}.image.tag = \"${SHA}\"" -i infra/helm/aegispay/values-prod.yaml
             echo "Patched ${svc} → ${SHA}"
           }
-          [[ "${{ needs.docker-api-gateway.result }}"          == "success" ]] && patch_tag api-gateway api_gateway
-          [[ "${{ needs.docker-user-service.result }}"         == "success" ]] && patch_tag user-service user_service
-          [[ "${{ needs.docker-transaction-service.result }}"  == "success" ]] && patch_tag transaction-service transaction_service
-          [[ "${{ needs.docker-ledger-service.result }}"       == "success" ]] && patch_tag ledger-service ledger_service
-          [[ "${{ needs.docker-payment-orchestrator.result }}" == "success" ]] && patch_tag payment-orchestrator payment_orchestrator
-          [[ "${{ needs.docker-risk-engine.result }}"          == "success" ]] && patch_tag risk-engine risk_engine
-          [[ "${{ needs.docker-notification-service.result }}" == "success" ]] && patch_tag notification-service notification_service
-          [[ "${{ needs.docker-ai-platform.result }}"          == "success" ]] && patch_tag ai-platform ai_platform
+          [[ "${{ needs.docker-api-gateway.result }}"            == "success" ]] && patch_tag api-gateway          api_gateway
+          [[ "${{ needs.docker-user-service.result }}"           == "success" ]] && patch_tag user-service         user_service
+          [[ "${{ needs.docker-transaction-service.result }}"    == "success" ]] && patch_tag transaction-service  transaction_service
+          [[ "${{ needs.docker-ledger-service.result }}"         == "success" ]] && patch_tag ledger-service       ledger_service
+          [[ "${{ needs.docker-payment-orchestrator.result }}"   == "success" ]] && patch_tag payment-orchestrator payment_orchestrator
+          [[ "${{ needs.docker-risk-engine.result }}"            == "success" ]] && patch_tag risk-engine          risk_engine
+          [[ "${{ needs.docker-notification-service.result }}"   == "success" ]] && patch_tag notification-service notification_service
+          [[ "${{ needs.docker-ai-platform.result }}"            == "success" ]] && patch_tag ai-platform          ai_platform
           [[ "${{ needs.docker-reconciliation-service.result }}" == "success" ]] && patch_tag reconciliation-service reconciliation_service
-          [[ "${{ needs.docker-data-pipeline.result }}"        == "success" ]] && patch_tag data-pipeline data_pipeline
+          [[ "${{ needs.docker-data-pipeline.result }}"          == "success" ]] && patch_tag data-pipeline        data_pipeline
 
       - name: Commit updated image tags
         run: |
