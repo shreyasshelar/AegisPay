@@ -127,7 +127,8 @@ public class LedgerService {
 
     @Transactional
     public void commitBalance(BalanceCommitRequestedEvent event) {
-        Account account = accountRepository.findByIdForUpdate(event.getAccountId())
+        // ── Debit sender: remove from reserved balance ──────────────────────
+        Account senderAccount = accountRepository.findByIdForUpdate(event.getAccountId())
                 .orElseThrow(() -> new AccountNotFoundException(event.getAccountId()));
 
         // Use the lock's base-currency amount, not event.getAmount() which carries
@@ -137,23 +138,55 @@ public class LedgerService {
                 .map(BalanceLock::getReservedAmount)
                 .orElse(event.getAmount());   // fallback if lock already cleaned up
 
-        BigDecimal balanceBefore = account.getReservedBalance();
-
-        account.setReservedBalance(account.getReservedBalance().subtract(amount));
-        accountRepository.save(account);
+        BigDecimal senderBalanceBefore = senderAccount.getReservedBalance();
+        senderAccount.setReservedBalance(senderAccount.getReservedBalance().subtract(amount));
+        accountRepository.save(senderAccount);
 
         ledgerEntryRepository.save(LedgerEntry.builder()
-                .accountId(account.getId())
+                .accountId(senderAccount.getId())
                 .transactionId(event.getTransactionId())
                 .entryType(LedgerEntryType.COMMIT)
                 .amount(amount)
-                .balanceBefore(balanceBefore)
-                .balanceAfter(account.getReservedBalance())
+                .balanceBefore(senderBalanceBefore)
+                .balanceAfter(senderAccount.getReservedBalance())
                 .description("Commit for transaction " + event.getTransactionId())
                 .build());
 
         balanceLockRepository.findByTransactionId(event.getTransactionId())
                 .ifPresent(balanceLockRepository::delete);
+
+        // ── Credit receiver: add to available balance ────────────────────────
+        if (event.getPayeeId() != null) {
+            List<Account> receiverAccounts = accountRepository.findByUserId(event.getPayeeId());
+            if (receiverAccounts.isEmpty()) {
+                log.warn("commitBalance: no account found for payeeId={} txn={} — receiver credit skipped",
+                        event.getPayeeId(), event.getTransactionId());
+            } else {
+                Account receiverAccount = accountRepository.findByIdForUpdate(receiverAccounts.get(0).getId())
+                        .orElseThrow();
+                // Convert from sender's base currency to receiver's base currency if they differ.
+                BigDecimal creditAmount = exchangeRateService.convert(
+                        amount, senderAccount.getCurrency(), receiverAccount.getCurrency());
+                BigDecimal receiverBalanceBefore = receiverAccount.getAvailableBalance();
+                receiverAccount.setAvailableBalance(receiverAccount.getAvailableBalance().add(creditAmount));
+                accountRepository.save(receiverAccount);
+
+                ledgerEntryRepository.save(LedgerEntry.builder()
+                        .accountId(receiverAccount.getId())
+                        .transactionId(event.getTransactionId())
+                        .entryType(LedgerEntryType.CREDIT)
+                        .amount(creditAmount)
+                        .balanceBefore(receiverBalanceBefore)
+                        .balanceAfter(receiverAccount.getAvailableBalance())
+                        .description("Credit from transaction " + event.getTransactionId())
+                        .build());
+                log.info("Receiver credited: txn={} payeeId={} amount={} {}",
+                        event.getTransactionId(), event.getPayeeId(), creditAmount, receiverAccount.getCurrency());
+            }
+        } else {
+            log.warn("commitBalance: payeeId is null for txn={} — receiver credit skipped",
+                    event.getTransactionId());
+        }
 
         BalanceCommittedEvent reply = BalanceCommittedEvent.builder()
                 .eventId(UUID.randomUUID())
@@ -161,10 +194,10 @@ public class LedgerService {
                 .schemaVersion(1)
                 .transactionId(event.getTransactionId())
                 .sagaId(event.getSagaId())
-                .accountId(account.getId())
+                .accountId(senderAccount.getId())
                 .committedAmount(amount)
-                .availableBalanceAfter(account.getAvailableBalance())
-                .reservedBalanceAfter(account.getReservedBalance())
+                .availableBalanceAfter(senderAccount.getAvailableBalance())
+                .reservedBalanceAfter(senderAccount.getReservedBalance())
                 .build();
 
         writeOutbox(event.getTransactionId().toString(), "BalanceCommittedEvent",

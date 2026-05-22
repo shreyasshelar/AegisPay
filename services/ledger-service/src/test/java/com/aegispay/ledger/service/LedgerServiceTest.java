@@ -48,10 +48,12 @@ class LedgerServiceTest {
 
     LedgerService ledgerService;
 
-    UUID accountId = UUID.randomUUID();
-    UUID userId    = UUID.randomUUID();   // the account owner's user ID
-    UUID txnId     = UUID.randomUUID();
-    UUID sagaId    = UUID.randomUUID();
+    UUID accountId         = UUID.randomUUID();
+    UUID userId            = UUID.randomUUID();   // the account owner's user ID
+    UUID payeeId           = UUID.randomUUID();   // receiver's user ID
+    UUID receiverAccountId = UUID.randomUUID();   // receiver's account ID
+    UUID txnId             = UUID.randomUUID();
+    UUID sagaId            = UUID.randomUUID();
 
     @BeforeEach
     void setUp() {
@@ -126,16 +128,34 @@ class LedgerServiceTest {
     }
 
     @Test
-    void commitBalance_reduces_reserved_balance() {
-        Account account = accountWithBalance("70.00", "30.00");
-        when(accountRepository.findByIdForUpdate(accountId)).thenReturn(Optional.of(account));
+    void commitBalance_reduces_reserved_balance_and_credits_receiver() {
+        Account senderAccount   = accountWithBalance("70.00", "30.00");
+        Account receiverAccount = receiverAccountWithBalance("100.00");
+
+        when(accountRepository.findByIdForUpdate(accountId)).thenReturn(Optional.of(senderAccount));
+        when(accountRepository.findByUserId(payeeId)).thenReturn(List.of(receiverAccount));
+        when(accountRepository.findByIdForUpdate(receiverAccountId)).thenReturn(Optional.of(receiverAccount));
+        // Same currency — converter passes the amount through unchanged
+        when(exchangeRateService.convert(any(BigDecimal.class), anyString(), anyString()))
+                .thenAnswer(inv -> inv.getArgument(0));
         when(ledgerEntryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(balanceLockRepository.findByTransactionId(txnId)).thenReturn(Optional.empty());
         when(outboxEntryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         ledgerService.commitBalance(commitEvent(new BigDecimal("30.00")));
 
-        assertThat(account.getReservedBalance()).isEqualByComparingTo("0.00");
+        // Sender's reserved balance drops to zero
+        assertThat(senderAccount.getReservedBalance()).isEqualByComparingTo("0.00");
+        // Receiver's available balance is credited
+        assertThat(receiverAccount.getAvailableBalance()).isEqualByComparingTo("130.00");
+
+        // Two ledger entries: COMMIT for sender + CREDIT for receiver
+        ArgumentCaptor<LedgerEntry> entryCaptor = ArgumentCaptor.forClass(LedgerEntry.class);
+        verify(ledgerEntryRepository, times(2)).save(entryCaptor.capture());
+        List<LedgerEntry> entries = entryCaptor.getAllValues();
+        assertThat(entries).anyMatch(e -> e.getEntryType() == com.aegispay.common.domain.enums.LedgerEntryType.COMMIT);
+        assertThat(entries).anyMatch(e -> e.getEntryType() == com.aegispay.common.domain.enums.LedgerEntryType.CREDIT);
+
         verify(outboxEntryRepository).save(argThat(e ->
                 ((OutboxEntry) e).getEventType().equals("BalanceCommittedEvent")));
     }
@@ -167,6 +187,17 @@ class LedgerServiceTest {
                 .build();
     }
 
+    private Account receiverAccountWithBalance(String available) {
+        return Account.builder()
+                .id(receiverAccountId)
+                .userId(payeeId)
+                .currency("USD")
+                .availableBalance(new BigDecimal(available))
+                .reservedBalance(BigDecimal.ZERO)
+                .version(0L)
+                .build();
+    }
+
     private BalanceReserveRequestedEvent reserveEvent(BigDecimal amount) {
         return BalanceReserveRequestedEvent.builder()
                 .eventId(UUID.randomUUID())
@@ -188,6 +219,7 @@ class LedgerServiceTest {
                 .transactionId(txnId)
                 .sagaId(sagaId)
                 .accountId(accountId)
+                .payeeId(payeeId)
                 .amount(amount)
                 .build();
     }

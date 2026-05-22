@@ -15,6 +15,7 @@ public class BalanceCommitRequestedEvent extends BaseEvent {
 
     private UUID transactionId;
     private UUID sagaId;
-    private UUID accountId;
+    private UUID accountId;   // sender's account ID (to debit reserved balance)
+    private UUID payeeId;     // receiver's user ID  (to credit available balance)
     private BigDecimal amount;
 }

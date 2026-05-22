@@ -102,7 +102,7 @@
       "targets": [
         {
           "datasource": { "type": "grafana-clickhouse-datasource", "uid": "aegispay-clickhouse" },
-          "rawSql": "SELECT count() AS breaks FROM aegispay_analytics.reconciliation_breaks WHERE detected_at >= now() - INTERVAL 24 HOUR",
+          "rawSql": "SELECT count() AS breaks FROM aegispay_analytics.reconciliation_breaks WHERE created_at >= now() - INTERVAL 24 HOUR",
           "refId": "A",
           "format": "table"
         }
@@ -130,7 +130,7 @@
           "datasource": { "type": "grafana-clickhouse-datasource", "uid": "aegispay-clickhouse" },
           "rawSql": "SELECT toStartOfHour(completed_at) AS time, quantile(0.50)(latency_ms) AS p50, quantile(0.95)(latency_ms) AS p95, quantile(0.99)(latency_ms) AS p99 FROM aegispay_analytics.saga_latencies WHERE completed_at >= now() - INTERVAL 7 DAY GROUP BY time ORDER BY time",
           "refId": "A",
-          "format": "time_series"
+          "format": "table"
         }
       ]
     },
@@ -150,12 +150,26 @@
       "options": { "legend": { "calcs": [], "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi", "sort": "none" } },
       "title": "Saga Completions by Final Status (hourly)",
       "type": "timeseries",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "axisLabel": "", "axisPlacement": "auto", "drawStyle": "bars", "fillOpacity": 80, "gradientMode": "none", "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "scaleDistribution": { "type": "linear" }, "showPoints": "never", "spanNulls": false, "stacking": { "group": "A", "mode": "normal" }, "thresholdsStyle": { "mode": "off" } },
+          "mappings": [],
+          "unit": "short"
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "COMPLETED" },    "properties": [{ "id": "color", "value": { "fixedColor": "#73BF69", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "FAILED" },       "properties": [{ "id": "color", "value": { "fixedColor": "#F2495C", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "COMPENSATED" },  "properties": [{ "id": "color", "value": { "fixedColor": "#FF9830", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "TIMEOUT" },      "properties": [{ "id": "color", "value": { "fixedColor": "#B877D9", "mode": "fixed" } }] }
+        ]
+      },
       "targets": [
         {
           "datasource": { "type": "grafana-clickhouse-datasource", "uid": "aegispay-clickhouse" },
           "rawSql": "SELECT toStartOfHour(completed_at) AS time, final_status, count() AS cnt FROM aegispay_analytics.saga_latencies WHERE completed_at >= now() - INTERVAL 7 DAY GROUP BY time, final_status ORDER BY time",
           "refId": "A",
-          "format": "time_series"
+          "format": "table"
         }
       ]
     },
@@ -188,19 +202,20 @@
         "defaults": { "color": { "mode": "thresholds" }, "custom": { "align": "auto", "displayMode": "auto" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] } },
         "overrides": [
           { "matcher": { "id": "byName", "options": "transaction_id" }, "properties": [{ "id": "custom.width", "value": 300 }] },
-          { "matcher": { "id": "byName", "options": "break_type" }, "properties": [{ "id": "custom.width", "value": 180 }] },
-          { "matcher": { "id": "byName", "options": "amount_diff" }, "properties": [{ "id": "unit", "value": "currencyINR" }] }
+          { "matcher": { "id": "byName", "options": "break_type" },     "properties": [{ "id": "custom.width", "value": 180 }] },
+          { "matcher": { "id": "byName", "options": "break_amount" },   "properties": [{ "id": "unit", "value": "currencyINR" }, { "id": "custom.width", "value": 120 }] },
+          { "matcher": { "id": "byName", "options": "break_status" },   "properties": [{ "id": "custom.width", "value": 120 }] }
         ]
       },
       "gridPos": { "h": 8, "w": 24, "x": 0, "y": 21 },
       "id": 8,
-      "options": { "footer": { "fields": "", "reducer": ["sum"], "show": false }, "showHeader": true, "sortBy": [{ "displayName": "detected_at", "desc": true }] },
+      "options": { "footer": { "fields": "", "reducer": ["sum"], "show": false }, "showHeader": true, "sortBy": [{ "displayName": "created_at", "desc": true }] },
       "title": "Reconciliation Breaks (last 24 h)",
       "type": "table",
       "targets": [
         {
           "datasource": { "type": "grafana-clickhouse-datasource", "uid": "aegispay-clickhouse" },
-          "rawSql": "SELECT toString(transaction_id) AS transaction_id, break_type, amount_diff, currency, source, detected_at FROM aegispay_analytics.reconciliation_breaks WHERE detected_at >= now() - INTERVAL 24 HOUR ORDER BY detected_at DESC LIMIT 50",
+          "rawSql": "SELECT toString(transaction_id) AS transaction_id, break_type, break_amount, currency, break_status, created_at FROM aegispay_analytics.reconciliation_breaks WHERE created_at >= now() - INTERVAL 24 HOUR ORDER BY created_at DESC LIMIT 50",
           "refId": "A",
           "format": "table"
         }

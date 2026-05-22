@@ -377,7 +377,8 @@ public class PaymentSagaOrchestrator {
         BalanceCommitRequestedEvent event = BalanceCommitRequestedEvent.builder()
                 .eventId(UUID.randomUUID()).occurredAt(Instant.now()).schemaVersion(1)
                 .transactionId(saga.getTransactionId()).sagaId(saga.getId())
-                .accountId(saga.getAccountId()).amount(saga.getAmount())
+                .accountId(saga.getAccountId()).payeeId(saga.getPayeeId())
+                .amount(saga.getAmount())
                 .build();
         writeOutbox(saga, "BalanceCommitRequestedEvent", KafkaTopics.BALANCE_COMMIT_REQUESTED, event);
     }
