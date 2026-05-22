@@ -13,4 +13,6 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, UUID> 
     List<LedgerEntry> findByAccountIdOrderByCreatedAtDesc(UUID accountId);
 
     boolean existsByIdempotencyKey(String idempotencyKey);
+
+    java.util.Optional<LedgerEntry> findByIdempotencyKey(String idempotencyKey);
 }

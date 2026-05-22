@@ -77,6 +77,13 @@ public class StripePaymentGatewayClient {
     @PostConstruct
     void init() {
         Stripe.apiKey = secretKey;
+        // 5s connect timeout: Stripe's CDN round-robins across IPs; some may be unreachable
+        // from this network. A 5s timeout detects bad IPs fast so the SDK can retry with a
+        // fresh DNS lookup (which often resolves to a different, reachable IP).
+        // Default is the OS TCP timeout (~22s on Windows) which causes 66s total on 3 attempts.
+        Stripe.setConnectTimeout(5000);
+        // 2 retries, idempotency key pinned by SDK — no double-charge risk.
+        Stripe.setMaxNetworkRetries(2);
         log.info("Stripe client initialised (key prefix: {})", secretKey.substring(0, 7));
     }
 
