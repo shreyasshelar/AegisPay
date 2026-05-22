@@ -126,12 +126,26 @@
       "options": { "legend": { "calcs": [], "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi", "sort": "none" } },
       "title": "Transaction Count by Status — Hourly",
       "type": "timeseries",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "drawStyle": "bars", "fillOpacity": 85, "gradientMode": "none", "hideFrom": { "legend": false, "tooltip": false, "viz": false }, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "scaleDistribution": { "type": "linear" }, "showPoints": "never", "spanNulls": false, "stacking": { "group": "A", "mode": "normal" }, "thresholdsStyle": { "mode": "off" } },
+          "mappings": [],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
+          "unit": "short"
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "COMPLETED" },    "properties": [{ "id": "color", "value": { "fixedColor": "#73BF69", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "FAILED" },       "properties": [{ "id": "color", "value": { "fixedColor": "#F2495C", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "ROLLED_BACK" },  "properties": [{ "id": "color", "value": { "fixedColor": "#FF9830", "mode": "fixed" } }] }
+        ]
+      },
       "targets": [
         {
           "datasource": { "type": "grafana-clickhouse-datasource", "uid": "aegispay-clickhouse" },
           "rawSql": "SELECT toStartOfHour(event_time) AS time, status, count() AS cnt FROM aegispay_analytics.transaction_facts WHERE event_time >= now() - INTERVAL 7 DAY GROUP BY time, status ORDER BY time",
           "refId": "A",
-          "format": "time_series"
+          "format": "table"
         }
       ]
     },
@@ -148,7 +162,7 @@
       },
       "gridPos": { "h": 8, "w": 8, "x": 16, "y": 4 },
       "id": 6,
-      "options": { "displayLabels": ["percent", "name"], "legend": { "displayMode": "table", "placement": "bottom", "values": ["value"] }, "pieType": "pie", "tooltip": { "mode": "single", "sort": "none" } },
+      "options": { "displayLabels": ["percent", "name"], "legend": { "displayMode": "table", "placement": "right", "values": ["value", "percent"] }, "pieType": "donut", "tooltip": { "mode": "single", "sort": "none" } },
       "title": "Volume by Currency (24 h)",
       "type": "piechart",
       "targets": [
@@ -204,7 +218,7 @@
           "datasource": { "type": "grafana-clickhouse-datasource", "uid": "aegispay-clickhouse" },
           "rawSql": "SELECT toStartOfHour(event_time) AS time, currency, sum(amount) AS volume FROM aegispay_analytics.transaction_facts WHERE event_time >= now() - INTERVAL 7 DAY GROUP BY time, currency ORDER BY time",
           "refId": "A",
-          "format": "time_series"
+          "format": "table"
         }
       ]
     }
