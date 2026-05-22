@@ -82,12 +82,16 @@ export function StepStatus() {
       !resolveError.data &&
       !resolveError.isPending
     ) {
+      // Derive a short machine-readable code for the AI:
+      // 1. Use failureCode if present and not the literal string "null"
+      // 2. Otherwise take the first colon-delimited token of failureReason (e.g. "INSUFFICIENT_FUNDS: ..." → "INSUFFICIENT_FUNDS")
+      // 3. Fall back to "UNKNOWN_ERROR"
+      const rawCode = tx.failureCode && tx.failureCode !== 'null' ? tx.failureCode : null
+      const derivedCode = tx.failureReason
+        ? tx.failureReason.split(':')[0].trim() || 'UNKNOWN_ERROR'
+        : 'UNKNOWN_ERROR'
       resolveError.mutate({
-        // Prefer machine-readable failureCode; fall back to last segment after ':'
-        errorCode:    tx.failureCode ??
-                      (tx.failureReason.includes(':')
-                        ? tx.failureReason.split(':').pop()!.trim()
-                        : tx.failureReason),
+        errorCode:    rawCode ?? derivedCode,
         errorMessage: tx.failureReason,
       })
     }
@@ -180,9 +184,11 @@ export function StepStatus() {
               <p className="text-sm text-amber-800 leading-relaxed">
                 {resolveError.data.resolution}
               </p>
-              <p className="font-mono text-xs text-amber-600">
-                Code: {resolveError.data.errorCode}
-              </p>
+              {resolveError.data.errorCode && resolveError.data.errorCode !== 'null' && (
+                <p className="font-mono text-xs text-amber-600">
+                  Code: {resolveError.data.errorCode}
+                </p>
+              )}
             </div>
           ) : tx.failureReason ? (
             <p className="font-mono text-xs text-amber-700">{tx.failureReason}</p>

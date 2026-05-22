@@ -107,3 +107,16 @@ logs/
 *.tmp
 *.bak
 .secrets.bat
+
+
+
+node_modules/
+dist/
+build/
+target/
+.next/
+coverage/
+*.log
+.venv/
+.idea/
+.vscode/
