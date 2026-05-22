@@ -82,12 +82,12 @@ export function TransactionDetailClient({
       !resolveError.data &&
       !resolveError.isPending
     ) {
+      const rawCode = tx.failureCode && tx.failureCode !== 'null' ? tx.failureCode : null
+      const derivedCode = tx.failureReason
+        ? tx.failureReason.split(':')[0].trim() || 'UNKNOWN_ERROR'
+        : 'UNKNOWN_ERROR'
       resolveError.mutate({
-        // Prefer machine-readable failureCode; fall back to text after last ':' in failureReason
-        errorCode:    tx.failureCode ??
-                      (tx.failureReason?.includes(':')
-                        ? tx.failureReason.split(':').pop()!.trim()
-                        : tx.failureReason ?? 'UNKNOWN'),
+        errorCode:    rawCode ?? derivedCode,
         errorMessage: tx.failureReason ?? undefined,
       })
     }
@@ -182,15 +182,16 @@ export function TransactionDetailClient({
               {/* Re-trigger button */}
               {!resolveError.isPending && (
                 <button
-                  onClick={() =>
+                  onClick={() => {
+                    const rawCode = tx.failureCode && tx.failureCode !== 'null' ? tx.failureCode : null
+                    const derivedCode = tx.failureReason
+                      ? tx.failureReason.split(':')[0].trim() || 'UNKNOWN_ERROR'
+                      : 'UNKNOWN_ERROR'
                     resolveError.mutate({
-                      errorCode:    tx.failureCode ??
-                                    (tx.failureReason?.includes(':')
-                                      ? tx.failureReason.split(':').pop()!.trim()
-                                      : tx.failureReason ?? 'UNKNOWN'),
+                      errorCode:    rawCode ?? derivedCode,
                       errorMessage: tx.failureReason ?? undefined,
                     })
-                  }
+                  }}
                   className="flex items-center gap-1 text-xs text-amber-600 hover:text-amber-800"
                 >
                   <RefreshCw className="h-3 w-3" />
@@ -215,9 +216,11 @@ export function TransactionDetailClient({
                 <p className="text-sm text-amber-800 leading-relaxed">
                   {resolveError.data.resolution}
                 </p>
-                <p className="text-xs text-amber-600 font-mono">
-                  Code: {resolveError.data.errorCode}
-                </p>
+                {resolveError.data.errorCode && resolveError.data.errorCode !== 'null' && (
+                  <p className="text-xs text-amber-600 font-mono">
+                    Code: {resolveError.data.errorCode}
+                  </p>
+                )}
               </div>
             ) : tx.failureReason ? (
               <p className="text-sm text-amber-700 font-mono">{tx.failureReason}</p>

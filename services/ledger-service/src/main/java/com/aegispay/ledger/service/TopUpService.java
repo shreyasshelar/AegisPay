@@ -2,6 +2,7 @@ package com.aegispay.ledger.service;
 
 import com.aegispay.common.domain.enums.LedgerEntryType;
 import com.aegispay.ledger.domain.dto.TopUpConfirmRequest;
+import com.aegispay.ledger.domain.dto.TopUpConfirmResponse;
 import com.aegispay.ledger.domain.dto.TopUpIntentRequest;
 import com.aegispay.ledger.domain.dto.TopUpIntentResponse;
 import com.aegispay.ledger.domain.entity.Account;
@@ -33,6 +34,7 @@ public class TopUpService {
 
     private final AccountRepository     accountRepository;
     private final LedgerEntryRepository ledgerEntryRepository;
+    private final ExchangeRateService   exchangeRateService;
 
     @Value("${stripe.secret-key}")
     private String stripeSecretKey;
@@ -90,7 +92,7 @@ public class TopUpService {
      * then credits the user's ledger account. Idempotent — safe to call twice.
      */
     @Transactional
-    public void confirmTopUp(UUID userId, TopUpConfirmRequest request) {
+    public TopUpConfirmResponse confirmTopUp(UUID userId, TopUpConfirmRequest request) {
         PaymentIntent intent = retrieveIntent(request.paymentIntentId());
 
         // Verify intent belongs to this user (metadata check)
@@ -121,42 +123,59 @@ public class TopUpService {
                     "PaymentIntent status is '" + intent.getStatus() + "', expected 'succeeded'");
         }
 
-        // Idempotency: check if this intent has already been credited
-        if (ledgerEntryRepository.existsByIdempotencyKey(request.paymentIntentId())) {
-            log.info("Top-up already credited for pi={} — skipping", request.paymentIntentId());
-            return;
+        // Idempotency: return existing entry if already credited
+        var existing = ledgerEntryRepository.findByIdempotencyKey(request.paymentIntentId());
+        if (existing.isPresent()) {
+            log.info("Top-up already credited for pi={} — returning cached result", request.paymentIntentId());
+            LedgerEntry e = existing.get();
+            Account acct = accountRepository.findById(e.getAccountId()).orElseThrow();
+            return new TopUpConfirmResponse("SUCCEEDED", e.getId(), e.getAmount(), acct.getCurrency());
         }
 
-        // Amount in base units → decimal
-        String currency = intent.getCurrency().toUpperCase();
-        BigDecimal amount = BigDecimal.valueOf(intent.getAmount())
+        // Amount in base units → decimal (payment currency)
+        String paymentCurrency = intent.getCurrency().toUpperCase();
+        BigDecimal paymentAmount = BigDecimal.valueOf(intent.getAmount())
                 .divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP);
 
-        // Locate or create the account for this currency
+        // Find account — prefer matching currency, fall back to user's primary account
         Account account = accountRepository
-                .findByUserIdAndCurrency(userId, currency)
+                .findByUserIdAndCurrency(userId, paymentCurrency)
                 .or(() -> accountRepository.findByUserId(userId).stream().findFirst())
                 .orElseThrow(() -> new AccountNotFoundException(userId));
+
+        String accountCurrency = account.getCurrency();
+
+        // Convert to account's native currency via Frankfurter live rates (Redis-cached 1 h)
+        BigDecimal creditAmount = exchangeRateService.convert(paymentAmount, paymentCurrency, accountCurrency);
+        if (!paymentCurrency.equals(accountCurrency)) {
+            log.info("Top-up FX: {} {} → {} {} (pi={})",
+                    paymentAmount, paymentCurrency, creditAmount, accountCurrency, request.paymentIntentId());
+        }
 
         // Lock row for update
         account = accountRepository.findByIdForUpdate(account.getId()).orElseThrow();
 
         BigDecimal balanceBefore = account.getAvailableBalance();
-        account.setAvailableBalance(balanceBefore.add(amount));
+        account.setAvailableBalance(balanceBefore.add(creditAmount));
         accountRepository.save(account);
 
-        ledgerEntryRepository.save(LedgerEntry.builder()
+        LedgerEntry entry = ledgerEntryRepository.save(LedgerEntry.builder()
                 .accountId(account.getId())
-                .transactionId(null)          // top-ups are not P2P transactions
+                .transactionId(null)
                 .entryType(LedgerEntryType.CREDIT)
-                .amount(amount)
+                .amount(creditAmount)
                 .balanceBefore(balanceBefore)
                 .balanceAfter(account.getAvailableBalance())
                 .idempotencyKey(request.paymentIntentId())
-                .description("Wallet top-up via Stripe " + request.paymentIntentId())
+                .description("Wallet top-up via Stripe " + request.paymentIntentId()
+                        + (paymentCurrency.equals(accountCurrency) ? ""
+                           : " (" + paymentAmount + " " + paymentCurrency + ")"))
                 .build());
 
-        log.info("Top-up credited: user={} pi={} {} {}", userId, request.paymentIntentId(), amount, currency);
+        log.info("Top-up credited: user={} pi={} {} {} (paid {} {})",
+                userId, request.paymentIntentId(), creditAmount, accountCurrency, paymentAmount, paymentCurrency);
+
+        return new TopUpConfirmResponse("SUCCEEDED", entry.getId(), creditAmount, accountCurrency);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

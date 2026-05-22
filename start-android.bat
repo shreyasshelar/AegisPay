@@ -41,11 +41,19 @@ REM ARGUMENTS
 REM   %1 = optional LAN IP of this machine (physical device)
 REM =========================================================
 
+REM DEVICE_IP is the address the Android device uses to reach this machine.
+REM   Emulator : 10.0.2.2  (fixed alias for host loopback)
+REM   Physical : host machine's LAN IP — use DEV_HOST from .secrets.bat or pass as %1
 set PHYSICAL_DEVICE=0
 set DEVICE_IP=10.0.2.2
 IF NOT "%1"=="" (
+    REM Explicit IP passed on command line takes highest priority
     set PHYSICAL_DEVICE=1
     set DEVICE_IP=%1
+) ELSE IF NOT "!DEV_HOST!"=="" IF NOT "!DEV_HOST!"=="localhost" (
+    REM DEV_HOST set to a LAN IP or domain in .secrets.bat → physical device mode
+    set PHYSICAL_DEVICE=1
+    set DEVICE_IP=!DEV_HOST!
 )
 
 set API_BASE_URL=http://!DEVICE_IP!:8080

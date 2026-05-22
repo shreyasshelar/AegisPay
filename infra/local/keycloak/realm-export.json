@@ -1,4 +1,4 @@
-{
+﻿{
   "id" : "096e754a-80a3-4282-ad9f-b05dcd19b1f5",
   "realm" : "aegispay",
   "displayName" : "AegisPay",
@@ -1133,7 +1133,7 @@
     "config" : {
       "syncMode" : "IMPORT",
       "clientSecret" : "**********",
-      "clientId" : "placeholder"
+      "clientId" : "807559318432-bm5598bns9o0lru85p4sm9dlcq399df3.apps.googleusercontent.com"
     }
   }, {
     "alias" : "microsoft",
@@ -1151,7 +1151,7 @@
     "config" : {
       "syncMode" : "IMPORT",
       "clientSecret" : "**********",
-      "clientId" : "placeholder",
+      "clientId" : "807559318432-bm5598bns9o0lru85p4sm9dlcq399df3.apps.googleusercontent.com",
       "tenant" : "common"
     }
   } ],
@@ -1169,7 +1169,7 @@
     "id" : "e6da3819-0459-4954-ae5e-144ab69a51bc",
     "name" : "microsoft-assign-realm-role",
     "identityProviderAlias" : "microsoft",
-    "identityProviderMapper" : "hardcoded-role-idp-mapper",
+    "identityProviderMapper" : "oidc-hardcoded-role-idp-mapper",
     "config" : {
       "syncMode" : "INHERIT",
       "role" : "CUSTOMER"
@@ -1208,7 +1208,7 @@
     "id" : "2bda2106-db9e-479c-b1b1-6f35e07fa141",
     "name" : "google-assign-realm-role",
     "identityProviderAlias" : "google",
-    "identityProviderMapper" : "hardcoded-role-idp-mapper",
+    "identityProviderMapper" : "oidc-hardcoded-role-idp-mapper",
     "config" : {
       "syncMode" : "INHERIT",
       "role" : "CUSTOMER"
@@ -1519,7 +1519,7 @@
   }, {
     "id" : "1984fc87-73a5-4acf-ae3f-b2f4dd6844a7",
     "alias" : "aegispay-social-first-login",
-    "description" : "First-broker-login for social IdPs Ã¢Â€Â” skips profile review, auto-links on email match",
+    "description" : "First-broker-login for social IdPs ÃƒÂ¢Ã‚â‚¬Ã‚â€ skips profile review, auto-links on email match",
     "providerId" : "basic-flow",
     "topLevel" : true,
     "builtIn" : false,

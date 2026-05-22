@@ -150,10 +150,11 @@ REM =========================================================
 
 set NODE_OPTIONS=--dns-result-order=ipv4first
 
-REM ── LAN IP — used when testing the web app from another device on the same network.
-REM    Browser must reach Keycloak and the WebSocket directly on this IP.
+REM ── Dev host — set DEV_HOST in .secrets.bat to your LAN IP, localhost, or domain.
+REM    Browser must reach Keycloak and the WebSocket directly on this host.
 REM    Server-to-server calls (api-gateway → downstream, Next.js → api-gateway) stay on localhost.
-set LAN_IP=192.168.29.34
+IF "!DEV_HOST!"=="" set DEV_HOST=localhost
+set LAN_IP=!DEV_HOST!
 
 REM ── PostgreSQL (host port 5433 maps to container port 5432) ──────────────
 set DB_HOST=localhost
@@ -552,7 +553,7 @@ start "ledger-service" /MIN cmd /c ^
 "java -DSTRIPE_SECRET_KEY=!STRIPE_SECRET_KEY! -DSTRIPE_WEBHOOK_SECRET=!STRIPE_WEBHOOK_SECRET! -jar services\ledger-service\target\ledger-service-1.0.0-SNAPSHOT.jar > logs\ledger-service.log 2>&1"
 
 start "payment-orchestrator" /MIN cmd /c ^
-"java -jar services\payment-orchestrator\target\payment-orchestrator-1.0.0-SNAPSHOT.jar > logs\payment-orchestrator.log 2>&1"
+"java -Djava.net.preferIPv4Stack=true -DSTRIPE_SECRET_KEY=!STRIPE_SECRET_KEY! -DSTRIPE_WEBHOOK_SECRET=!STRIPE_WEBHOOK_SECRET! -jar services\payment-orchestrator\target\payment-orchestrator-1.0.0-SNAPSHOT.jar > logs\payment-orchestrator.log 2>&1"
 
 start "risk-engine" /MIN cmd /c ^
 "java -DAI_PLATFORM_URL=http://localhost:8091 -jar services\risk-engine\target\risk-engine-1.0.0-SNAPSHOT.jar > logs\risk-engine.log 2>&1"

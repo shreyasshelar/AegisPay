@@ -114,11 +114,11 @@ resilience4j:
   retry:
     instances:
       rag-pipeline:
-        max-attempts: 3
-        wait-duration: 1s
-        enable-exponential-backoff: true
-        exponential-backoff-multiplier: 2
-        exponential-max-wait-duration: 10s
+        max-attempts: 2
+        # 30s: outlasts OpenRouter's Retry-After (typically 20-21s on free tier 429s).
+        # Only 1 retry — if it fails twice the CB fallback fires rather than blocking longer.
+        wait-duration: 30s
+        enable-exponential-backoff: false
         retry-exceptions:
           - java.lang.RuntimeException
       # KYC vision calls — 2 attempts, fast backoff (vision API is slow; don't pile up)

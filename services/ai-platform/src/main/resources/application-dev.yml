@@ -27,16 +27,16 @@ spring:
       api-key: "not-used-on-dev"
 
     # ── OpenRouter via OpenAI-compatible adapter ───────────────────────────────
+    # Spring AI 1.0 appends /v1/chat/completions to base-url, so strip the /v1
+    # here to avoid https://openrouter.ai/api/v1/v1/chat/completions (404).
     openai:
-      base-url: https://openrouter.ai/api/v1
+      base-url: https://openrouter.ai/api
       # OPENROUTER_API_KEY injected from Vault via ESO → K8s secret aegispay-ai-secret
       api-key: ${OPENROUTER_API_KEY}
 
       chat:
         options:
-          # Primary model: Llama 3.1 8B free — good for RAG, fraud explanation,
-          # error resolution, incident triage (text tasks)
-          model: meta-llama/llama-3.1-8b-instruct:free
+          model: nvidia/nemotron-3-super-120b-a12b:free
           max-tokens: 2048
           temperature: 0.1
 
@@ -63,9 +63,7 @@ aegispay:
     provider: openrouter
 
     models:
-      # Fraud copilot, error resolution, incident triage — text tasks
-      chat: "meta-llama/llama-3.1-8b-instruct:free"
-      # KYC document OCR — vision task
+      chat: "nvidia/nemotron-3-super-120b-a12b:free"
       vision: "meta-llama/llama-3.2-11b-vision-instruct:free"
       # Embeddings — local via Ollama if running, else hash fallback
       embedding: "nomic-embed-text"

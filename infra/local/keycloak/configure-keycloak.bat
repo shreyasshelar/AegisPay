@@ -1,13 +1,17 @@
 @echo off
 setlocal EnableDelayedExpansion
 
+REM Load local secrets — picks up DEV_HOST (and OAuth creds) when run standalone
+SET SCRIPT_ROOT=%~dp0..\..\
+IF EXIST "%SCRIPT_ROOT%.secrets.bat" call "%SCRIPT_ROOT%.secrets.bat"
+
 set KC_URL=http://localhost:8180
 set REALM=aegispay
 set ADMIN_USER=admin
 set ADMIN_PASS=admin
 
-REM LAN_IP is inherited from start-aegispay.bat (set to machine's LAN IP for remote browser access)
-REM Falls back to localhost if run standalone
+REM LAN_IP: prefer value inherited from start-aegispay.bat, then DEV_HOST from .secrets.bat, then localhost
+IF "!LAN_IP!"=="" IF NOT "!DEV_HOST!"=="" set LAN_IP=!DEV_HOST!
 IF "!LAN_IP!"=="" set LAN_IP=localhost
 
 REM UUIDs must match the values seeded into aegispay_users / aegispay_ledger by start-aegispay.bat
@@ -241,6 +245,44 @@ curl -s -X PUT "%KC_URL%/admin/realms/%REALM%/clients/!IOS_CLIENT_ID!" ^
   -d "{\"redirectUris\":[\"aegispay://oauth/callback\",\"https://aegispay.app/auth/callback\"],\"webOrigins\":[\"*\"]}" ^
   >nul 2>&1
 echo   LAN redirect URIs registered (ios)
+
+REM =========================================================
+REM 6. PATCH SOCIAL IDP CLIENT SECRETS
+REM    realm-export.json cannot persist plaintext secrets — they
+REM    come from .secrets.bat (GOOGLE_CLIENT_SECRET / MICROSOFT_CLIENT_SECRET)
+REM    and are injected via REST after every Keycloak import.
+REM =========================================================
+
+echo.
+echo [6/6] Patching social login client secrets ...
+
+IF "!GOOGLE_CLIENT_SECRET!"=="" (
+    echo   GOOGLE_CLIENT_SECRET not set - skipping Google IDP
+) ELSE (
+    curl -s "%KC_URL%/admin/realms/%REALM%/identity-provider/instances/google" ^
+      -H "Authorization: Bearer !TOKEN!" -o google_idp.json
+    python -c "import json; d=json.load(open('google_idp.json')); d['config']['clientSecret']='!GOOGLE_CLIENT_SECRET!'; open('google_idp_updated.json','w').write(json.dumps(d))"
+    curl -s -X PUT "%KC_URL%/admin/realms/%REALM%/identity-provider/instances/google" ^
+      -H "Authorization: Bearer !TOKEN!" ^
+      -H "Content-Type: application/json" ^
+      --data-binary @google_idp_updated.json >nul 2>&1
+    del /q google_idp.json google_idp_updated.json >nul 2>&1
+    echo   Google IDP secret updated
+)
+
+IF "!MICROSOFT_CLIENT_SECRET!"=="" (
+    echo   MICROSOFT_CLIENT_SECRET not set - skipping Microsoft IDP
+) ELSE (
+    curl -s "%KC_URL%/admin/realms/%REALM%/identity-provider/instances/microsoft" ^
+      -H "Authorization: Bearer !TOKEN!" -o microsoft_idp.json
+    python -c "import json; d=json.load(open('microsoft_idp.json')); d['config']['clientSecret']='!MICROSOFT_CLIENT_SECRET!'; open('microsoft_idp_updated.json','w').write(json.dumps(d))"
+    curl -s -X PUT "%KC_URL%/admin/realms/%REALM%/identity-provider/instances/microsoft" ^
+      -H "Authorization: Bearer !TOKEN!" ^
+      -H "Content-Type: application/json" ^
+      --data-binary @microsoft_idp_updated.json >nul 2>&1
+    del /q microsoft_idp.json microsoft_idp_updated.json >nul 2>&1
+    echo   Microsoft IDP secret updated
+)
 
 REM =========================================================
 REM CLEANUP

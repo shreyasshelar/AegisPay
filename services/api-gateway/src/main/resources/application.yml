@@ -12,7 +12,10 @@ spring:
         - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
       httpclient:
         connect-timeout: ${GATEWAY_CONNECT_TIMEOUT_MS:3000}
-        response-timeout: ${GATEWAY_RESPONSE_TIMEOUT_MS:30000}
+        # 120s covers LLM latency on AI routes (OpenRouter free tier: 30-90s).
+        # Healthy microservice routes respond in <1s so this only affects truly hung requests.
+        # Use explicit 's' suffix — bare integers are parsed as nanoseconds by Spring Duration.
+        response-timeout: 120s
         pool:
           type: disabled
 
@@ -90,15 +93,21 @@ spring:
             slowCallDurationThreshold: 5s
             slowCallRateThreshold: 80
 
-          # AI platform calls invoke Claude LLM — allow longer slow-call threshold
+          # AI platform — loose thresholds because:
+          #   1. LLM calls are inherently slow (OpenRouter free tier: 30-90s)
+          #   2. AI platform has its own internal CB that returns 200 fallback on failure
+          #      so 5xx from the AI platform is rare; only a hard crash opens this CB.
+          #   slowCallRateThreshold: 100 → slow calls never count toward opening the CB.
+          #   failureRateThreshold: 80 → needs 80% true errors (5xx/timeout) to open.
+          #   waitDurationInOpenState: 10s → recover fast when the platform comes back.
           ai-platform:
-            slidingWindowSize: 10
-            minimumNumberOfCalls: 5
-            failureRateThreshold: 50
-            waitDurationInOpenState: 30s
+            slidingWindowSize: 20
+            minimumNumberOfCalls: 10
+            failureRateThreshold: 80
+            waitDurationInOpenState: 10s
             permittedNumberOfCallsInHalfOpenState: 3
-            slowCallDurationThreshold: 25s
-            slowCallRateThreshold: 80
+            slowCallDurationThreshold: 90s
+            slowCallRateThreshold: 100
 
   security:
     oauth2:

@@ -4,6 +4,7 @@ import com.aegispay.common.domain.dto.ApiResponse;
 import com.aegispay.ledger.domain.dto.AccountResponse;
 import com.aegispay.ledger.domain.dto.LedgerEntryResponse;
 import com.aegispay.ledger.domain.dto.TopUpConfirmRequest;
+import com.aegispay.ledger.domain.dto.TopUpConfirmResponse;
 import com.aegispay.ledger.domain.dto.TopUpIntentRequest;
 import com.aegispay.ledger.domain.dto.TopUpIntentResponse;
 import com.aegispay.ledger.service.LedgerService;
@@ -79,13 +80,13 @@ public class LedgerController {
      */
     @PostMapping("/topup/confirm")
     @PreAuthorize("hasRole('CUSTOMER')")
-    public ResponseEntity<ApiResponse<Void>> confirmTopUp(
+    public ResponseEntity<ApiResponse<TopUpConfirmResponse>> confirmTopUp(
             @AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody TopUpConfirmRequest request) {
         UUID userId = UUID.fromString(jwt.getClaimAsString("aegispay_user_id") != null
                 ? jwt.getClaimAsString("aegispay_user_id")
                 : jwt.getSubject());
-        topUpService.confirmTopUp(userId, request);
-        return ResponseEntity.ok(ApiResponse.ok(null));
+        TopUpConfirmResponse response = topUpService.confirmTopUp(userId, request);
+        return ResponseEntity.ok(ApiResponse.ok(response));
     }
 }
