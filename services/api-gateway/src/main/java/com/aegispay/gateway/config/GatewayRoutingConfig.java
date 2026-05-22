@@ -68,12 +68,11 @@ public class GatewayRoutingConfig {
                     .circuitBreaker(cb -> cb
                         .setName("transaction-service")
                         .setFallbackUri("forward:/fallback/service-unavailable"))
-                    // POST is safe to retry because transaction-service is idempotency-key protected
+                    // Only retry GET — POST retries cause idempotency key collision (409)
+                    // which the CB records as failure and creates a retry→503→retry loop.
                     .retry(retryConfig -> retryConfig
                         .setRetries(2)
-                        .setMethods(
-                            org.springframework.http.HttpMethod.GET,
-                            org.springframework.http.HttpMethod.POST)
+                        .setMethods(org.springframework.http.HttpMethod.GET)
                         .setStatuses(
                             org.springframework.http.HttpStatus.BAD_GATEWAY,
                             org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE))

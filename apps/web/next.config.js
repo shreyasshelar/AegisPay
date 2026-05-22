@@ -85,6 +85,17 @@ const nextConfig = {
 
   reactStrictMode: true,
 
+  // Allow Next.js dev server to accept requests from LAN IP without
+  // treating them as cross-origin (which blocks state cookie transmission).
+  allowedDevOrigins: (() => {
+    const origins = []
+    const nextAuthUrl = process.env.NEXTAUTH_URL
+    if (nextAuthUrl) {
+      try { origins.push(new URL(nextAuthUrl).hostname) } catch {}
+    }
+    return origins.length ? origins : ['192.168.29.34']
+  })(),
+
   experimental: {
     serverActions: {
       // Allow server actions from localhost and any LAN IP configured via NEXTAUTH_URL

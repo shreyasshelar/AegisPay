@@ -209,6 +209,8 @@ services:
       GF_INSTALL_PLUGINS: grafana-clickhouse-datasource
       GF_PATHS_PROVISIONING: /etc/grafana/provisioning
       GF_SERVER_HTTP_PORT: "3100"
+      SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-https://hooks.slack.com/services/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}
+      OPS_EMAIL: ${OPS_EMAIL:-ops@aegispay.shreyasshelar.uk}
     ports:
       - "3100:3100"   # avoids clash with Next.js on 3000
     volumes:
