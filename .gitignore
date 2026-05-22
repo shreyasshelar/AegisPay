@@ -106,3 +106,4 @@ failsafe-reports/
 logs/
 *.tmp
 *.bak
+.secrets.bat
