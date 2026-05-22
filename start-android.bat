@@ -22,15 +22,14 @@ REM   - JDK 17 or 21 on PATH  (Gradle uses it — not the Java 21 Maven check)
 REM =========================================================
 
 
-REM Windows — in cmd or System Environment Variables
+REM Load local secrets (gitignored) — copy .secrets.bat.template to .secrets.bat and fill in your values
+IF EXIST "%~dp0.secrets.bat" call "%~dp0.secrets.bat"
 
-set GOOGLE_CLIENT_ID=
-
-set GOOGLE_CLIENT_SECRET=
-
-set MICROSOFT_CLIENT_ID=
-
-set MICROSOFT_CLIENT_SECRET=
+REM Defaults to empty — set via .secrets.bat or Windows system environment variables
+IF NOT DEFINED GOOGLE_CLIENT_ID     set GOOGLE_CLIENT_ID=
+IF NOT DEFINED GOOGLE_CLIENT_SECRET set GOOGLE_CLIENT_SECRET=
+IF NOT DEFINED MICROSOFT_CLIENT_ID  set MICROSOFT_CLIENT_ID=
+IF NOT DEFINED MICROSOFT_CLIENT_SECRET set MICROSOFT_CLIENT_SECRET=
 
 echo.
 echo =========================================================
