@@ -1,0 +1,2 @@
+ALTER TABLE risk_cases
+    ADD COLUMN IF NOT EXISTS payee_id UUID;

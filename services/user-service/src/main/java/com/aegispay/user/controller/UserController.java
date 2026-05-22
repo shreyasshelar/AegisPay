@@ -85,6 +85,22 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.ok(response));
     }
 
+    /** Internal service-to-service: returns just the KYC status for the given user. */
+    @GetMapping("/{userId}/kyc-status")
+    @PreAuthorize("hasAnyRole('BACK_OFFICE', 'ADMIN', 'MERCHANT_OPS') or " +
+                  "#jwt.getClaimAsString('aegispay_user_id') == #userId.toString() or " +
+                  "#jwt.subject == #userId.toString()")
+    public ResponseEntity<ApiResponse<java.util.Map<String, String>>> getKycStatus(
+            @PathVariable UUID userId,
+            @AuthenticationPrincipal Jwt jwt) {
+        String aeId = jwt.getClaimAsString("aegispay_user_id");
+        boolean isSelf = userId.toString().equals(aeId) || userId.toString().equals(jwt.getSubject());
+        UserResponse user = isSelf
+                ? userService.getByExternalId(userId.toString())
+                : userService.getById(userId);
+        return ResponseEntity.ok(ApiResponse.ok(java.util.Map.of("kycStatus", user.kycStatus().name())));
+    }
+
     /** Submit a KYC document for analysis. The caller must be the document owner or an ADMIN. */
     @PostMapping("/{userId}/kyc/documents")
     public ResponseEntity<ApiResponse<KycStatusResponse>> submitKycDocument(

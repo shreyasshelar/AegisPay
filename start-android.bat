@@ -21,6 +21,17 @@ REM   - adb.exe on PATH or reachable via %ANDROID_HOME%\platform-tools
 REM   - JDK 17 or 21 on PATH  (Gradle uses it — not the Java 21 Maven check)
 REM =========================================================
 
+
+REM Windows — in cmd or System Environment Variables
+
+set GOOGLE_CLIENT_ID=
+
+set GOOGLE_CLIENT_SECRET=
+
+set MICROSOFT_CLIENT_ID=
+
+set MICROSOFT_CLIENT_SECRET=
+
 echo.
 echo =========================================================
 echo   AegisPay — Android Build ^& Run  (Windows)
@@ -53,13 +64,13 @@ REM ── Google OAuth (Keycloak social login) ──────────�
 REM Set GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET in your environment.
 REM   https://console.cloud.google.com/apis/credentials
 IF "%GOOGLE_CLIENT_ID%"==""     echo WARNING: GOOGLE_CLIENT_ID not set — Google login disabled
-IF "%GOOGLE_CLIENT_SECRET%"=""  echo WARNING: GOOGLE_CLIENT_SECRET not set — Google login disabled
+IF "%GOOGLE_CLIENT_SECRET%"==""  echo WARNING: GOOGLE_CLIENT_SECRET not set — Google login disabled
 
 REM ── Microsoft OAuth (Keycloak social login) ───────────────
 REM Set MICROSOFT_CLIENT_ID / MICROSOFT_CLIENT_SECRET in your environment.
 REM   https://portal.azure.com/ -> App Registrations -> Certificates and Secrets
 IF "%MICROSOFT_CLIENT_ID%"==""    echo WARNING: MICROSOFT_CLIENT_ID not set — Microsoft login disabled
-IF "%MICROSOFT_CLIENT_SECRET%"="" echo WARNING: MICROSOFT_CLIENT_SECRET not set — Microsoft login disabled
+IF "%MICROSOFT_CLIENT_SECRET%"=="" echo WARNING: MICROSOFT_CLIENT_SECRET not set — Microsoft login disabled
 IF "%MICROSOFT_TENANT_ID%"==""    set MICROSOFT_TENANT_ID=common
 
 REM =========================================================
