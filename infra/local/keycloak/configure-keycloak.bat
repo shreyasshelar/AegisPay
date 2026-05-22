@@ -247,41 +247,54 @@ curl -s -X PUT "%KC_URL%/admin/realms/%REALM%/clients/!IOS_CLIENT_ID!" ^
 echo   LAN redirect URIs registered (ios)
 
 REM =========================================================
-REM 6. PATCH SOCIAL IDP CLIENT SECRETS
-REM    realm-export.json cannot persist plaintext secrets — they
-REM    come from .secrets.bat (GOOGLE_CLIENT_SECRET / MICROSOFT_CLIENT_SECRET)
-REM    and are injected via REST after every Keycloak import.
+REM 6. CONFIGURE SOCIAL IDPs  (clientId + clientSecret + correct first-broker-login flow)
+REM
+REM    realm-export.json ships with empty clientId values so no credentials
+REM    end up in VCS.  This step reads the current IDP config from Keycloak,
+REM    injects the real values from .secrets.bat, and PUTs the full object back.
+REM
+REM    ALSO ensures firstBrokerLoginFlowAlias = aegispay-social-first-login so
+REM    social login auto-creates/auto-links accounts without demanding a
+REM    Keycloak password (the default first-broker-login flow does that).
 REM =========================================================
 
 echo.
-echo [6/6] Patching social login client secrets ...
+echo [6/6] Configuring social login IDPs (clientId + secret + login flow) ...
 
-IF "!GOOGLE_CLIENT_SECRET!"=="" (
-    echo   GOOGLE_CLIENT_SECRET not set - skipping Google IDP
+REM ── Google ────────────────────────────────────────────────────────────────────
+IF "!GOOGLE_CLIENT_ID!"=="" (
+    echo   WARNING: GOOGLE_CLIENT_ID not set — Google social login will be disabled
 ) ELSE (
     curl -s "%KC_URL%/admin/realms/%REALM%/identity-provider/instances/google" ^
       -H "Authorization: Bearer !TOKEN!" -o google_idp.json
-    python -c "import json; d=json.load(open('google_idp.json')); d['config']['clientSecret']='!GOOGLE_CLIENT_SECRET!'; open('google_idp_updated.json','w').write(json.dumps(d))"
+
+    python -c "import json; d=json.load(open('google_idp.json')); d['config']['clientId']='!GOOGLE_CLIENT_ID!'; d['config']['clientSecret']='!GOOGLE_CLIENT_SECRET!'; d['firstBrokerLoginFlowAlias']='aegispay-social-first-login'; open('google_idp_updated.json','w').write(json.dumps(d))"
+
     curl -s -X PUT "%KC_URL%/admin/realms/%REALM%/identity-provider/instances/google" ^
       -H "Authorization: Bearer !TOKEN!" ^
       -H "Content-Type: application/json" ^
       --data-binary @google_idp_updated.json >nul 2>&1
+
     del /q google_idp.json google_idp_updated.json >nul 2>&1
-    echo   Google IDP secret updated
+    echo   Google IDP configured (clientId, secret, aegispay-social-first-login flow)
 )
 
-IF "!MICROSOFT_CLIENT_SECRET!"=="" (
-    echo   MICROSOFT_CLIENT_SECRET not set - skipping Microsoft IDP
+REM ── Microsoft ─────────────────────────────────────────────────────────────────
+IF "!MICROSOFT_CLIENT_ID!"=="" (
+    echo   WARNING: MICROSOFT_CLIENT_ID not set — Microsoft social login will be disabled
 ) ELSE (
     curl -s "%KC_URL%/admin/realms/%REALM%/identity-provider/instances/microsoft" ^
       -H "Authorization: Bearer !TOKEN!" -o microsoft_idp.json
-    python -c "import json; d=json.load(open('microsoft_idp.json')); d['config']['clientSecret']='!MICROSOFT_CLIENT_SECRET!'; open('microsoft_idp_updated.json','w').write(json.dumps(d))"
+
+    python -c "import json; d=json.load(open('microsoft_idp.json')); d['config']['clientId']='!MICROSOFT_CLIENT_ID!'; d['config']['clientSecret']='!MICROSOFT_CLIENT_SECRET!'; d['config']['tenant']='common'; d['firstBrokerLoginFlowAlias']='aegispay-social-first-login'; open('microsoft_idp_updated.json','w').write(json.dumps(d))"
+
     curl -s -X PUT "%KC_URL%/admin/realms/%REALM%/identity-provider/instances/microsoft" ^
       -H "Authorization: Bearer !TOKEN!" ^
       -H "Content-Type: application/json" ^
       --data-binary @microsoft_idp_updated.json >nul 2>&1
+
     del /q microsoft_idp.json microsoft_idp_updated.json >nul 2>&1
-    echo   Microsoft IDP secret updated
+    echo   Microsoft IDP configured (clientId, secret, aegispay-social-first-login flow)
 )
 
 REM =========================================================
