@@ -14,8 +14,7 @@ spring:
         connect-timeout: ${GATEWAY_CONNECT_TIMEOUT_MS:3000}
         response-timeout: ${GATEWAY_RESPONSE_TIMEOUT_MS:30000}
         pool:
-          type: elastic
-          max-idle-time: 30s
+          type: disabled
 
     # ── Spring Cloud CircuitBreaker (Resilience4j) ──────────────────────────────
     # THIS is the namespace the Gateway circuitBreaker() filter reads.
@@ -47,11 +46,10 @@ spring:
 
           transaction-service:
             slidingWindowSize: 20
-            minimumNumberOfCalls: 5
+            minimumNumberOfCalls: 10
             failureRateThreshold: 60
             waitDurationInOpenState: 15s
             permittedNumberOfCallsInHalfOpenState: 5
-            # POST is idempotency-key protected, so retries are safe
             slowCallDurationThreshold: 10s
             slowCallRateThreshold: 80
 
@@ -125,7 +123,7 @@ server:
 
 management:
   server:
-    port: ${MANAGEMENT_PORT:8090}   # ③ actuator binds to a separate port not exposed by Ingress/LB
+    port: ${MANAGEMENT_PORT:8190}   # ③ actuator binds to a separate port not exposed by Ingress/LB
   endpoints:
     web:
       exposure:

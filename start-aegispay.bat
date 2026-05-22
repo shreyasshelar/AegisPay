@@ -26,6 +26,16 @@ REM   - At least one AVD created in Android Studio > Device Manager
 REM   - adb.exe on PATH or reachable via %ANDROID_HOME%\platform-tools
 REM =========================================================
 
+REM Windows — in cmd or System Environment Variables
+
+set GOOGLE_CLIENT_ID=
+
+set GOOGLE_CLIENT_SECRET=
+
+set MICROSOFT_CLIENT_ID=
+
+set MICROSOFT_CLIENT_SECRET=
+
 echo =========================================================
 echo   AegisPay Bootstrap  (Windows)
 echo =========================================================
@@ -205,13 +215,13 @@ REM Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in your environment before
 REM running this script.  Get them from:
 REM   https://console.cloud.google.com/apis/credentials
 IF "%GOOGLE_CLIENT_ID%"==""     echo WARNING: GOOGLE_CLIENT_ID not set — Google social login will be disabled
-IF "%GOOGLE_CLIENT_SECRET%"=""  echo WARNING: GOOGLE_CLIENT_SECRET not set — Google social login will be disabled
+IF "%GOOGLE_CLIENT_SECRET%"==""  echo WARNING: GOOGLE_CLIENT_SECRET not set — Google social login will be disabled
 
 REM ── Microsoft OAuth (Keycloak social login) ───────────────────────────────
 REM Set MICROSOFT_CLIENT_ID and MICROSOFT_CLIENT_SECRET in your environment.
 REM   https://portal.azure.com/ -> App Registrations -> your app -> Certificates and Secrets
 IF "%MICROSOFT_CLIENT_ID%"==""    echo WARNING: MICROSOFT_CLIENT_ID not set — Microsoft social login will be disabled
-IF "%MICROSOFT_CLIENT_SECRET%"="" echo WARNING: MICROSOFT_CLIENT_SECRET not set — Microsoft social login will be disabled
+IF "%MICROSOFT_CLIENT_SECRET%"=="" echo WARNING: MICROSOFT_CLIENT_SECRET not set — Microsoft social login will be disabled
 IF "%MICROSOFT_TENANT_ID%"==""    set MICROSOFT_TENANT_ID=common
 IF "%SLACK_WEBHOOK_URL%"=="" set SLACK_WEBHOOK_URL=https://hooks.slack.com/services/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
 IF "%FAST2SMS_API_KEY%"=="" set FAST2SMS_API_KEY=ZNd8Xx4lqrERbj67Unwi1LHvB0smOFDayTCkgczIYKM9oPAfV2jDTskbhao0QZ3luvA7VfiLdWM2KNOe
@@ -534,25 +544,25 @@ start "api-gateway" /MIN cmd /c ^
 "java -DUSER_SERVICE_URI=http://localhost:8081 -DTRANSACTION_SERVICE_URI=http://localhost:8082 -DLEDGER_SERVICE_URI=http://localhost:8083 -DORCHESTRATOR_SERVICE_URI=http://localhost:8084 -DRISK_ENGINE_URI=http://localhost:8085 -DNOTIFICATION_SERVICE_URI=http://localhost:8086 -DAI_PLATFORM_URI=http://localhost:8091 -DOAUTH2_PRIMARY_ISSUER_URI=http://!LAN_IP!:8180/realms/aegispay -DOAUTH2_ISSUER_KEYCLOAK=http://!LAN_IP!:8180/realms/aegispay -DOAUTH2_ISSUER_KEYCLOAK_LOCAL=http://localhost:8180/realms/aegispay -DCORS_ALLOWED_ORIGIN_1=http://!LAN_IP!:3000 -Dspring.data.redis.url=redis://default:aegispay_dev@localhost:6379 -jar services\api-gateway\target\api-gateway-1.0.0-SNAPSHOT.jar > logs\api-gateway.log 2>&1"
 
 start "user-service" /MIN cmd /c ^
-"java -jar services\user-service\target\user-service-1.0.0-SNAPSHOT.jar > logs\user-service.log 2>&1"
+"java -DAI_PLATFORM_URL=http://localhost:8091 -jar services\user-service\target\user-service-1.0.0-SNAPSHOT.jar > logs\user-service.log 2>&1"
 
 start "transaction-service" /MIN cmd /c ^
-"java -jar services\transaction-service\target\transaction-service-1.0.0-SNAPSHOT.jar > logs\transaction-service.log 2>&1"
+"java ""-Daegispay.user-service.base-url=http://localhost:8081"" -jar services\transaction-service\target\transaction-service-1.0.0-SNAPSHOT.jar > logs\transaction-service.log 2>&1"
 
 start "ledger-service" /MIN cmd /c ^
-"java -jar services\ledger-service\target\ledger-service-1.0.0-SNAPSHOT.jar > logs\ledger-service.log 2>&1"
+"java -DSTRIPE_SECRET_KEY=!STRIPE_SECRET_KEY! -DSTRIPE_WEBHOOK_SECRET=!STRIPE_WEBHOOK_SECRET! -jar services\ledger-service\target\ledger-service-1.0.0-SNAPSHOT.jar > logs\ledger-service.log 2>&1"
 
 start "payment-orchestrator" /MIN cmd /c ^
 "java -jar services\payment-orchestrator\target\payment-orchestrator-1.0.0-SNAPSHOT.jar > logs\payment-orchestrator.log 2>&1"
 
 start "risk-engine" /MIN cmd /c ^
-"java -jar services\risk-engine\target\risk-engine-1.0.0-SNAPSHOT.jar > logs\risk-engine.log 2>&1"
+"java -DAI_PLATFORM_URL=http://localhost:8091 -jar services\risk-engine\target\risk-engine-1.0.0-SNAPSHOT.jar > logs\risk-engine.log 2>&1"
 
 start "notification-service" /MIN cmd /c ^
-"java -jar services\notification-service\target\notification-service-1.0.0-SNAPSHOT.jar > logs\notification-service.log 2>&1"
+"java -DSMTP_PASSWORD=!SMTP_PASSWORD! -DFAST2SMS_API_KEY=!FAST2SMS_API_KEY! -DSLACK_WEBHOOK_URL=!SLACK_WEBHOOK_URL! -jar services\notification-service\target\notification-service-1.0.0-SNAPSHOT.jar > logs\notification-service.log 2>&1"
 
 start "ai-platform" /MIN cmd /c ^
-"java -Dspring.profiles.active=dev -jar services\ai-platform\target\ai-platform-1.0.0-SNAPSHOT.jar > logs\ai-platform.log 2>&1"
+"java -Dspring.profiles.active=dev -DOPENROUTER_API_KEY=!OPENROUTER_API_KEY! -DANTHROPIC_API_KEY=!ANTHROPIC_API_KEY! -jar services\ai-platform\target\ai-platform-1.0.0-SNAPSHOT.jar > logs\ai-platform.log 2>&1"
 
 start "data-pipeline" /MIN cmd /c ^
 "java -jar services\data-pipeline\target\data-pipeline-1.0.0-SNAPSHOT.jar > logs\data-pipeline.log 2>&1"
@@ -593,7 +603,7 @@ REM =========================================================
 echo.
 echo Waiting for all services to be healthy...
 
-call :wait_service api-gateway 8080
+call :wait_service api-gateway 8190
 call :wait_service user-service 8081
 call :wait_service transaction-service 8082
 call :wait_service ledger-service 8083
@@ -797,7 +807,7 @@ echo   AegisPay is running!
 echo =========================================================
 echo.
 echo   Web App        -^>  http://localhost:3000
-echo   API Gateway    -^>  http://localhost:8080/actuator/health
+echo   API Gateway    -^>  http://localhost:8080  ^(actuator: http://localhost:8190/actuator/health^)
 echo   Keycloak       -^>  http://localhost:8180   (admin / admin)
 echo   Kafka UI       -^>  http://localhost:8090
 echo   Grafana        -^>  http://localhost:3100   (admin / admin)

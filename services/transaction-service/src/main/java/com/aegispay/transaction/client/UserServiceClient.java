@@ -4,7 +4,10 @@ import com.aegispay.common.domain.exception.AegisPayException;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 
@@ -35,18 +38,31 @@ public class UserServiceClient {
     /** Minimal projection — only fields needed for the KYC gate. */
     public record UserKycProjection(String kycStatus) {}
 
+    /** Wrapper matching ApiResponse<UserKycProjection> envelope. */
+    record KycApiResponse(boolean success, UserKycProjection data) {}
+
     /**
      * Returns the KYC status string for the given userId.
      * Falls back to {@code "UNKNOWN"} if user-service is unavailable (circuit open).
      */
     @CircuitBreaker(name = "user-service-kyc", fallbackMethod = "kycStatusFallback")
     public String getKycStatus(UUID userId) {
-        UserKycProjection projection = webClient.get()
+        String bearer = resolveBearer();
+        KycApiResponse response = webClient.get()
                 .uri("/api/v1/users/{id}/kyc-status", userId)
+                .headers(h -> { if (bearer != null) h.set(HttpHeaders.AUTHORIZATION, bearer); })
                 .retrieve()
-                .bodyToMono(UserKycProjection.class)
+                .bodyToMono(KycApiResponse.class)
                 .block();
-        return projection != null ? projection.kycStatus() : "UNKNOWN";
+        return (response != null && response.data() != null) ? response.data().kycStatus() : "UNKNOWN";
+    }
+
+    private String resolveBearer() {
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getPrincipal() instanceof Jwt jwt) {
+            return "Bearer " + jwt.getTokenValue();
+        }
+        return null;
     }
 
     @SuppressWarnings("unused")
