@@ -39,6 +39,7 @@ targets:
         WS_BASE_URL: "ws://localhost:8080"
         KEYCLOAK_ISSUER: "http://localhost:8180/realms/aegispay"
         OAUTH_CLIENT_ID: "aegispay-mobile"
+        STRIPE_PUBLISHABLE_KEY: "pk_test_51TTkk2CyjRW67i1Dr44Sfw2W1FzJ2taFP757phrJYxYlwFTThQEEdL2eUnugV6w50ySvXjHUUXO35yHd6y3HAgiP007Aa0VZdL"
       configs:
         Debug:
           DEBUG_INFORMATION_FORMAT: dwarf
