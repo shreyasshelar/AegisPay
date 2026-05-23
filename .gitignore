@@ -120,3 +120,6 @@ coverage/
 .venv/
 .idea/
 .vscode/
+
+
+**/.claude/

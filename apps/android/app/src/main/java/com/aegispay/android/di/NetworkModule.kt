@@ -40,7 +40,7 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideOkHttpClient(authRepository: AuthRepository): OkHttpClient {
+    fun provideOkHttpClient(authRepository: dagger.Lazy<AuthRepository>): OkHttpClient {
         val loggingInterceptor = HttpLoggingInterceptor().apply {
             level = if (BuildConfig.DEBUG)
                 HttpLoggingInterceptor.Level.BODY
@@ -49,7 +49,7 @@ object NetworkModule {
         }
 
         val authInterceptor = Interceptor { chain ->
-            val token = runBlocking { runCatching { authRepository.validAccessToken() }.getOrNull() }
+            val token = runBlocking { runCatching { authRepository.get().validAccessToken() }.getOrNull() }
             val request = chain.request().newBuilder()
                 .apply { if (token != null) header("Authorization", "Bearer $token") }
                 .header("X-Correlation-ID", UUID.randomUUID().toString())
