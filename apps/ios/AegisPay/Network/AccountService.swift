@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 final class AccountService {
 
     private let api: ApiClient

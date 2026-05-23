@@ -1,6 +1,7 @@
 import Foundation
 
 /// Calls the risk-engine API on behalf of back-office users.
+@MainActor
 final class RiskService {
 
     private let api: ApiClient

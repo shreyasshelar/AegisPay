@@ -32,6 +32,7 @@ enum DeepLinkDestination: Equatable {
 /// Universal Links:   `https://api.aegispay.shreyasshelar.uk/transactions/{id}`
 ///                    `https://api.aegispay.shreyasshelar.uk/send`
 ///                    `https://api.aegispay.shreyasshelar.uk/wallet`
+@MainActor
 final class DeepLinkRouter: ObservableObject {
 
     static let shared = DeepLinkRouter()

@@ -1,4 +1,4 @@
-# AegisPay — Comprehensive Prod-Grade Testing Guide
+# AegisPay — Comprehensive Testing Guide
 
 Complete guide for testing every feature of AegisPay across **Web**, **Android**, and **iOS** —
 including environment setup on your specific hardware (Mac 8 GB for iOS, Windows 32 GB for Android).

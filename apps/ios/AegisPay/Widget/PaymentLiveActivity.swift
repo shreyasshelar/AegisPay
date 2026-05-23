@@ -12,7 +12,7 @@
 //     banner on 16.1.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import ActivityKit
+@preconcurrency import ActivityKit
 import SwiftUI
 import WidgetKit
 

@@ -3,12 +3,9 @@ import UserNotifications
 
 /// Handles APNs registration, token forwarding to backend, and foreground
 /// notification display. Wire into AegisPayApp via AppDelegate.
-@MainActor
-final class PushNotificationHandler: NSObject, UNUserNotificationCenterDelegate {
+final class PushNotificationHandler: NSObject, UNUserNotificationCenterDelegate, @unchecked Sendable {
 
-    static let shared = PushNotificationHandler()
-
-    private let userService = UserService()
+    @MainActor static let shared = PushNotificationHandler()
 
     // ── Request permission & register ─────────────────────────────────────────
 
@@ -29,8 +26,8 @@ final class PushNotificationHandler: NSObject, UNUserNotificationCenterDelegate 
     /// Call from AppDelegate.application(_:didRegisterForRemoteNotificationsWithDeviceToken:)
     func didRegisterWithToken(_ tokenData: Data, userId: String) {
         let token = tokenData.map { String(format: "%02x", $0) }.joined()
-        Task {
-            try? await userService.registerPushToken(userId: userId, token: token, platform: "ios")
+        Task { @MainActor in
+            try? await UserService().registerPushToken(userId: userId, token: token, platform: "ios")
         }
     }
 

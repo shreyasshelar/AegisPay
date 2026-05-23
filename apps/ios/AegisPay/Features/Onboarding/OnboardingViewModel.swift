@@ -27,8 +27,9 @@ final class OnboardingViewModel: ObservableObject {
 
     var emailError: String? {
         guard !email.isEmpty else { return nil }
-        let pattern = /^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$/
-        return email.wholeMatch(of: pattern) == nil ? "Enter a valid email address" : nil
+        let pattern   = "[A-Z0-9a-z._%+\\-]+@[A-Za-z0-9.\\-]+\\.[A-Za-z]{2,}"
+        let predicate = NSPredicate(format: "SELF MATCHES %@", pattern)
+        return predicate.evaluate(with: email) ? nil : "Enter a valid email address"
     }
 
     var isValid: Bool {

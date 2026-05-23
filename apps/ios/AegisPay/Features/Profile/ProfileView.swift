@@ -141,10 +141,10 @@ struct ProfileView: View {
                         SkeletonRect(width: 130, height: 16)
                         SkeletonRect(width: 180, height: 12)
                     } else {
-                        Text(vm.profile?.name ?? authStore.currentUser?.name ?? "—")
+                        Text(vm.profile?.name ?? "—")
                             .font(.aegisSubhead)
                             .foregroundStyle(Color.aegisText)
-                        Text(vm.profile?.email ?? authStore.currentUser?.email ?? "—")
+                        Text(vm.profile?.email ?? "—")
                             .font(.aegisBodySmall)
                             .foregroundStyle(Color.aegisTextMuted)
                         Text(authStore.currentUser?.role ?? "CUSTOMER")

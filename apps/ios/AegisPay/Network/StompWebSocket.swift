@@ -3,6 +3,7 @@ import Foundation
 /// Raw STOMP-over-WebSocket client (no external library).
 /// Connects, authenticates with Bearer JWT, subscribes to the user's
 /// personal notification queue, and delivers parsed payloads via `onMessage`.
+@MainActor
 final class StompWebSocket: NSObject {
 
     typealias MessageHandler = (TransactionWebSocketNotification) -> Void
@@ -102,9 +103,9 @@ final class StompWebSocket: NSObject {
                 // Exponential back-off: 5 s → 10 s → 20 s → 40 s → cap 60 s
                 let delay = min(5.0 * pow(2.0, Double(self.reconnectAttempts)), self.maxReconnectDelay)
                 self.reconnectAttempts = min(self.reconnectAttempts + 1, 10)
-                self.reconnectTask = Task {
+                self.reconnectTask = Task { @MainActor [weak self] in
                     try? await Task.sleep(for: .seconds(delay))
-                    guard !self.isStopped else { return }
+                    guard let self, !self.isStopped else { return }
                     self.openSocket(accessToken: accessToken)
                 }
             }

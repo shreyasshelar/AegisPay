@@ -46,9 +46,16 @@ pnpm-debug.log*
 *.tsbuildinfo
 
 # ── Swift / iOS / Xcode ─────────────────────────────────────
+# Per-user Xcode state — never commit
 *.xcworkspace/xcuserdata/
 *.xcodeproj/xcuserdata/
+*.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist
+# SPM build cache & auto-generated Xcode integration
+apps/ios/.build/
+apps/ios/.swiftpm/
+# Xcode derived data (lives in ~/Library, not repo — just in case)
 DerivedData/
+# Legacy Xcode artefacts
 *.pbxuser
 !default.pbxuser
 *.mode1v3
@@ -110,16 +117,5 @@ logs/
 
 
 
-node_modules/
-dist/
-build/
-target/
-.next/
-coverage/
-*.log
-.venv/
-.idea/
-.vscode/
-
-
+# ── Claude Code ─────────────────────────────────────────────
 **/.claude/
