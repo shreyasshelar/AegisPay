@@ -1,6 +1,7 @@
 import Foundation
 
 /// All transaction-related API calls.
+@MainActor
 final class TransactionService {
 
     private let api: ApiClient

@@ -12,14 +12,14 @@ enum BiometricType {
 
 // MARK: — BiometricAuthResult
 
-enum BiometricAuthResult {
+enum BiometricAuthResult: Equatable {
     case success
     case userCancelled
     case lockedOut           // too many failures — passcode required
     case notEnrolled         // biometrics not set up on device
     case failed(String)      // other LAError or system failure
 
-    var isSuccess: Bool { self == .success }
+    var isSuccess: Bool { if case .success = self { return true }; return false }
 }
 
 // MARK: — BiometricAuthService

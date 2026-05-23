@@ -163,4 +163,4 @@ final class ApiClient: ObservableObject {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-private struct EmptyBody: Encodable {}
+private struct EmptyBody: Codable {}

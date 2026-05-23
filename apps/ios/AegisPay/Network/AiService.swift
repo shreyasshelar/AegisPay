@@ -1,6 +1,7 @@
 import Foundation
 
 /// Centralized AI platform API calls.
+@MainActor
 final class AiService {
 
     private let api: ApiClient

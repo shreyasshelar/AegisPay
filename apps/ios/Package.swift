@@ -4,9 +4,7 @@ import PackageDescription
 let package = Package(
     name: "AegisPay",
     platforms: [.iOS(.v17)],
-    products: [
-        .library(name: "AegisPay", targets: ["AegisPay"]),
-    ],
+    products: [],
     dependencies: [
         // OAuth2 / PKCE
         .package(

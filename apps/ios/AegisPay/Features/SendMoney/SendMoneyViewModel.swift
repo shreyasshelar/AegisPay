@@ -59,8 +59,8 @@ final class SendMoneyViewModel: ObservableObject {
 
     var payeeIdError: String? {
         guard !payeeId.isEmpty else { return nil }
-        let uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/
-        return payeeId.wholeMatch(of: uuidRegex) == nil ? "Must be a valid UUID" : nil
+        // UUID(uuidString:) validates the canonical 8-4-4-4-12 UUID format.
+        return UUID(uuidString: payeeId) == nil ? "Must be a valid UUID" : nil
     }
 
     var amount: Decimal? { Decimal(string: amountText) }

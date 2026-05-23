@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 final class NotificationService {
 
     private let api: ApiClient

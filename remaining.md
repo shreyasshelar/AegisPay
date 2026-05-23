@@ -295,7 +295,7 @@ Both scripts: build all JARs → start Docker infra → wait for Keycloak + Clic
 - [x] **`ExchangeRateService.java`** — Added 3 s connect + 5 s read timeout to Frankfurter RestClient (previously no timeout — would hang indefinitely on TCP stall)
 - [x] **`StripeSettlementFetcher.java`** — Replaced `throw new RuntimeException` on `StripeException` with 3-attempt retry (2 s×attempt backoff) → degrade to empty list on permanent failure. Previously crashed the entire reconciliation batch job when Stripe was unavailable.
 
-### KYC Production-Grade Upgrade (this session)
+### KYC Upgrade (this session)
 - [x] **`DocumentValidationService.java`** — NEW: bank-grade AI document validator. Checks: format/number pattern (Aadhaar 12-digit, PAN ABCDE1234F, Passport MRZ, DL state-code), expiry date, age 18+, security features (hologram/seal/QR/MRZ), issuing authority visibility, photo presence, name cross-match vs registered name
 - [x] **`KycDocumentService.java`** — Validation step inserted between tampering detection and OCR; name mismatch → MANUAL_REVIEW; overall invalid → REJECTED with per-check reasons
 - [x] **`KycDocumentController.java`** — `ProcessRequest` now accepts optional `registeredName` for cross-validation
@@ -461,7 +461,7 @@ Both scripts: build all JARs → start Docker infra → wait for Keycloak + Clic
 
 ---
 
-## 📊 Production-Grade Completion: **99.5%**
+## 📊 Completion: **99.5%**
 
 | Category | Status | Notes |
 |----------|--------|-------|
@@ -713,7 +713,7 @@ Authorization: Bearer <ADMIN-token>
 
 ---
 
-## ✅ ALL TASKS COMPLETE — Production-Grade Completion: **99.5%**
+## ✅ ALL TASKS COMPLETE — Completion: **99.5%**
 
 > Every item in the original backlog and all subsequent audit rounds have been implemented. The only remaining actions are the **live production transaction** below (intentionally last) and the external-dependency items above (require business agreements or real data).
 

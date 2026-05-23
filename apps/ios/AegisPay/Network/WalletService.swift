@@ -3,6 +3,7 @@ import Foundation
 // ── WalletService ─────────────────────────────────────────────────────────────
 // All wallet top-up API calls.  Follows the same pattern as AccountService.
 
+@MainActor
 final class WalletService {
 
     private let api: ApiClient

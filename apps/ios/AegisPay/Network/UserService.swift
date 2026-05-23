@@ -6,6 +6,7 @@ struct UserRegistrationRequest: Encodable {
     let email:     String
 }
 
+@MainActor
 final class UserService {
 
     private let api: ApiClient
