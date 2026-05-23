@@ -1,8 +1,9 @@
 import SwiftUI
-import StripePaymentSheet
+@preconcurrency import StripePaymentSheet
 
 // MARK: — AppDelegate (APNs callbacks)
 
+@MainActor
 final class AppDelegate: NSObject, UIApplicationDelegate {
 
     func application(

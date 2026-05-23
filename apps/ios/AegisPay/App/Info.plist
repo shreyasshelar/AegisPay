@@ -2,13 +2,23 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <!-- Required xcodebuild vars -->
+    <key>CFBundleDevelopmentRegion</key>
+    <string>$(DEVELOPMENT_LANGUAGE)</string>
+    <key>CFBundleExecutable</key>
+    <string>$(EXECUTABLE_NAME)</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+
     <!-- App metadata -->
     <key>CFBundleName</key>
     <string>AegisPay</string>
     <key>CFBundleDisplayName</key>
     <string>AegisPay</string>
     <key>CFBundleIdentifier</key>
-    <string>io.aegispay.app</string>
+    <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>CFBundleShortVersionString</key>
@@ -18,7 +28,7 @@
     <key>UILaunchScreen</key>
     <dict/>
 
-    <!-- OAuth redirect URL scheme — must match AppConfig.oauthRedirectURI -->
+    <!-- OAuth redirect URL scheme -->
     <key>CFBundleURLTypes</key>
     <array>
         <dict>
@@ -38,44 +48,30 @@
         <true/>
     </dict>
 
-    <!-- Privacy descriptions — required for PhotosPicker -->
+    <!-- Privacy descriptions -->
     <key>NSPhotoLibraryUsageDescription</key>
     <string>AegisPay uses your photo library to upload KYC identity documents.</string>
     <key>NSCameraUsageDescription</key>
     <string>AegisPay uses your camera to capture KYC identity documents.</string>
+    <key>NSFaceIDUsageDescription</key>
+    <string>AegisPay uses biometric authentication to protect your account.</string>
 
-    <!-- Backend endpoints (overridden by CI build settings) -->
+    <!-- Backend endpoints -->
     <key>API_BASE_URL</key>
     <string>$(API_BASE_URL)</string>
     <key>WS_BASE_URL</key>
     <string>$(WS_BASE_URL)</string>
 
-    <!-- OAuth config (overridden by CI build settings) -->
+    <!-- OAuth config -->
     <key>KEYCLOAK_ISSUER</key>
     <string>$(KEYCLOAK_ISSUER)</string>
     <key>OAUTH_CLIENT_ID</key>
     <string>$(OAUTH_CLIENT_ID)</string>
 
-    <!-- Face ID / Touch ID usage -->
-    <key>NSFaceIDUsageDescription</key>
-    <string>AegisPay uses biometric authentication to protect your account.</string>
+    <!-- Stripe publishable key -->
+    <key>STRIPE_PUBLISHABLE_KEY</key>
+    <string>$(STRIPE_PUBLISHABLE_KEY)</string>
 
-    <!--
-        Universal Links (Associated Domains) — handled in Xcode project capabilities.
-        The AASA file is served at:
-          https://api.aegispay.shreyasshelar.uk/.well-known/apple-app-site-association
-        Domain format: applinks:<host>   (no scheme prefix, no path)
-    -->
-    <key>com.apple.developer.associated-domains</key>
-    <array>
-        <string>applinks:api.aegispay.shreyasshelar.uk</string>
-        <string>webcredentials:api.aegispay.shreyasshelar.uk</string>
-    </array>
-
-    <!-- App Store encryption compliance.
-         AegisPay uses only the OS-provided TLS/SSL (via URLSession / SecureTransport).
-         It does not implement or link to any custom encryption algorithms.
-         Setting this to false exempts the app from Export Compliance Documentation. -->
     <key>ITSAppUsesNonExemptEncryption</key>
     <false/>
 

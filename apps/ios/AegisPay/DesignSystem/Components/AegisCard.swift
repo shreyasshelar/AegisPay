@@ -2,8 +2,13 @@ import SwiftUI
 
 /// Base card container — white surface, rounded corners, subtle shadow.
 struct AegisCard<Content: View>: View {
-    let content: () -> Content
     var padding: CGFloat = 16
+    let content: () -> Content
+
+    init(padding: CGFloat = 16, @ViewBuilder content: @escaping () -> Content) {
+        self.padding = padding
+        self.content = content
+    }
 
     var body: some View {
         content()

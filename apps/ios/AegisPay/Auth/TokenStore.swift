@@ -6,7 +6,7 @@ import KeychainAccess
 /// accessibility to prevent them appearing in iCloud backups.
 final class TokenStore {
 
-    static let shared = TokenStore()
+    nonisolated(unsafe) static let shared = TokenStore()
 
     private let keychain: Keychain
 

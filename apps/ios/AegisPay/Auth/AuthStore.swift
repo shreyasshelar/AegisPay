@@ -1,5 +1,5 @@
 import SwiftUI
-import AppAuth
+@preconcurrency import AppAuth
 import Combine
 
 // ── Auth state machine ─────────────────────────────────────────────────────
