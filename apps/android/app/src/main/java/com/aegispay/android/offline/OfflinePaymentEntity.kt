@@ -21,6 +21,7 @@ import java.math.BigDecimal
 data class OfflinePaymentEntity(
 
     @PrimaryKey
+    @ColumnInfo(name = "idempotency_key")
     val idempotencyKey: String,
 
     @ColumnInfo(name = "payee_id")

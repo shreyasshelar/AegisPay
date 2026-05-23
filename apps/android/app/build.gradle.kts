@@ -107,6 +107,15 @@ dependencies {
     implementation(libs.moshi.kotlin)
     implementation(libs.moshi.adapters)
 
+    // AppCompat (required for FragmentActivity / BiometricPrompt host)
+    implementation(libs.appcompat)
+
+    // Biometric
+    implementation(libs.biometric)
+
+    // Splash Screen
+    implementation(libs.core.splashscreen)
+
     // Auth
     implementation(libs.appauth)
     implementation(libs.security.crypto)

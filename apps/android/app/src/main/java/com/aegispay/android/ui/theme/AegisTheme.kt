@@ -3,6 +3,7 @@ package com.aegispay.android.ui.theme
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import com.aegispay.android.network.TransactionStatus
 
 // ── Brand palette ─────────────────────────────────────────────────────────────
 
@@ -22,6 +23,7 @@ object AegisColor {
 
     // Neutrals
     val Bg           = Color(0xFFF8FAFC)  // slate-50
+    val Background   = Bg
     val Surface      = Color(0xFFFFFFFF)
     val Border       = Color(0xFFE2E8F0)  // slate-200
     val Text         = Color(0xFF0F172A)  // slate-900
@@ -59,8 +61,6 @@ fun AegisTheme(content: @Composable () -> Unit) {
 }
 
 // ── Status colours ────────────────────────────────────────────────────────────
-
-import com.aegispay.android.network.TransactionStatus
 
 fun statusColor(status: TransactionStatus): Color = when (status) {
     TransactionStatus.INITIATED    -> AegisColor.Warning
