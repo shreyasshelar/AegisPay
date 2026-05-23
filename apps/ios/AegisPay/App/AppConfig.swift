@@ -36,9 +36,10 @@ enum AppConfig {
 
     // ── Stripe ────────────────────────────────────────────────────────────────
     /// Stripe publishable key — pk_test_* for development, pk_live_* injected by CI via Info.plist.
+    /// The test key below is safe to commit — publishable keys are public client-side credentials.
     static let stripePublishableKey: String =
         Bundle.main.object(forInfoDictionaryKey: "STRIPE_PUBLISHABLE_KEY") as? String
-        ?? "pk_test_placeholder_local_dev"
+        ?? "pk_test_51TTkk2CyjRW67i1Dr44Sfw2W1FzJ2taFP757phrJYxYlwFTThQEEdL2eUnugV6w50ySvXjHUUXO35yHd6y3HAgiP007Aa0VZdL"
 
     // ── Keychain ──────────────────────────────────────────────────────────────
     static let keychainService = "io.aegispay.app"
