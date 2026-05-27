@@ -5,7 +5,6 @@ import { useSession } from 'next-auth/react'
 import { useAuthGuard } from '@/lib/useAuthGuard'
 import { toast } from 'sonner'
 import {
-  UserCircle,
   Upload,
   CheckCircle2,
   Clock,
@@ -13,20 +12,17 @@ import {
   Loader2,
   ShieldCheck,
   Camera,
-  Star,
   AlertTriangle,
-  FileCheck,
   ChevronDown,
   Fingerprint,
-  BadgeCheck,
-  BadgeX,
-  Minus,
+  Copy,
+  Check,
 } from 'lucide-react'
-import { useUser, useProcessKyc, useConfirmKyc, useBiometric } from '@aegispay/api-client'
+import { useMe, useProcessKyc, useBiometric, ApiError } from '@aegispay/api-client'
 import { Header } from '@/components/header'
 import { Button as AegisButton } from '@aegispay/design-system'
 import { cn } from '@/lib/utils'
-import type { KycStatus, KycProcessingResult } from '@aegispay/shared-types'
+import type { KycStatus } from '@aegispay/shared-types'
 
 // ── KYC status config ─────────────────────────────────────────────────────────
 
@@ -38,7 +34,7 @@ const KYC_CONFIG: Record<KycStatus, { label: string; icon: React.ElementType; bg
     text:  'text-warning-700',
   },
   DOCUMENT_SUBMITTED: {
-    label: 'Document received — awaiting AI processing',
+    label: 'Document received — AI is analysing it in the background',
     icon:  Loader2,
     bg:    'bg-primary-50 ring-primary-200',
     text:  'text-primary-700',
@@ -77,121 +73,6 @@ const DOCUMENT_TYPES = [
 ] as const
 type DocumentTypeValue = typeof DOCUMENT_TYPES[number]['value']
 
-// ── Quality score badge ───────────────────────────────────────────────────────
-
-function QualityBar({ score, label }: { score: number; label: string }) {
-  const color = score >= 70 ? 'bg-success-500' : score >= 40 ? 'bg-warning-500' : 'bg-danger-500'
-  return (
-    <div className="space-y-1">
-      <div className="flex justify-between text-xs text-slate-500">
-        <span>{label}</span>
-        <span className="font-medium">{Math.round(score)}%</span>
-      </div>
-      <div className="h-1.5 rounded-full bg-slate-100">
-        <div className={cn('h-1.5 rounded-full transition-all', color)} style={{ width: `${score}%` }} />
-      </div>
-    </div>
-  )
-}
-
-// ── Extracted data table ──────────────────────────────────────────────────────
-
-function ExtractedDataCard({ data }: { data: NonNullable<KycProcessingResult['extractedData']> }) {
-  const rows = [
-    { label: 'Full Name',       value: data.fullName },
-    { label: 'Date of Birth',   value: data.dateOfBirth },
-    { label: 'Document Number', value: data.documentNumber },
-    { label: 'Document Type',   value: data.documentType },
-    { label: 'Expiry Date',     value: data.expiryDate },
-    { label: 'Address',         value: data.address },
-  ].filter(r => r.value)
-
-  return (
-    <dl className="divide-y divide-slate-100">
-      {rows.map(r => (
-        <div key={r.label} className="flex items-start justify-between gap-4 py-2.5">
-          <dt className="text-xs text-slate-400 shrink-0">{r.label}</dt>
-          <dd className="text-xs font-medium text-slate-800 text-right break-all">{r.value}</dd>
-        </div>
-      ))}
-    </dl>
-  )
-}
-
-// ── Validation checks card ────────────────────────────────────────────────────
-
-type CheckState = boolean | null | undefined
-
-function CheckRow({ label, value, detail }: { label: string; value: CheckState; detail?: string | null }) {
-  const icon =
-    value === true ? <BadgeCheck className="h-4 w-4 text-success-500 shrink-0" /> :
-    value === false ? <BadgeX className="h-4 w-4 text-danger-500 shrink-0" /> :
-    <Minus className="h-4 w-4 text-slate-300 shrink-0" />
-
-  const textColor =
-    value === true ? 'text-success-700' :
-    value === false ? 'text-danger-700' :
-    'text-slate-400'
-
-  return (
-    <div className="flex items-start gap-2.5 py-2">
-      {icon}
-      <div className="flex-1 min-w-0">
-        <span className={cn('text-xs font-medium', textColor)}>{label}</span>
-        {detail && (
-          <p className="text-xs text-slate-400 mt-0.5 break-words">{detail}</p>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function ValidationChecksCard({ v }: { v: NonNullable<KycProcessingResult['validation']> }) {
-  return (
-    <div className="space-y-1">
-      <div className="flex items-center gap-2 mb-1">
-        <ShieldCheck className="h-4 w-4 text-primary-500" />
-        <h3 className="text-sm font-semibold text-slate-900">Document Validation</h3>
-        <span className={cn(
-          'ml-auto rounded-full px-2 py-0.5 text-xs font-semibold',
-          v.overallValid ? 'bg-success-50 text-success-700' : 'bg-danger-50 text-danger-700',
-        )}>
-          {v.overallValid ? 'Pass' : 'Fail'}
-        </span>
-      </div>
-
-      {v.documentTypeDetected && v.documentTypeDetected !== 'UNKNOWN' && (
-        <p className="text-xs text-slate-500">
-          Detected: <span className="font-medium text-slate-700">{v.documentTypeDetected}</span>
-        </p>
-      )}
-
-      <div className="divide-y divide-slate-100 rounded-lg bg-slate-50 px-3 ring-1 ring-slate-100">
-        <CheckRow label="Document format valid"    value={v.formatValid}               detail={v.formatDetails} />
-        <CheckRow label="Not expired"              value={v.notExpired}                detail={v.notExpired === false ? 'Document is expired' : undefined} />
-        <CheckRow label="Age verified (18+)"       value={v.ageVerified}               detail={v.ageVerified === false ? 'Applicant appears to be under 18' : undefined} />
-        <CheckRow label="Security features"        value={v.securityFeaturesPresent}   detail={v.missingSecurityFeatures?.length ? v.missingSecurityFeatures.join(', ') : undefined} />
-        <CheckRow label="Issuing authority visible" value={v.issuingAuthorityVisible}  />
-        <CheckRow label="Photo present"            value={v.photoPresent}              />
-        {v.nameMatch !== null && v.nameMatch !== undefined && (
-          <CheckRow label="Name matches account"   value={v.nameMatch}                 detail={v.nameMatchDetails ?? undefined} />
-        )}
-      </div>
-
-      {!v.overallValid && v.failureReasons.length > 0 && (
-        <div className="rounded-lg bg-danger-50 px-3 py-2.5 ring-1 ring-danger-200">
-          <p className="text-xs font-semibold text-danger-700 mb-1">Rejection reasons</p>
-          <ul className="list-disc list-inside space-y-0.5">
-            {v.failureReasons.map((r, i) => (
-              <li key={i} className="text-xs text-danger-600">{r}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </div>
-  )
-}
-
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function ProfileClient({ userId }: { userId: string }) {
@@ -201,12 +82,13 @@ export function ProfileClient({ userId }: { userId: string }) {
   const cameraInputRef    = useRef<HTMLInputElement>(null)
 
   const [documentType, setDocumentType] = useState<DocumentTypeValue>('NATIONAL_ID')
-  const [kycResult,    setKycResult]    = useState<KycProcessingResult | null>(null)
   const [isDragging,   setIsDragging]   = useState(false)
+  const [idCopied,     setIdCopied]     = useState(false)
 
-  const { data: user, isLoading, refetch } = useUser(userId)
-  const processKyc  = useProcessKyc()
-  const confirmKyc  = useConfirmKyc()
+  // Use /me endpoint so it works for all users regardless of whether
+  // aegispay_user_id has been written back to the Keycloak JWT yet.
+  const { data: user, isLoading, isError, error, refetch } = useMe()
+  const processKyc = useProcessKyc()
 
   const kycStatus: KycStatus = user?.kycStatus ?? 'PENDING'
   const cfg = KYC_CONFIG[kycStatus]
@@ -227,37 +109,73 @@ export function ProfileClient({ userId }: { userId: string }) {
 
     const buffer = await file.arrayBuffer()
     const bytes = new Uint8Array(buffer)
+    // Chunked base64 encoding — avoids O(n²) string concatenation that freezes the
+    // browser tab for several seconds on document-scan-sized images (1–5 MB).
+    // String.fromCharCode.apply() processes 8 KB at a time; stays well within the
+    // JS engine call-stack limit and runs in O(n) time.
+    const CHUNK = 8192
     let binary = ''
-    for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i])
+    for (let i = 0; i < bytes.byteLength; i += CHUNK) {
+      binary += String.fromCharCode.apply(
+        null,
+        bytes.subarray(i, i + CHUNK) as unknown as number[],
+      )
+    }
     const base64 = btoa(binary)
 
     try {
-      const result = await processKyc.mutateAsync({
+      await processKyc.mutateAsync({
         base64ImageData: base64,
         mimeType: file.type as 'image/jpeg' | 'image/png' | 'image/webp',
+        documentType,
         registeredName: session?.user?.name ?? undefined,
       })
-      setKycResult(result)
 
-      if (!result.quality.acceptable) {
-        toast.warning('Low image quality', {
-          description: result.quality.rejectionReason ?? 'Please retake or use a higher-quality image',
+      // 202 Accepted — AI pipeline is now running in the background.
+      toast.success('Document submitted', {
+        description:
+          'Your document is being analysed by AI. You will receive a notification ' +
+          'when processing is complete (usually within a few minutes).',
+        duration: 6000,
+      })
+
+      // Refresh the user profile so the KYC status banner updates to DOCUMENT_SUBMITTED.
+      refetch()
+    } catch (err) {
+      if (err instanceof ApiError && (err.status === 503 || err.errorCode === 'SERVICE_UNAVAILABLE')) {
+        const retryIn = err.retryAfterSecs
+          ? ` Try again in ${err.retryAfterSecs} seconds.`
+          : ' Please try again in a moment.'
+        toast.warning('AI service temporarily unavailable', {
+          description: `Document verification is offline right now.${retryIn}`,
+          duration: 8000,
         })
-      } else if (result.tampering?.tampered) {
-        toast.error('Document tampering detected', {
-          description: 'Please upload an unmodified original document',
-        })
-      } else if (result.validation && !result.validation.overallValid) {
-        toast.error('Document validation failed', {
-          description: result.validation.failureReasons[0] ?? 'Document did not pass verification checks',
+      } else if (
+        err instanceof ApiError &&
+        err.status === 0 &&
+        err.message.toLowerCase().includes('timeout')
+      ) {
+        // Axios timed out waiting for the 202 Accepted response.
+        // The document may already have been received and queued by the AI pipeline —
+        // a network timeout doesn't mean the upload failed, only that the browser
+        // didn't receive the acknowledgement in time (common on first upload after
+        // a cold start or while the dev server is recompiling).
+        // Refresh the profile data; if the status changed to DOCUMENT_SUBMITTED the
+        // KYC banner will update and the user will know the document is being processed.
+        refetch()
+        toast.warning('Upload is taking longer than expected', {
+          description:
+            'Your document may already be queued for verification — ' +
+            'check the status banner below. If it still shows Pending, please try again.',
+          duration: 12_000,
         })
       } else {
-        toast.success('Document analysed', { description: 'Review the extracted data below and confirm' })
+        toast.error('Upload failed', {
+          description: err instanceof Error ? err.message : 'Please try again',
+        })
       }
-    } catch (err) {
-      toast.error('Upload failed', { description: err instanceof Error ? err.message : 'Please try again' })
     }
-  }, [processKyc, session?.user?.name])
+  }, [processKyc, documentType, session?.user?.name, refetch])
 
   function onFileInputChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -270,19 +188,6 @@ export function ProfileClient({ userId }: { userId: string }) {
     setIsDragging(false)
     const file = e.dataTransfer.files?.[0]
     if (file) handleFile(file)
-  }
-
-  // ── Confirm extracted data ─────────────────────────────────────────────────
-
-  async function handleConfirm() {
-    try {
-      await confirmKyc.mutateAsync({ userId, documentType })
-      toast.success('KYC submitted', { description: 'Your identity verification is under review' })
-      setKycResult(null)
-      refetch()
-    } catch (err) {
-      toast.error('Confirmation failed', { description: err instanceof Error ? err.message : 'Please try again' })
-    }
   }
 
   // ── Auth guard (all hooks above; conditional renders below) ──────────────
@@ -302,6 +207,56 @@ export function ProfileClient({ userId }: { userId: string }) {
     )
   }
 
+  if (isError) {
+    const is503          = error instanceof ApiError && (error.status === 503 || error.errorCode === 'SERVICE_UNAVAILABLE')
+    const isNotFound     = error instanceof ApiError && error.errorCode === 'USER_NOT_FOUND'
+    const retryAfterSecs = error instanceof ApiError ? error.retryAfterSecs : undefined
+
+    // USER_NOT_FOUND: the onUserNotFound Axios interceptor already fired and called
+    // triggerSignOut() → toast → signOut({ callbackUrl: '/login' }).  signOut() is
+    // async (POST /api/auth/signout + redirect), so the component stays mounted for
+    // ~1-2 seconds while the sign-out completes.  Show a neutral loading state rather
+    // than a confusing error card — the user is about to be redirected regardless.
+    if (isNotFound) {
+      return (
+        <>
+          <Header title="Profile & KYC" />
+          <div className="flex h-64 flex-col items-center justify-center gap-3">
+            <Loader2 className="h-7 w-7 animate-spin text-slate-300" />
+            <p className="text-sm text-slate-500">Refreshing your session…</p>
+          </div>
+        </>
+      )
+    }
+
+    return (
+      <>
+        <Header title="Profile & KYC" />
+        <div className="px-6 py-10 max-w-xl">
+          <div className="flex flex-col items-center gap-4 rounded-xl bg-white p-8 shadow-sm ring-1 ring-slate-200 text-center">
+            <AlertTriangle className={cn('h-10 w-10', is503 ? 'text-warning-400' : 'text-danger-400')} />
+            <div>
+              <p className="font-semibold text-slate-900">
+                {is503 ? 'Service temporarily unavailable' : 'Could not load profile'}
+              </p>
+              <p className="mt-1 text-sm text-slate-500">
+                {is503
+                  ? `The profile service is momentarily offline.${retryAfterSecs ? ` Please wait ${retryAfterSecs} seconds and try again.` : ' Please wait a moment and try again.'}`
+                  : (error instanceof Error ? error.message : 'An unexpected error occurred.')}
+              </p>
+            </div>
+            <button
+              onClick={() => refetch()}
+              className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 transition-colors"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      </>
+    )
+  }
+
   return (
     <>
       <Header title="Profile & KYC" subtitle="Identity verification status" />
@@ -309,19 +264,63 @@ export function ProfileClient({ userId }: { userId: string }) {
       <div className="px-6 pb-10 max-w-xl space-y-5 animate-fade-in">
 
         {/* ── Profile card ─────────────────────────────────────────────────── */}
-        <div className="rounded-xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+        <div className="rounded-xl bg-white p-6 shadow-sm ring-1 ring-slate-200 space-y-4">
           <div className="flex items-center gap-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary-100 text-xl font-bold uppercase text-primary-700">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-primary-100 text-xl font-bold uppercase text-primary-700">
               {session?.user?.name?.charAt(0) ?? '?'}
             </div>
-            <div>
-              <p className="text-base font-semibold text-slate-900">{session?.user?.name}</p>
-              <p className="text-sm text-slate-400">{session?.user?.email}</p>
+            <div className="min-w-0">
+              <p className="text-base font-semibold text-slate-900 truncate">{session?.user?.name}</p>
+              <p className="text-sm text-slate-400 truncate">{session?.user?.email}</p>
               <span className="mt-0.5 inline-block rounded-full bg-primary-50 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-primary-700">
                 {user?.role ?? session?.user?.role ?? 'CUSTOMER'}
               </span>
             </div>
           </div>
+
+          {/* AegisPay User ID — only revealed after KYC is approved */}
+          {user?.id && (
+            <div className="rounded-lg bg-slate-50 px-4 py-3 ring-1 ring-slate-100">
+              <p className="text-xs text-slate-400 mb-1.5 font-medium">Your AegisPay ID</p>
+              {kycStatus === 'APPROVED' ? (
+                <>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono text-xs text-slate-700 break-all select-all">
+                      {user.id}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(user.id).then(() => {
+                          setIdCopied(true)
+                          setTimeout(() => setIdCopied(false), 2000)
+                        })
+                      }}
+                      className="shrink-0 rounded-md p-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-700 transition-colors"
+                      title="Copy ID"
+                    >
+                      {idCopied
+                        ? <Check className="h-3.5 w-3.5 text-success-500" />
+                        : <Copy className="h-3.5 w-3.5" />}
+                    </button>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1.5">
+                    Share this ID with others so they can send you money.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <span className="font-mono text-sm tracking-widest text-slate-300 select-none">
+                    ••••••••-••••-••••-••••-••••••••••••
+                  </span>
+                  <p className="mt-1.5 flex items-center gap-1.5 text-xs text-warning-600">
+                    <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
+                    Complete KYC verification to unlock your ID and receive payments.
+                  </p>
+                </>
+              )}
+            </div>
+          )}
         </div>
 
         {/* ── KYC status banner ────────────────────────────────────────────── */}
@@ -341,8 +340,22 @@ export function ProfileClient({ userId }: { userId: string }) {
           </div>
         )}
 
+        {/* ── Processing hint (shown while AI is working) ───────────────────── */}
+        {(kycStatus === 'DOCUMENT_SUBMITTED' || kycStatus === 'AI_PROCESSING') && (
+          <div className="rounded-xl bg-primary-50 px-5 py-4 ring-1 ring-primary-200 flex items-start gap-3">
+            <Loader2 className="h-5 w-5 text-primary-500 shrink-0 mt-0.5 animate-spin" />
+            <div>
+              <p className="text-sm font-semibold text-primary-700">Analysis in progress</p>
+              <p className="text-xs text-primary-600 mt-0.5">
+                Our AI is reviewing your document. This usually takes a few minutes.
+                You&apos;ll get a notification as soon as it&apos;s done — no need to stay on this page.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* ── Upload panel ─────────────────────────────────────────────────── */}
-        {canUpload && !kycResult && (
+        {canUpload && (
           <div className="rounded-xl bg-white p-6 shadow-sm ring-1 ring-slate-200 space-y-4">
             <div>
               <h3 className="text-sm font-semibold text-slate-900">Upload Identity Document</h3>
@@ -382,7 +395,7 @@ export function ProfileClient({ userId }: { userId: string }) {
               {processKyc.isPending ? (
                 <>
                   <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
-                  <p className="text-sm text-slate-500">Analysing document…</p>
+                  <p className="text-sm text-slate-500">Uploading…</p>
                 </>
               ) : (
                 <>
@@ -424,96 +437,6 @@ export function ProfileClient({ userId }: { userId: string }) {
 
         {/* ── Security (WebAuthn biometric) ────────────────────────────────── */}
         <BiometricSetupCard />
-
-        {/* ── KYC result panel ─────────────────────────────────────────────── */}
-        {kycResult && (
-          <div className="rounded-xl bg-white p-6 shadow-sm ring-1 ring-slate-200 space-y-5">
-
-            {/* Quality scores */}
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Star className="h-4 w-4 text-warning-500" />
-                <h3 className="text-sm font-semibold text-slate-900">Image Quality</h3>
-                <span className={cn(
-                  'ml-auto rounded-full px-2 py-0.5 text-xs font-semibold',
-                  kycResult.quality.acceptable
-                    ? 'bg-success-50 text-success-700'
-                    : 'bg-danger-50 text-danger-700',
-                )}>
-                  {kycResult.quality.acceptable ? 'Acceptable' : 'Low quality'}
-                </span>
-              </div>
-              <div className="space-y-2">
-                <QualityBar score={kycResult.quality.sharpness}   label="Sharpness" />
-                <QualityBar score={kycResult.quality.brightness}  label="Brightness" />
-                <QualityBar score={kycResult.quality.overallScore} label="Overall" />
-              </div>
-            </div>
-
-            {/* Tampering alert */}
-            {kycResult.tampering?.tampered && (
-              <div className="flex items-start gap-2 rounded-lg bg-danger-50 p-3 ring-1 ring-danger-200">
-                <AlertTriangle className="h-4 w-4 text-danger-600 mt-0.5 shrink-0" />
-                <div>
-                  <p className="text-xs font-semibold text-danger-700">Tampering detected</p>
-                  {kycResult.tampering.indicators.length > 0 && (
-                    <p className="text-xs text-danger-600 mt-0.5">{kycResult.tampering.indicators.join(', ')}</p>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Document validation checks */}
-            {kycResult.validation && (
-              <div className="space-y-2">
-                <ValidationChecksCard v={kycResult.validation} />
-              </div>
-            )}
-
-            {/* Extracted data */}
-            {kycResult.extractedData && (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <FileCheck className="h-4 w-4 text-primary-500" />
-                  <h3 className="text-sm font-semibold text-slate-900">Extracted Information</h3>
-                </div>
-                <div className="rounded-lg bg-slate-50 px-4 ring-1 ring-slate-100">
-                  <ExtractedDataCard data={kycResult.extractedData} />
-                </div>
-                <p className="text-xs text-slate-400">
-                  Please verify this information is correct before confirming.
-                </p>
-              </div>
-            )}
-
-            {/* Actions */}
-            <div className="flex gap-3">
-              <AegisButton
-                type="button"
-                variant="secondary"
-                onClick={() => setKycResult(null)}
-                disabled={confirmKyc.isPending}
-                className="flex-1"
-              >
-                Retake
-              </AegisButton>
-              <AegisButton
-                type="button"
-                loading={confirmKyc.isPending}
-                onClick={handleConfirm}
-                disabled={
-                  !kycResult.quality.acceptable ||
-                  kycResult.tampering?.tampered === true ||
-                  kycResult.validation?.overallValid === false
-                }
-                className="flex-1"
-              >
-                <CheckCircle2 className="h-4 w-4" />
-                {confirmKyc.isPending ? 'Submitting…' : 'Confirm & Submit'}
-              </AegisButton>
-            </div>
-          </div>
-        )}
       </div>
     </>
   )

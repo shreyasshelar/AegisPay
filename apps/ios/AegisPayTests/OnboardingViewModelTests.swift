@@ -36,11 +36,10 @@ final class MockUserService: UserServiceProtocol {
     }
 
     // Other unused stubs
-    func processKycDocument(_ request: KycDocumentRequest) async throws -> KycProcessingResult {
+    func processKycDocument(_ request: KycDocumentRequest) async throws {
         fatalError("not implemented in mock")
     }
     func registerPushToken(userId: String, token: String, platform: String) async throws {}
-    func confirmKyc(userId: String, documentType: String) async throws {}
 }
 
 enum TestError: Error {
@@ -295,7 +294,6 @@ protocol UserServiceProtocol {
     func register(firstName: String, lastName: String, email: String, idempotencyKey: String) async throws -> UserProfile
     func getMe() async throws -> UserProfile?
     func getProfile(userId: String) async throws -> UserProfile
-    func processKycDocument(_ request: KycDocumentRequest) async throws -> KycProcessingResult
+    func processKycDocument(_ request: KycDocumentRequest) async throws
     func registerPushToken(userId: String, token: String, platform: String) async throws
-    func confirmKyc(userId: String, documentType: String) async throws
 }

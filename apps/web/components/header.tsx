@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
+import { useNotificationStore } from '@/lib/useNotificationStore'
 
 interface HeaderProps {
   title?:    string
@@ -15,9 +16,10 @@ interface HeaderProps {
 }
 
 export function Header({ title, subtitle, action }: HeaderProps) {
-  const { data: session }    = useSession()
-  const queryClient          = useQueryClient()
+  const { data: session }       = useSession()
+  const queryClient             = useQueryClient()
   const [spinning, setSpinning] = useState(false)
+  const unreadCount             = useNotificationStore((s) => s.unreadCount)
 
   async function handleRefresh() {
     setSpinning(true)
@@ -58,8 +60,9 @@ export function Header({ title, subtitle, action }: HeaderProps) {
           title="Notifications"
         >
           <Bell className="h-4 w-4" />
-          {/* Unread dot — wired in Phase F4 */}
-          <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-danger-500" />
+          {unreadCount > 0 && (
+            <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-danger-500" />
+          )}
         </Link>
 
         {/* Avatar */}

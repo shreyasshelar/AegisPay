@@ -71,14 +71,13 @@ interface AegisApiService {
         @Query("kycStatus") kycStatus: String? = null,
     ): PagedUsers
 
+    /**
+     * Submits a KYC document for async AI processing.
+     * Returns 202 Accepted immediately; the result is delivered via push notification
+     * / WebSocket when the background pipeline finishes (up to ~6 min).
+     */
     @POST("api/v1/ai/kyc/process")
-    suspend fun processKycDocument(@Body request: KycDocumentRequest): KycProcessingResult
-
-    @PATCH("api/v1/users/{id}/kyc")
-    suspend fun confirmKyc(
-        @Path("id") userId: String,
-        @Body body: Map<String, String>,
-    ): Unit
+    suspend fun processKycDocument(@Body request: KycDocumentRequest): Unit
 
     @POST("api/v1/users/{id}/push-token")
     suspend fun registerPushToken(

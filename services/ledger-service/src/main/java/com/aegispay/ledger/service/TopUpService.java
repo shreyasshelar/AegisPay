@@ -13,6 +13,7 @@ import com.aegispay.ledger.repository.LedgerEntryRepository;
 import com.stripe.Stripe;
 import com.stripe.exception.StripeException;
 import com.stripe.model.PaymentIntent;
+import com.stripe.net.RequestOptions;
 import com.stripe.param.PaymentIntentConfirmParams;
 import com.stripe.param.PaymentIntentCreateParams;
 import jakarta.annotation.PostConstruct;
@@ -38,6 +39,23 @@ public class TopUpService {
 
     @Value("${stripe.secret-key}")
     private String stripeSecretKey;
+
+    /**
+     * Stripe SDK request options applied to every outbound call.
+     *
+     * <p>The Stripe Java SDK default read timeout is 80 seconds, which is longer
+     * than the API Gateway's effective HTTP-client timeout.  If Stripe is slow the
+     * gateway times out waiting for ledger-service to respond, generates a
+     * network-level failure, and the circuit breaker opens → 503 Service Unavailable.
+     *
+     * <p>By capping the read timeout at 15 s the ledger service responds to the
+     * gateway quickly (with an HTTP 422) instead of hanging.  The circuit breaker
+     * never sees a timeout, stays closed, and subsequent requests succeed normally.
+     */
+    private static final RequestOptions STRIPE_REQUEST_OPTIONS = RequestOptions.builder()
+            .setConnectTimeout(5_000)   // 5 s to open TCP connection to api.stripe.com
+            .setReadTimeout(15_000)     // 15 s to receive the response body
+            .build();
 
     @PostConstruct
     void initStripe() {
@@ -66,7 +84,8 @@ public class TopUpService {
                             .addPaymentMethodType("card")
                             .putMetadata("aegispay_user_id", userId.toString())
                             .putMetadata("top_up", "true")
-                            .build()
+                            .build(),
+                    STRIPE_REQUEST_OPTIONS
             );
 
             log.info("Created PaymentIntent pi={} amount={} {} user={}",
@@ -110,7 +129,8 @@ public class TopUpService {
                     intent = intent.confirm(
                             PaymentIntentConfirmParams.builder()
                                     .setPaymentMethod("pm_card_visa")
-                                    .build());
+                                    .build(),
+                            STRIPE_REQUEST_OPTIONS);
                     log.info("Test-mode auto-confirm: pi={} status={}", intent.getId(), intent.getStatus());
                 } catch (StripeException e) {
                     throw new IllegalStateException("Auto-confirm failed: " + e.getMessage(), e);
@@ -182,7 +202,7 @@ public class TopUpService {
 
     private PaymentIntent retrieveIntent(String paymentIntentId) {
         try {
-            return PaymentIntent.retrieve(paymentIntentId);
+            return PaymentIntent.retrieve(paymentIntentId, STRIPE_REQUEST_OPTIONS);
         } catch (StripeException e) {
             log.error("Stripe error retrieving PaymentIntent {}: {}", paymentIntentId, e.getMessage(), e);
             throw new IllegalStateException("Could not retrieve payment: " + e.getMessage(), e);

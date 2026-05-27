@@ -77,6 +77,10 @@ stripe:
   secret-key: ${STRIPE_SECRET_KEY:sk_test_placeholder_local_dev}
 
 aegispay:
+  # Base URL of the user-service — used by UserServiceClient to resolve AegisPay
+  # domain UUIDs for first-session users whose JWT lacks aegispay_user_id yet.
+  user-service:
+    base-url: ${USER_SERVICE_URL:http://localhost:8081}
   ledger:
     balance-lock-expiry-minutes: 30
     optimistic-lock-max-retries: 3

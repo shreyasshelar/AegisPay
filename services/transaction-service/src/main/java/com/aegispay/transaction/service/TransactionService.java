@@ -47,22 +47,28 @@ public class TransactionService {
     private final MongoTemplate mongoTemplate;
     private final UserServiceClient userServiceClient;
 
+    /**
+     * Create a new transaction or return the existing one for an idempotent replay.
+     *
+     * <p>The KYC gate is enforced in {@link com.aegispay.transaction.controller.TransactionController}
+     * before this method is called, so it runs for every inbound request (including idempotency
+     * retries).  No second KYC call is made here.
+     *
+     * <p>The payee existence check is intentionally kept inside {@link #createNew} so it only
+     * fires when a genuinely new transaction is being created — not for idempotency replays.
+     */
     @Transactional
     public TransactionResponse create(TransactionRequest request,
                                       String idempotencyKey,
                                       UUID userId) {
-        // Idempotent: return existing if idempotency key already used
+        // Idempotent: return existing record if this idempotency key was already processed.
         return transactionRepository.findByIdempotencyKey(idempotencyKey)
                 .map(existing -> {
-                    log.debug("Returning existing transaction for idempotency key: {}", idempotencyKey);
+                    log.debug("Idempotency hit — returning existing transaction: key={} txnId={}",
+                            idempotencyKey, existing.getId());
                     return transactionMapper.toResponse(existing);
                 })
                 .orElseGet(() -> {
-                    // ── Server-side KYC gate ──────────────────────────────────
-                    // Blocks PENDING, DOCUMENT_SUBMITTED, AI_PROCESSING, REJECTED.
-                    // Allows APPROVED, MANUAL_REVIEW (flagged but not blocked), UNKNOWN (fallback).
-                    userServiceClient.assertKycAllowsTransaction(userId);
-
                     idempotencyService.claim(idempotencyKey);
                     return createNew(request, idempotencyKey, userId);
                 });
@@ -71,6 +77,13 @@ public class TransactionService {
     private TransactionResponse createNew(TransactionRequest request,
                                           String idempotencyKey,
                                           UUID userId) {
+        // ── Payee existence gate ──────────────────────────────────────────────
+        // Validate the payee is a registered AegisPay user BEFORE writing anything
+        // to the DB or initiating the saga.  Without this check a transaction to an
+        // unknown payeeId would charge the sender via Stripe and then silently skip
+        // the receiver credit in the ledger, losing money permanently.
+        userServiceClient.assertPayeeExists(request.payeeId());
+
         // Merge note into metadata so it is persisted and returned via the mapper
         java.util.Map<String, Object> meta = new java.util.HashMap<>();
         if (request.metadata() != null) meta.putAll(request.metadata());

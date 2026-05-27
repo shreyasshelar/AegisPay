@@ -28,10 +28,30 @@ public class NotificationTemplateService {
                     "Your payment has been reversed. " +
                     vars.getOrDefault("rollbackReason", ""));
 
-            case KYC_STATUS_CHANGED -> new RenderedNotification(
-                    "KYC Status Update",
-                    "Your KYC status has been updated to: " +
-                    vars.getOrDefault("newStatus", "Unknown"));
+            case KYC_STATUS_CHANGED -> {
+                String newStatus = vars.getOrDefault("newStatus", "");
+                yield switch (newStatus) {
+                    case "DOCUMENT_SUBMITTED" -> new RenderedNotification(
+                            "Document Received",
+                            "Your document has been received and is now being analysed by our AI system. " +
+                            "We will notify you once the review is complete.");
+                    case "AI_PROCESSING" -> new RenderedNotification(
+                            "AI Processing",
+                            "Your KYC document is being processed by AI. This usually takes a few minutes.");
+                    case "APPROVED" -> new RenderedNotification(
+                            "KYC Approved",
+                            "Your identity has been verified. Your account now has full access to all features.");
+                    case "REJECTED" -> new RenderedNotification(
+                            "KYC Rejected",
+                            "Your document could not be verified. Please re-upload a valid identity document.");
+                    case "MANUAL_REVIEW" -> new RenderedNotification(
+                            "KYC Under Review",
+                            "Your document has been flagged for manual review. Our compliance team will contact you shortly.");
+                    default -> new RenderedNotification(
+                            "KYC Status Update",
+                            "Your KYC status has been updated to: " + newStatus);
+                };
+            }
 
             case USER_REGISTERED -> new RenderedNotification(
                     "Welcome to AegisPay!",

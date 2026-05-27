@@ -6,11 +6,9 @@ final class ProfileViewModel: ObservableObject {
 
     @Published private(set) var profile:        UserProfile?
     @Published private(set) var isLoading       = false
-    @Published private(set) var isProcessing    = false   // OCR in flight
-    @Published private(set) var isConfirming    = false   // PATCH in flight
-    @Published private(set) var kycResult:      KycProcessingResult?
+    @Published private(set) var isProcessing    = false   // upload in flight
+    @Published private(set) var submitSuccess   = false   // 202 received; processing in background
     @Published private(set) var errorMessage:   String?
-    @Published private(set) var confirmSuccess  = false
 
     // Document type selection
     @Published var selectedDocType: KycDocumentType = .nationalId
@@ -42,7 +40,7 @@ final class ProfileViewModel: ObservableObject {
         defer { selectedPhoto = nil }
 
         isProcessing  = true
-        kycResult     = nil
+        submitSuccess = false
         errorMessage  = nil
 
         do {
@@ -61,9 +59,9 @@ final class ProfileViewModel: ObservableObject {
     // ── Process image from camera or picker ───────────────────────────────────
 
     func processImage(_ uiImage: UIImage) async {
-        isProcessing = true
-        kycResult    = nil
-        errorMessage = nil
+        isProcessing  = true
+        submitSuccess = false
+        errorMessage  = nil
 
         guard let data = uiImage.jpegData(compressionQuality: 0.85) else {
             errorMessage = AppError.imageLoadFailed.localizedDescription
@@ -90,15 +88,14 @@ final class ProfileViewModel: ObservableObject {
         )
 
         do {
-            let result = try await userService.processKycDocument(request)
-            kycResult  = result
-
-            if result.tampering?.tampered == true {
-                HapticFeedback.warning()
-            } else if result.quality.acceptable {
-                HapticFeedback.success()
-            } else {
-                HapticFeedback.warning()
+            // Server returns 202 immediately — AI pipeline runs in the background.
+            // Result arrives via push notification / WebSocket when processing completes.
+            try await userService.processKycDocument(request)
+            submitSuccess = true
+            HapticFeedback.success()
+            // Refresh profile so the status banner updates to DOCUMENT_SUBMITTED / AI_PROCESSING
+            if let userId = profile?.id {
+                await load(userId: userId)
             }
         } catch {
             errorMessage = error.localizedDescription
@@ -106,35 +103,9 @@ final class ProfileViewModel: ObservableObject {
         }
     }
 
-    // ── Confirm extracted data ────────────────────────────────────────────────
-
-    func confirmKyc(userId: String) async {
-        isConfirming  = true
-        errorMessage  = nil
-        do {
-            try await userService.confirmKyc(userId: userId, documentType: selectedDocType.rawValue)
-            confirmSuccess = true
-            kycResult      = nil
-            HapticFeedback.success()
-            // Refresh profile to get updated kycStatus
-            await load(userId: userId)
-        } catch {
-            errorMessage = error.localizedDescription
-            HapticFeedback.error()
-        }
-        isConfirming = false
-    }
-
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    func resetResult() { kycResult = nil; errorMessage = nil }
-
-    var canConfirm: Bool {
-        guard let r = kycResult else { return false }
-        if r.tampering?.tampered == true { return false }
-        if let v = r.validation, !v.overallValid { return false }
-        return r.quality.acceptable
-    }
+    func resetResult() { submitSuccess = false; errorMessage = nil }
 }
 
 enum AppError: LocalizedError {

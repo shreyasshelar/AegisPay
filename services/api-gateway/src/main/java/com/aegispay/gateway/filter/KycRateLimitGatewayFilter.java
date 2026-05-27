@@ -78,7 +78,35 @@ public class KycRateLimitGatewayFilter implements GatewayFilter {
                             });
                 })
                 .onErrorResume(IllegalStateException.class,
-                        e -> rejectKycExceeded(exchange, cfg.getWindowHours()));
+                        e -> rejectKycExceeded(exchange, cfg.getWindowHours()))
+                .onErrorResume(e -> {
+                    // Redis or other infrastructure failure. Fail closed: reject with 503
+                    // rather than allowing an unmetered KYC attempt through.
+                    log.error("KYC rate limiter check failed (Redis unavailable?): {}", e.getMessage(), e);
+                    return rejectServiceUnavailable(exchange);
+                });
+    }
+
+    private Mono<Void> rejectServiceUnavailable(ServerWebExchange exchange) {
+        exchange.getResponse().setStatusCode(HttpStatus.SERVICE_UNAVAILABLE);
+        exchange.getResponse().getHeaders().setContentType(MediaType.APPLICATION_JSON);
+
+        ErrorResponse error = ErrorResponse.builder()
+                .errorCode("RATE_LIMITER_UNAVAILABLE")
+                .message("KYC service temporarily unavailable. Please try again in a moment.")
+                .httpStatus(HttpStatus.SERVICE_UNAVAILABLE.value())
+                .build();
+
+        byte[] body;
+        try {
+            body = objectMapper.writeValueAsBytes(ApiResponse.error(error));
+        } catch (JsonProcessingException e) {
+            body = "{\"success\":false,\"error\":{\"errorCode\":\"RATE_LIMITER_UNAVAILABLE\"}}"
+                    .getBytes(StandardCharsets.UTF_8);
+        }
+
+        DataBuffer buffer = exchange.getResponse().bufferFactory().wrap(body);
+        return exchange.getResponse().writeWith(Mono.just(buffer));
     }
 
     private Mono<Void> rejectKycExceeded(ServerWebExchange exchange, int windowHours) {

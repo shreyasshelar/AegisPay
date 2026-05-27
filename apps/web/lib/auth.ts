@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto'
 import http from 'http'
 import type { NextAuthOptions, Session } from 'next-auth'
 import type { JWT } from 'next-auth/jwt'
@@ -84,20 +85,30 @@ export const authOptions: NextAuthOptions = {
       authorization: { params: { scope: 'openid email profile offline_access' } },
       httpOptions: { agent: ipv4Agent, timeout: 10000 },
       profile(profile) {
+        const p = profile as Record<string, unknown>
+        const aegisUserId = p.aegispay_user_id as string | undefined
         return {
           // Use the AegisPay domain UUID if present; fall back to Keycloak sub.
-          // This is critical for WebSocket subscriptions and API calls that
-          // look up users by their AegisPay UUID, not the Keycloak internal UUID.
-          id:    (profile as Record<string, unknown>).aegispay_user_id as string | undefined
-                   ?? profile.sub,
-          name:  profile.name ?? profile.preferred_username,
-          email: profile.email,
-          image: profile.picture,
-          role:  (profile.realm_access?.roles ?? []).includes('ADMIN')
-                   ? 'ADMIN'
-                   : (profile.realm_access?.roles ?? []).includes('BACK_OFFICE')
-                     ? 'BACK_OFFICE'
-                     : 'CUSTOMER',
+          // Social-login users won't have aegispay_user_id until the User Service
+          // provisions them — the jwt callback handles that registration step.
+          id:                aegisUserId ?? profile.sub,
+          name:              profile.name ?? profile.preferred_username,
+          email:             profile.email,
+          image:             profile.picture,
+          role:              (profile.realm_access?.roles ?? []).includes('ADMIN')
+                               ? 'ADMIN'
+                               : (profile.realm_access?.roles ?? []).includes('BACK_OFFICE')
+                                 ? 'BACK_OFFICE'
+                                 : (profile.realm_access?.roles ?? []).includes('MERCHANT_OPS')
+                                   ? 'MERCHANT_OPS'
+                                   : (profile.realm_access?.roles ?? []).includes('PARTNER')
+                                     ? 'PARTNER'
+                                     : 'CUSTOMER',
+          // Extra fields forwarded to jwt callback for auto-registration
+          rawSub:            profile.sub,
+          firstName:         (p.given_name as string | undefined) ?? profile.preferred_username ?? '',
+          lastName:          (p.family_name as string | undefined) ?? '',
+          needsRegistration: !aegisUserId,
         }
       },
     }),
@@ -115,14 +126,152 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, account, user }) {
       // ── Initial sign-in: Keycloak just issued fresh tokens ──────────────────
       if (account && user) {
+        const u = user as { role?: string; needsRegistration?: boolean; firstName?: string; lastName?: string }
+        let userId = user.id
+
+        // Always call /register on every initial sign-in — the endpoint is fully idempotent
+        // on externalId (Keycloak sub).  For established users it is a cheap no-op that returns
+        // the existing record; for new or re-provisioned users it creates the record.
+        //
+        // Calling unconditionally (rather than only when needsRegistration=true) covers the
+        // "stale attribute" edge case: if the DB was wiped after the user's last login, the
+        // Keycloak user-attribute aegispay_user_id still points to the old (now-missing) UUID.
+        // Without this call the session would carry a UUID that resolves to 404 on every API
+        // call.  By always registering we get the correct (possibly new) UUID in the session.
+        //
+        // Cases handled:
+        //   (a) First-time / social login — no aegispay_user_id in JWT yet.
+        //   (b) Keycloak-native users created via admin console.
+        //   (c) Established users (normal re-login) — idempotent, returns existing record.
+        //   (d) Stale-attribute users (post-DB-wipe) — re-creates the record.
+        if (!user.email) {
+          // Guard: some OAuth providers don't return an email (e.g. GitHub with private email).
+          // Without an email we cannot register — fail gracefully rather than sending null.
+          console.error(
+            '[auth] Cannot auto-register user: no email in IdP profile. ' +
+            'sub=%s provider=%s — user will see USER_NOT_FOUND until email is set in IdP.',
+            user.rawSub ?? user.id,
+            account.provider,
+          )
+          // Fall through — userId stays as Keycloak sub (or the stale aegispay_user_id set by
+          // profile()).  All API calls will fail with 404 until email is configured in the IdP.
+        } else {
+          try {
+            const apiBase    = process.env.API_BASE_URL ?? 'http://localhost:8080'
+            const nameParts  = (user.name ?? '').split(' ')
+            const firstName  = u.firstName || nameParts[0] || 'User'
+            const lastName   = u.lastName  || nameParts.slice(1).join(' ') || 'Account'
+
+            const resp = await fetch(`${apiBase}/api/v1/users/register`, {
+              method: 'POST',
+              headers: {
+                'Content-Type':      'application/json',
+                'Authorization':     `Bearer ${account.access_token}`,
+                'X-Idempotency-Key': randomUUID(),
+              },
+              body: JSON.stringify({
+                email:     user.email,
+                firstName,
+                lastName,
+                tenantId:  'default',
+              }),
+            })
+
+            if (resp.ok) {
+              const body = await resp.json() as { data?: { id?: string } }
+              if (body.data?.id) {
+                userId = body.data.id
+                if (u.needsRegistration) {
+                  console.log('[auth] User provisioned — aegispay_user_id=%s sub=%s',
+                    userId, user.rawSub ?? user.id)
+                } else if (userId !== user.id) {
+                  // Stale-attribute case: the DB returned a different UUID than what Keycloak
+                  // had stored.  Use the authoritative DB value for this session.
+                  console.warn('[auth] Stale aegispay_user_id corrected — old=%s new=%s sub=%s',
+                    user.id, userId, user.rawSub ?? user.id)
+                }
+              } else {
+                // Should never happen: 2xx but no id in envelope.
+                console.error('[auth] Registration 2xx but response contained no user id. ' +
+                  'body=%j sub=%s', body, user.rawSub ?? user.id)
+                // userId stays as whatever profile() set — /me fallback in UserController will
+                // recover via getByExternalId if the DB record exists.
+              }
+            } else if (resp.status === 409) {
+              // 409 can mean:
+              //   (a) EMAIL_ALREADY_EXISTS — a different Keycloak sub already owns this email.
+              //       This is a genuine account conflict (e.g. email+password first, then social
+              //       login with the same address).  We CANNOT merge accounts automatically —
+              //       that could grant access to someone else's funds.  The user must sign in
+              //       with their original method to access their account.
+              //   (b) DATA_CONFLICT — concurrent first-time logins for the same sub raced past
+              //       the findByExternalId check.  The DB constraint fired.  The /register
+              //       controller retries and returns the existing user (so this path is rare),
+              //       but if /register itself returns 409 we recover here by calling /me.
+              //   (c) Idempotency key collision (extremely unlikely with randomUUID).
+              const errBody = await resp.json().catch(() => ({})) as { error?: { code?: string } }
+              if (errBody.error?.code === 'EMAIL_ALREADY_EXISTS') {
+                console.warn(
+                  '[auth] EMAIL_ALREADY_EXISTS during registration for sub=%s email=%s — ' +
+                  'an existing account owns this email.  Profile will show a "not found" error; ' +
+                  'the user must sign in with their original method (email+password) to access ' +
+                  'their account.  userId stays as Keycloak sub for this session.',
+                  user.rawSub ?? user.id,
+                  user.email,
+                )
+                // userId stays as Keycloak sub — profile/ledger calls will return 404, which
+                // is intentional: this session has no valid AegisPay account to display.
+              } else if (errBody.error?.code === 'DATA_CONFLICT') {
+                // Concurrent registration: another request for this sub won the race.
+                // Recover by reading the existing user from /me (external_id lookup).
+                console.warn(
+                  '[auth] DATA_CONFLICT on registration for sub=%s — fetching existing user via /me',
+                  user.rawSub ?? user.id,
+                )
+                try {
+                  const meResp = await fetch(`${apiBase}/api/v1/users/me`, {
+                    headers: { 'Authorization': `Bearer ${account.access_token}` },
+                  })
+                  if (meResp.ok) {
+                    const meBody = await meResp.json() as { data?: { id?: string } }
+                    if (meBody.data?.id) {
+                      userId = meBody.data.id
+                      console.log('[auth] DATA_CONFLICT recovered via /me: userId=%s sub=%s',
+                        userId, user.rawSub ?? user.id)
+                    }
+                  }
+                } catch (meErr) {
+                  console.error('[auth] DATA_CONFLICT /me recovery failed: %o sub=%s',
+                    meErr, user.rawSub ?? user.id)
+                  // userId stays as user.id (sub for new users → getMe bootstrap fallback works)
+                }
+              } else {
+                console.error('[auth] Registration 409 (unexpected code): %j sub=%s',
+                  errBody, user.rawSub ?? user.id)
+              }
+            } else {
+              const errText = await resp.text().catch(() => '(unreadable)')
+              console.error('[auth] Registration failed: status=%d body=%s sub=%s',
+                resp.status, errText, user.rawSub ?? user.id)
+              // userId stays as whatever profile() set.
+              // /me will work via getByExternalId if the user exists in DB by externalId.
+              // If not, the user will see errors — logging out and back in retries registration.
+            }
+          } catch (err) {
+            console.error('[auth] Registration fetch threw (network/timeout): %o sub=%s',
+              err, user.rawSub ?? user.id)
+            // userId stays as whatever profile() set — transient error, retry on next login.
+          }
+        }
+
         return {
           ...token,
           error:                undefined,          // clear any previous error
           accessToken:          account.access_token!,
           accessTokenExpiresAt: account.expires_at! * 1000,
           refreshToken:         account.refresh_token ?? '',
-          userId:               user.id,
-          role:                 (user as { role?: string }).role ?? 'CUSTOMER',
+          userId,
+          role:                 u.role ?? 'CUSTOMER',
         }
       }
 
@@ -182,7 +331,13 @@ declare module 'next-auth' {
       role:   string
     }
   }
-  interface User { role: string }
+  interface User {
+    role: string
+    rawSub?: string
+    firstName?: string
+    lastName?: string
+    needsRegistration?: boolean
+  }
 }
 
 declare module 'next-auth/jwt' {

@@ -40,6 +40,8 @@ export type User = z.infer<typeof UserSchema>
 export const KycUploadRequestSchema = z.object({
   base64ImageData: z.string().min(1),
   mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp']),
+  /** Document category sent to AI Platform so it can include it in the User Service callback. */
+  documentType: z.string().optional(),
   registeredName: z.string().optional(),
 })
 export type KycUploadRequest = z.infer<typeof KycUploadRequestSchema>

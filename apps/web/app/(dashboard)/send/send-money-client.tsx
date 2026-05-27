@@ -6,7 +6,7 @@ import { Plus, ShieldAlert, ArrowRight, Loader2 } from 'lucide-react'
 import { useSession } from 'next-auth/react'
 import { useSendMoneyStore } from '@/lib/useSendMoneyStore'
 import { useAuthGuard } from '@/lib/useAuthGuard'
-import { useUser } from '@aegispay/api-client'
+import { useMe } from '@aegispay/api-client'
 import { StepPayee }  from './steps/StepPayee'
 import { StepAmount } from './steps/StepAmount'
 import { StepReview } from './steps/StepReview'
@@ -97,10 +97,9 @@ export function SendMoneyClient() {
   const { data: session }  = useSession()
   const { step, reset }    = useSendMoneyStore()
 
-  // Check if the user's KYC is approved before allowing any send action
-  const { data: user, isLoading: userLoading } = useUser(session?.user?.id ?? '', {
-    enabled: !!session?.user?.id,
-  })
+  // Use /me so it works immediately for Google/Microsoft users whose JWT
+  // does not yet carry aegispay_user_id (async Keycloak write-back pending).
+  const { data: user, isLoading: userLoading } = useMe()
 
   // Reset wizard state every time this page mounts so previous transaction doesn't leak
   useEffect(() => {
