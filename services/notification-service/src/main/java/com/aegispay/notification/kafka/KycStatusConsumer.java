@@ -34,10 +34,18 @@ public class KycStatusConsumer {
 
             dispatcher.dispatch(userId, NotificationType.KYC_STATUS_CHANGED, "WEBSOCKET", null, vars);
 
-            // SMS for KYC decisions — user needs to know immediately
-            String phone = resolvePhone(userId);
-            if (phone != null) {
-                dispatcher.dispatch(userId, NotificationType.KYC_STATUS_CHANGED, "SMS", phone, vars);
+            // SMS only for final KYC decisions (APPROVED / REJECTED / MANUAL_REVIEW).
+            // Transitional states (DOCUMENT_SUBMITTED, AI_PROCESSING) only need the
+            // WebSocket push so the UI can update — no need to text the user for every step.
+            String newStatus = event.getNewStatus() != null ? event.getNewStatus().name() : "";
+            boolean isFinalDecision = newStatus.equals("APPROVED")
+                    || newStatus.equals("REJECTED")
+                    || newStatus.equals("MANUAL_REVIEW");
+            if (isFinalDecision) {
+                String phone = resolvePhone(userId);
+                if (phone != null) {
+                    dispatcher.dispatch(userId, NotificationType.KYC_STATUS_CHANGED, "SMS", phone, vars);
+                }
             }
         } catch (Exception e) {
             log.error("Error processing KYC status notification: {}", e.getMessage(), e);

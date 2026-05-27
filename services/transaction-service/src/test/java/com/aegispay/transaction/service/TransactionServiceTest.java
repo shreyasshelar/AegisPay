@@ -55,7 +55,7 @@ class TransactionServiceTest {
     @Test
     void createBuildsTransactionAndOutboxEntry() {
         when(transactionRepository.findByIdempotencyKey("key-1")).thenReturn(Optional.empty());
-        doNothing().when(userServiceClient).assertKycAllowsTransaction(any());
+        doNothing().when(userServiceClient).assertPayeeExists(any(UUID.class));
 
         Transaction saved = buildTransaction();
         when(transactionRepository.save(any(Transaction.class))).thenReturn(saved);

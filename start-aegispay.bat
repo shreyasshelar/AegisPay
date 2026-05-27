@@ -202,8 +202,10 @@ set NOTIFICATION_SERVICE_URI=http://localhost:8086
 set AI_PLATFORM_URI=http://localhost:8091
 
 REM Optional — override if you have real keys
-REM AI Platform — OpenRouter (free models, onprem profile). Get key: https://openrouter.ai
-IF "%OPENROUTER_API_KEY%"=="" set OPENROUTER_API_KEY=sk-ant-placeholder-local-dev
+REM AI Platform — Groq (dev profile, free vision inference). Get key: https://console.groq.com
+IF "%GROQ_API_KEY%"=="" set GROQ_API_KEY=gsk-placeholder-local-dev
+REM AI Platform — OpenRouter (legacy/fallback). Get key: https://openrouter.ai
+IF "%OPENROUTER_API_KEY%"=="" set OPENROUTER_API_KEY=sk-or-placeholder-local-dev
 REM AI Platform — Anthropic Claude (prod profile). Set for real KYC/fraud AI with Claude.
 IF "%ANTHROPIC_API_KEY%"=="" set ANTHROPIC_API_KEY=sk-ant-placeholder-local-dev
 IF "%STRIPE_SECRET_KEY%"=="" set STRIPE_SECRET_KEY=sk_test_51TTkk2CyjRW67i1DP4dcrEgzhOm9dUe61k9U5kPNoDST6Deuy9rAvgJY0ZL93kKbDmdP7SEAUXUM6M4TMMtxkWNb00eKgRIql5
@@ -278,9 +280,7 @@ echo Libs parent POM installed
 echo.
 echo Building and installing shared libraries...
 
-call !MVN_CMD! --batch-mode --no-transfer-progress clean install ^
--pl libs/common-domain,libs/common-security,libs/common-kafka,libs/common-observability ^
---also-make ^
+call !MVN_CMD! --batch-mode --no-transfer-progress -f libs/pom.xml clean install ^
 -DskipTests -q
 
 IF %ERRORLEVEL% NEQ 0 (
@@ -386,10 +386,26 @@ echo try { $r = Invoke-RestMethod -Method Post -Uri ($url+'/realms/master/protoc
 echo if (-not $r -or -not $r.access_token) { Write-Host '  No admin token - IDP seed skipped'; exit 0 } >> "!KC_SEED_PS!"
 echo $h = @{ Authorization = "Bearer $($r.access_token)"; 'Content-Type' = 'application/json' } >> "!KC_SEED_PS!"
 echo $idps = @( >> "!KC_SEED_PS!"
-echo @{ n='Google';    b='{"alias":"google","providerId":"google","displayName":"Google","enabled":true,"config":{"clientId":"!GOOGLE_CLIENT_ID!","clientSecret":"!GOOGLE_CLIENT_SECRET!","defaultScope":"email profile openid"}}' }, >> "!KC_SEED_PS!"
-echo @{ n='Microsoft'; b='{"alias":"microsoft","providerId":"microsoft","displayName":"Microsoft","enabled":true,"config":{"clientId":"!MICROSOFT_CLIENT_ID!","clientSecret":"!MICROSOFT_CLIENT_SECRET!","tenantId":"!MICROSOFT_TENANT_ID!","defaultScope":"openid email profile"}}' } >> "!KC_SEED_PS!"
+echo @{ n='Google';    alias='google';    b='{"alias":"google","providerId":"google","displayName":"Google","enabled":true,"config":{"clientId":"!GOOGLE_CLIENT_ID!","clientSecret":"!GOOGLE_CLIENT_SECRET!","defaultScope":"email profile openid"}}' }, >> "!KC_SEED_PS!"
+echo @{ n='Microsoft'; alias='microsoft'; b='{"alias":"microsoft","providerId":"microsoft","displayName":"Microsoft","enabled":true,"config":{"clientId":"!MICROSOFT_CLIENT_ID!","clientSecret":"!MICROSOFT_CLIENT_SECRET!","tenantId":"!MICROSOFT_TENANT_ID!","defaultScope":"openid email profile"}}' } >> "!KC_SEED_PS!"
 echo ) >> "!KC_SEED_PS!"
-echo foreach ($idp in $idps) { try { Invoke-RestMethod -Method Post -Uri ($url+'/admin/realms/'+$realm+'/identity-provider/instances') -Headers $h -Body $idp.b -ErrorAction Stop ^| Out-Null; Write-Host ("  "+$idp.n+" IDP created") } catch { if ($_.Exception.Response -and $_.Exception.Response.StatusCode.value__ -eq 409) { Write-Host ("  "+$idp.n+" IDP already exists") } else { Write-Host ("  "+$idp.n+" IDP: "+$_.Exception.Message) } } } >> "!KC_SEED_PS!"
+echo foreach ($idp in $idps) { >> "!KC_SEED_PS!"
+echo     try { >> "!KC_SEED_PS!"
+echo         Invoke-RestMethod -Method Post -Uri ($url+'/admin/realms/'+$realm+'/identity-provider/instances') -Headers $h -Body $idp.b -ErrorAction Stop ^| Out-Null >> "!KC_SEED_PS!"
+echo         Write-Host ("  "+$idp.n+" IDP created") >> "!KC_SEED_PS!"
+echo     } catch { >> "!KC_SEED_PS!"
+echo         if ($_.Exception.Response -and $_.Exception.Response.StatusCode.value__ -eq 409) { >> "!KC_SEED_PS!"
+echo             try { >> "!KC_SEED_PS!"
+echo                 Invoke-RestMethod -Method Put -Uri ($url+'/admin/realms/'+$realm+'/identity-provider/instances/'+$idp.alias) -Headers $h -Body $idp.b -ErrorAction Stop ^| Out-Null >> "!KC_SEED_PS!"
+echo                 Write-Host ("  "+$idp.n+" IDP credentials updated") >> "!KC_SEED_PS!"
+echo             } catch { >> "!KC_SEED_PS!"
+echo                 Write-Host ("  "+$idp.n+" IDP update failed: "+$_.Exception.Message) >> "!KC_SEED_PS!"
+echo             } >> "!KC_SEED_PS!"
+echo         } else { >> "!KC_SEED_PS!"
+echo             Write-Host ("  "+$idp.n+" IDP error: "+$_.Exception.Message) >> "!KC_SEED_PS!"
+echo         } >> "!KC_SEED_PS!"
+echo     } >> "!KC_SEED_PS!"
+echo } >> "!KC_SEED_PS!"
 powershell -NoProfile -ExecutionPolicy Bypass -File "!KC_SEED_PS!"
 del "!KC_SEED_PS!" >nul 2>&1
 
@@ -562,7 +578,7 @@ start "notification-service" /MIN cmd /c ^
 "java -DSMTP_PASSWORD=!SMTP_PASSWORD! -DFAST2SMS_API_KEY=!FAST2SMS_API_KEY! -DSLACK_WEBHOOK_URL=!SLACK_WEBHOOK_URL! -jar services\notification-service\target\notification-service-1.0.0-SNAPSHOT.jar > logs\notification-service.log 2>&1"
 
 start "ai-platform" /MIN cmd /c ^
-"java -Dspring.profiles.active=dev -DOPENROUTER_API_KEY=!OPENROUTER_API_KEY! -DANTHROPIC_API_KEY=!ANTHROPIC_API_KEY! -jar services\ai-platform\target\ai-platform-1.0.0-SNAPSHOT.jar > logs\ai-platform.log 2>&1"
+"java -Dspring.profiles.active=dev -DGROQ_API_KEY=!GROQ_API_KEY! -DOPENROUTER_API_KEY=!OPENROUTER_API_KEY! -DANTHROPIC_API_KEY=!ANTHROPIC_API_KEY! -DUSER_SERVICE_URL=http://localhost:8081 -jar services\ai-platform\target\ai-platform-1.0.0-SNAPSHOT.jar > logs\ai-platform.log 2>&1"
 
 start "data-pipeline" /MIN cmd /c ^
 "java -jar services\data-pipeline\target\data-pipeline-1.0.0-SNAPSHOT.jar > logs\data-pipeline.log 2>&1"
@@ -617,20 +633,27 @@ call :wait_service ai-platform 8091
 REM =========================================================
 REM SEED TEST ACCOUNTS
 REM =========================================================
+REM
+REM Users are seeded by Flyway V5 (user-service) — no psql INSERT needed here.
+REM Ledger accounts are seeded by Flyway V6 (ledger-service) on startup.
+REM This psql call is a safety-net top-up in case a manual DB wipe left accounts
+REM missing; ON CONFLICT DO NOTHING makes it a no-op when Flyway already ran.
+REM
+REM IDs below are the AegisPay domain UUIDs (users.id / accounts.user_id).
+REM They MUST match user-service V5__seed_dev_users.sql and
+REM ledger-service V6__seed_dev_accounts.sql.
+REM =========================================================
 
 echo.
 echo Seeding test accounts...
 
-set CUSTOMER_KC_UUID=59295e61-a284-40ed-8d3b-9e15bedeb040
-set PAYEE_KC_UUID=3bf3e523-9de8-4254-9cc9-d5fa50ff8d4a
+set CUSTOMER_ID=3f951f39-c51e-4713-9b40-4209b0c4942b
+set PAYEE_ID=be0f53e9-ac88-4a0c-9f09-913df3c8f0eb
 
-docker exec -e PGPASSWORD=aegispay_dev aegispay-postgres psql -U aegispay -d aegispay_ledger -c "INSERT INTO accounts (user_id, currency, available_balance, reserved_balance) VALUES ('%CUSTOMER_KC_UUID%', 'INR', 50000.00, 0.00), ('%PAYEE_KC_UUID%', 'INR', 25000.00, 0.00) ON CONFLICT (user_id, currency) DO NOTHING;" >nul 2>&1
+docker exec -e PGPASSWORD=aegispay_dev aegispay-postgres psql -U aegispay -d aegispay_ledger -c "INSERT INTO accounts (user_id, currency, available_balance, reserved_balance) VALUES ('%CUSTOMER_ID%', 'INR', 100000.00, 0.00), ('%PAYEE_ID%', 'INR', 100000.00, 0.00) ON CONFLICT (user_id, currency) DO NOTHING;" >nul 2>&1
 IF %ERRORLEVEL% EQU 0 ( echo Ledger accounts seeded ) ELSE ( echo Ledger seed skipped ^(may already exist^) )
 
-docker exec -e PGPASSWORD=aegispay_dev aegispay-postgres psql -U aegispay -d aegispay_users -c "INSERT INTO users (external_id, email, first_name, last_name, phone, role, kyc_status, is_active) VALUES ('%CUSTOMER_KC_UUID%', 'customer@aegispay.local', 'Test', 'Customer', '+919000000001', 'CUSTOMER', 'APPROVED', true), ('%PAYEE_KC_UUID%', 'payee@aegispay.local', 'Test', 'Payee', '+919000000002', 'CUSTOMER', 'APPROVED', true) ON CONFLICT DO NOTHING;" >nul 2>&1
-IF %ERRORLEVEL% EQU 0 ( echo User data seeded ) ELSE ( echo User seed skipped ^(may already exist^) )
-
-echo Test accounts ready — Customer INR 50000  ^|  Payee INR 25000
+echo Test accounts ready — Customer INR 100000  ^|  Payee INR 100000
 
 REM =========================================================
 REM FRONTEND
@@ -815,9 +838,9 @@ echo   ClickHouse     -^>  http://localhost:8123
 echo   PostgreSQL     -^>  localhost:5433          (aegispay / aegispay_dev)
 echo.
 echo   Test accounts:
-echo     Sender : customer@aegispay.local / Test@1234  (INR 50000)
-echo     Payee  : payee@aegispay.local    / Test@1234  (INR 25000)
-echo     Payee UUID: %PAYEE_KC_UUID%
+echo     Sender : customer@aegispay.local / Test@1234  (INR 100000)
+echo     Payee  : payee@aegispay.local    / Test@1234  (INR 100000)
+echo     Payee AegisPay ID: !PAYEE_ID!
 echo.
 
 IF "!LAUNCH_ANDROID!"=="1" (

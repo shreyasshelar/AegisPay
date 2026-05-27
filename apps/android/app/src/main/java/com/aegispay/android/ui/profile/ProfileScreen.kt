@@ -27,15 +27,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import com.aegispay.android.auth.BiometricAuthManager
 import com.aegispay.android.network.KycDocumentType
-import com.aegispay.android.network.KycExtractedData
-import com.aegispay.android.network.KycProcessingResult
 import com.aegispay.android.network.KycStatus
 import com.aegispay.android.ui.components.AegisCard
 import com.aegispay.android.ui.components.ShimmerBox
@@ -246,7 +243,7 @@ fun ProfileScreen(
                             }
                         }
 
-                        if (cfg.canUpload && uiState.kycResult == null) {
+                        if (cfg.canUpload) {
                             // Document type picker
                             ExposedDropdownMenuBox(
                                 expanded         = docTypeExpanded,
@@ -308,25 +305,8 @@ fun ProfileScreen(
                 }
             }
 
-            // ── KYC result card ───────────────────────────────────────────────
-            AnimatedVisibility(
-                visible = uiState.kycResult != null,
-                enter   = fadeIn(),
-                exit    = fadeOut(),
-            ) {
-                uiState.kycResult?.let { result ->
-                    KycResultCard(
-                        result     = result,
-                        uiState    = uiState,
-                        onRetake   = { viewModel.resetResult() },
-                        onConfirm  = { viewModel.confirmKyc() },
-                        canConfirm = viewModel.canConfirm,
-                    )
-                }
-            }
-
-            // ── Confirm success notice ────────────────────────────────────────
-            if (uiState.confirmSuccess) {
+            // ── Upload success notice ─────────────────────────────────────────
+            if (uiState.uploadSuccess) {
                 Surface(
                     color  = AegisColor.SuccessLight,
                     shape  = MaterialTheme.shapes.medium,
@@ -429,157 +409,7 @@ fun ProfileScreen(
     }
 }
 
-// ── KYC result card ───────────────────────────────────────────────────────────
-
-@Composable
-private fun KycResultCard(
-    result:     KycProcessingResult,
-    uiState:    ProfileUiState,
-    onRetake:   () -> Unit,
-    onConfirm:  () -> Unit,
-    canConfirm: Boolean,
-) {
-    AegisCard {
-        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-
-            // ── Quality ───────────────────────────────────────────────────────
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Icon(Icons.Default.Star, null, tint = AegisColor.Warning, modifier = Modifier.size(18.dp))
-                    Text("Image Quality", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = AegisColor.Text)
-                    Spacer(Modifier.weight(1f))
-                    val qColor = if (result.quality.acceptable) AegisColor.Success else AegisColor.Danger
-                    Surface(color = qColor.copy(alpha = 0.12f), shape = MaterialTheme.shapes.extraLarge) {
-                        Text(
-                            if (result.quality.acceptable) "Acceptable" else "Low Quality",
-                            style    = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                            color    = qColor,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                        )
-                    }
-                }
-                QualityBar("Sharpness",  result.quality.sharpness)
-                QualityBar("Brightness", result.quality.brightness)
-                QualityBar("Overall",    result.quality.overallScore)
-            }
-
-            // ── Tampering ─────────────────────────────────────────────────────
-            if (result.tampering?.tampered == true) {
-                Surface(
-                    color  = AegisColor.DangerLight,
-                    shape  = MaterialTheme.shapes.small,
-                    border = BorderStroke(1.dp, AegisColor.Danger.copy(alpha = 0.3f)),
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.Top,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        modifier = Modifier.fillMaxWidth().padding(12.dp),
-                    ) {
-                        Icon(Icons.Default.Warning, null, tint = AegisColor.Danger, modifier = Modifier.size(18.dp))
-                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text("Tampering Detected", style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold), color = AegisColor.Danger)
-                            if (result.tampering!!.indicators.isNotEmpty()) {
-                                Text(result.tampering.indicators.joinToString(" · "),
-                                    style = MaterialTheme.typography.bodySmall, color = AegisColor.Danger.copy(alpha = 0.8f))
-                            }
-                        }
-                    }
-                }
-            }
-
-            // ── Extracted data ────────────────────────────────────────────────
-            result.extractedData?.let { data ->
-                HorizontalDivider(color = AegisColor.Border)
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Icon(Icons.Default.FindInPage, null, tint = AegisColor.Primary, modifier = Modifier.size(18.dp))
-                        Text("Extracted Information", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = AegisColor.Text)
-                    }
-                    Surface(color = AegisColor.Surface, shape = MaterialTheme.shapes.small, border = BorderStroke(1.dp, AegisColor.Border)) {
-                        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            ExtractedRow("Full Name",       data.fullName)
-                            ExtractedRow("Date of Birth",   data.dateOfBirth)
-                            ExtractedRow("Document Number", data.documentNumber)
-                            ExtractedRow("Document Type",   data.documentType)
-                            ExtractedRow("Expiry Date",     data.expiryDate)
-                            ExtractedRow("Address",         data.address)
-                        }
-                    }
-                    Text("Please verify this information before confirming.",
-                        style = MaterialTheme.typography.bodySmall, color = AegisColor.TextSubtle)
-                }
-            }
-
-            // ── Confirm error ──────────────────────────────────────────────────
-            uiState.confirmError?.let {
-                Text(it, color = AegisColor.Danger, style = MaterialTheme.typography.bodySmall)
-            }
-
-            // ── Actions ───────────────────────────────────────────────────────
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedButton(
-                    onClick  = onRetake,
-                    enabled  = !uiState.isConfirming,
-                    modifier = Modifier.weight(1f).height(52.dp),
-                    border   = BorderStroke(1.dp, AegisColor.Border),
-                ) {
-                    Icon(Icons.Default.Refresh, null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("Retake")
-                }
-                Button(
-                    onClick  = onConfirm,
-                    enabled  = canConfirm && !uiState.isConfirming,
-                    modifier = Modifier.weight(1f).height(52.dp),
-                    colors   = ButtonDefaults.buttonColors(containerColor = AegisColor.Primary),
-                    shape    = RoundedCornerShape(12.dp),
-                ) {
-                    if (uiState.isConfirming) {
-                        CircularProgressIndicator(modifier = Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
-                    } else {
-                        Icon(Icons.Default.CheckCircle, null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("Confirm & Submit", fontWeight = FontWeight.SemiBold)
-                    }
-                }
-            }
-        }
-    }
-}
-
 // ── Sub-components ────────────────────────────────────────────────────────────
-
-@Composable
-private fun QualityBar(label: String, score: Double) {
-    val color = when {
-        score >= 70 -> AegisColor.Success
-        score >= 40 -> AegisColor.Warning
-        else        -> AegisColor.Danger
-    }
-    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(label, style = MaterialTheme.typography.bodySmall, color = AegisColor.TextMuted)
-            Text("${score.toInt()}%", style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold), color = color)
-        }
-        LinearProgressIndicator(
-            progress = { (score / 100.0).toFloat() },
-            modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(4.dp)),
-            color    = color,
-            trackColor = AegisColor.Border,
-        )
-    }
-}
-
-@Composable
-private fun ExtractedRow(label: String, value: String?) {
-    if (value.isNullOrBlank()) return
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label, style = MaterialTheme.typography.bodySmall, color = AegisColor.TextMuted,
-            modifier = Modifier.weight(0.4f))
-        Text(value, style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Medium),
-            color = AegisColor.Text, modifier = Modifier.weight(0.6f))
-    }
-}
 
 @Composable
 private fun ProfileInfoRow(label: String, value: String) {

@@ -125,66 +125,6 @@ data class KycDocumentRequest(
     @Json(name = "registeredName")  val registeredName:  String? = null,
 )
 
-@JsonClass(generateAdapter = true)
-data class KycQuality(
-    @Json(name = "overallScore")    val overallScore:    Double,
-    @Json(name = "sharpness")       val sharpness:       Double,
-    @Json(name = "brightness")      val brightness:      Double,
-    @Json(name = "crop")            val crop:            Double,
-    @Json(name = "glare")           val glare:           Double,
-    @Json(name = "acceptable")      val acceptable:      Boolean,
-    @Json(name = "rejectionReason") val rejectionReason: String?,
-)
-
-@JsonClass(generateAdapter = true)
-data class KycTampering(
-    @Json(name = "tampered")   val tampered:   Boolean,
-    @Json(name = "confidence") val confidence: Double,
-    @Json(name = "indicators") val indicators: List<String>,
-)
-
-@JsonClass(generateAdapter = true)
-data class KycExtractedData(
-    @Json(name = "fullName")       val fullName:       String?,
-    @Json(name = "dateOfBirth")    val dateOfBirth:    String?,
-    @Json(name = "documentNumber") val documentNumber: String?,
-    @Json(name = "documentType")   val documentType:   String?,
-    @Json(name = "expiryDate")     val expiryDate:     String?,
-    @Json(name = "address")        val address:        String?,
-)
-
-@JsonClass(generateAdapter = true)
-data class KycValidationResult(
-    @Json(name = "documentTypeDetected")    val documentTypeDetected:    String?,
-    @Json(name = "formatValid")             val formatValid:             Boolean?,
-    @Json(name = "formatDetails")           val formatDetails:           String?,
-    @Json(name = "notExpired")              val notExpired:              Boolean?,
-    @Json(name = "ageVerified")             val ageVerified:             Boolean?,
-    @Json(name = "securityFeaturesPresent") val securityFeaturesPresent: Boolean?,
-    @Json(name = "missingSecurityFeatures") val missingSecurityFeatures: List<String>?,
-    @Json(name = "nameMatch")               val nameMatch:               Boolean?,
-    @Json(name = "nameMatchDetails")        val nameMatchDetails:        String?,
-    @Json(name = "issuingAuthorityVisible") val issuingAuthorityVisible: Boolean?,
-    @Json(name = "photoPresent")            val photoPresent:            Boolean?,
-    @Json(name = "extractedDocumentNumber") val extractedDocumentNumber: String?,
-    @Json(name = "extractedExpiry")         val extractedExpiry:         String?,
-    @Json(name = "extractedDob")            val extractedDob:            String?,
-    @Json(name = "extractedName")           val extractedName:           String?,
-    @Json(name = "overallValid")            val overallValid:            Boolean,
-    @Json(name = "failureReasons")          val failureReasons:          List<String>?,
-)
-
-@JsonClass(generateAdapter = true)
-data class KycProcessingResult(
-    @Json(name = "status")          val status:          String,
-    @Json(name = "rejectionCode")   val rejectionCode:   String?,
-    @Json(name = "rejectionReason") val rejectionReason: String?,
-    @Json(name = "quality")         val quality:         KycQuality,
-    @Json(name = "tampering")       val tampering:       KycTampering?,
-    @Json(name = "extractedData")   val extractedData:   KycExtractedData?,
-    @Json(name = "validation")      val validation:      KycValidationResult?,
-)
-
 // ── Notifications ─────────────────────────────────────────────────────────────
 
 @JsonClass(generateAdapter = true)

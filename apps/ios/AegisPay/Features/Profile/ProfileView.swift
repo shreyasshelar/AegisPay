@@ -82,9 +82,6 @@ struct ProfileView: View {
                         verifiedBadge
                     }
                     kycUploadSection
-                    if let result = vm.kycResult {
-                        kycResultCard(result)
-                    }
                     securitySection
                     signOutButton
                 }
@@ -96,7 +93,7 @@ struct ProfileView: View {
             .navigationBarTitleDisplayMode(.large)
             .task { await vm.load(userId: authStore.currentUser?.id ?? "") }
             .animation(.easeInOut, value: vm.profile?.kycStatus)
-            .animation(.easeInOut, value: vm.kycResult != nil)
+            .animation(.easeInOut, value: vm.isProcessing)
             // Camera sheet
             .sheet(isPresented: $showCamera, onDismiss: { handleCameraImage(cameraImage) }) {
                 CameraPickerView(image: $cameraImage)
@@ -222,7 +219,7 @@ struct ProfileView: View {
         let status = vm.profile?.kycStatus ?? .pending
         let canUpload = status == .pending || status == .rejected
 
-        if canUpload && vm.kycResult == nil {
+        if canUpload {
             AegisCard {
                 VStack(spacing: 20) {
                     // Header
@@ -277,7 +274,7 @@ struct ProfileView: View {
                         if vm.isProcessing {
                             VStack(spacing: 10) {
                                 ProgressView().scaleEffect(1.2)
-                                Text("Analysing document…")
+                                Text("Uploading…")
                                     .font(.aegisBodySmall)
                                     .foregroundStyle(Color.aegisTextMuted)
                             }
@@ -331,121 +328,6 @@ struct ProfileView: View {
                         }
                         .transition(.opacity.combined(with: .move(edge: .top)))
                     }
-                }
-            }
-        }
-    }
-
-    // MARK: — KYC result card
-
-    @ViewBuilder
-    private func kycResultCard(_ result: KycProcessingResult) -> some View {
-        AegisCard {
-            VStack(alignment: .leading, spacing: 20) {
-
-                // ── Quality section ──────────────────────────────────────────
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack {
-                        Image(systemName: "star.fill")
-                            .foregroundStyle(Color.aegisWarning)
-                        Text("Image Quality")
-                            .font(.aegisBodySmall)
-                            .fontWeight(.semibold)
-                            .foregroundStyle(Color.aegisText)
-                        Spacer()
-                        Text(result.quality.acceptable ? "Acceptable" : "Low Quality")
-                            .font(.aegisCaption)
-                            .fontWeight(.semibold)
-                            .foregroundStyle(result.quality.acceptable ? Color.aegisSuccess : Color.aegisDanger)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(result.quality.acceptable ? Color.aegisSuccessLight : Color.aegisDangerLight)
-                            .clipShape(Capsule())
-                    }
-                    QualityBarRow(label: "Sharpness",  score: result.quality.sharpness)
-                    QualityBarRow(label: "Brightness", score: result.quality.brightness)
-                    QualityBarRow(label: "Overall",    score: result.quality.overallScore)
-                }
-
-                // ── Tampering alert ──────────────────────────────────────────
-                if result.tampering?.tampered == true {
-                    HStack(alignment: .top, spacing: 10) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundStyle(Color.aegisDanger)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Tampering Detected")
-                                .font(.aegisBodySmall)
-                                .fontWeight(.semibold)
-                                .foregroundStyle(Color.aegisDanger)
-                            if let indicators = result.tampering?.indicators, !indicators.isEmpty {
-                                Text(indicators.joined(separator: " · "))
-                                    .font(.aegisCaption)
-                                    .foregroundStyle(Color.aegisDanger.opacity(0.8))
-                            }
-                        }
-                    }
-                    .padding(12)
-                    .background(Color.aegisDangerLight)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.aegisDanger.opacity(0.3), lineWidth: 1))
-                }
-
-                // ── Extracted data ───────────────────────────────────────────
-                if let data = result.extractedData {
-                    Divider()
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack {
-                            Image(systemName: "doc.text.magnifyingglass")
-                                .foregroundStyle(Color.aegisPrimary)
-                            Text("Extracted Information")
-                                .font(.aegisBodySmall)
-                                .fontWeight(.semibold)
-                                .foregroundStyle(Color.aegisText)
-                        }
-
-                        VStack(spacing: 0) {
-                            extractedRow("Full Name",       data.fullName)
-                            extractedRow("Date of Birth",   data.dateOfBirth)
-                            extractedRow("Document Number", data.documentNumber)
-                            extractedRow("Document Type",   data.documentType)
-                            extractedRow("Expiry Date",     data.expiryDate)
-                            extractedRow("Address",         data.address)
-                        }
-                        .background(Color.aegisSurface)
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.aegisBorder, lineWidth: 1))
-
-                        Text("Please verify this information before confirming.")
-                            .font(.aegisCaption)
-                            .foregroundStyle(Color.aegisTextSubtle)
-                    }
-                }
-
-                // ── Error from confirm ───────────────────────────────────────
-                if let err = vm.errorMessage {
-                    Text(err)
-                        .font(.aegisBodySmall)
-                        .foregroundStyle(Color.aegisDanger)
-                }
-
-                // ── Actions ──────────────────────────────────────────────────
-                HStack(spacing: 12) {
-                    Button { vm.resetResult() } label: {
-                        Label("Retake", systemImage: "arrow.counterclockwise")
-                    }
-                    .aegisButtonStyle(.secondary, fullWidth: true)
-                    .disabled(vm.isConfirming)
-
-                    Button {
-                        Task { await vm.confirmKyc(userId: authStore.currentUser?.id ?? "") }
-                    } label: {
-                        Label(
-                            vm.isConfirming ? "Submitting…" : "Confirm & Submit",
-                            systemImage: "checkmark.circle.fill"
-                        )
-                    }
-                    .aegisButtonStyle(.primary, loading: vm.isConfirming, fullWidth: true)
-                    .disabled(!vm.canConfirm || vm.isConfirming)
                 }
             }
         }
@@ -527,63 +409,4 @@ struct ProfileView: View {
         .aegisButtonStyle(.destructive, fullWidth: true)
     }
 
-    // MARK: — Helpers
-
-    @ViewBuilder
-    private func extractedRow(_ label: String, _ value: String?) -> some View {
-        if let value, !value.isEmpty {
-            HStack(alignment: .top) {
-                Text(label)
-                    .font(.aegisCaption)
-                    .foregroundStyle(Color.aegisTextMuted)
-                    .frame(width: 110, alignment: .leading)
-                Text(value)
-                    .font(.aegisCaption)
-                    .fontWeight(.medium)
-                    .foregroundStyle(Color.aegisText)
-                    .lineLimit(2)
-                Spacer()
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            Divider().padding(.leading, 12)
-        }
-    }
-}
-
-// MARK: — Quality bar
-
-private struct QualityBarRow: View {
-    let label: String
-    let score: Double
-
-    private var color: Color {
-        score >= 70 ? Color.aegisSuccess : score >= 40 ? Color.aegisWarning : Color.aegisDanger
-    }
-
-    var body: some View {
-        VStack(spacing: 3) {
-            HStack {
-                Text(label)
-                    .font(.aegisCaption)
-                    .foregroundStyle(Color.aegisTextMuted)
-                Spacer()
-                Text("\(Int(score))%")
-                    .font(.aegisCaption)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(color)
-            }
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color.aegisBorder)
-                        .frame(height: 6)
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(color)
-                        .frame(width: geo.size.width * score / 100, height: 6)
-                }
-            }
-            .frame(height: 6)
-        }
-    }
 }

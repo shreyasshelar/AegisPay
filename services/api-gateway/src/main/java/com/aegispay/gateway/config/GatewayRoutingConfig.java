@@ -51,8 +51,14 @@ public class GatewayRoutingConfig {
                     .circuitBreaker(cb -> cb
                         .setName("user-service")
                         .setFallbackUri("forward:/fallback/service-unavailable"))
+                    // GET-only retry: POSTs (/register, /kyc/documents) must not be
+                    // retried at the gateway level — the X-Idempotency-Key header makes
+                    // POST retries safe at the service level, but a gateway retry on a
+                    // network timeout produces a second write that races with the first.
+                    // 1 retry (2 total attempts) is sufficient; more amplify CB failures.
                     .retry(retryConfig -> retryConfig
-                        .setRetries(2)
+                        .setRetries(1)
+                        .setMethods(org.springframework.http.HttpMethod.GET)
                         .setStatuses(org.springframework.http.HttpStatus.BAD_GATEWAY,
                                      org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE))
                 )
@@ -68,10 +74,10 @@ public class GatewayRoutingConfig {
                     .circuitBreaker(cb -> cb
                         .setName("transaction-service")
                         .setFallbackUri("forward:/fallback/service-unavailable"))
-                    // Only retry GET — POST retries cause idempotency key collision (409)
-                    // which the CB records as failure and creates a retry→503→retry loop.
+                    // Only retry GET — POST retries cause idempotency key collision (409).
+                    // 1 retry (2 total attempts) keeps failure amplification minimal.
                     .retry(retryConfig -> retryConfig
-                        .setRetries(2)
+                        .setRetries(1)
                         .setMethods(org.springframework.http.HttpMethod.GET)
                         .setStatuses(
                             org.springframework.http.HttpStatus.BAD_GATEWAY,
@@ -145,6 +151,10 @@ public class GatewayRoutingConfig {
                 .uri(svc.getNotificationService()))
 
             // ── AI Platform — KYC (rate-limited: 5 attempts per 24 h per user) ─
+            // Uses a DEDICATED circuit breaker ("kyc-circuit-breaker") with a
+            // 360 s TimeLimiter — the KYC pipeline has 4 sequential AI vision
+            // calls that can each take up to 90 s on OpenRouter free tier.
+            // Sharing the 120 s "ai-platform" CB would time out mid-pipeline.
             .route("ai-platform-kyc", r -> r
                 .path("/api/v1/ai/kyc/**")
                 .filters(f -> f
@@ -153,7 +163,7 @@ public class GatewayRoutingConfig {
                     .filter(jwtRelayFilter)
                     .filter(kycRateLimitFilter)          // ← KYC-specific limiter
                     .circuitBreaker(cb -> cb
-                        .setName("ai-platform")
+                        .setName("kyc-circuit-breaker")
                         .setFallbackUri("forward:/fallback/service-unavailable"))
                 )
                 .uri(svc.getAiPlatform()))

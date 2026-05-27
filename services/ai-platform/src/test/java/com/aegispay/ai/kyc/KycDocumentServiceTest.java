@@ -1,7 +1,10 @@
 package com.aegispay.ai.kyc;
 
+import com.aegispay.ai.config.AiPlatformProperties;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.web.client.RestClient;
 
 import java.util.List;
 
@@ -34,7 +37,10 @@ class KycDocumentServiceTest {
         tamperService = mock(TamperingDetectionService.class);
         qualityService = mock(QualityScoreService.class);
         validationService = mock(DocumentValidationService.class);
-        kycService = new KycDocumentService(ocrService, tamperService, qualityService, validationService);
+        // Extra deps for the async callback path — not exercised by these unit tests.
+        kycService = new KycDocumentService(
+                ocrService, tamperService, qualityService, validationService,
+                new AiPlatformProperties(), new ObjectMapper(), mock(RestClient.class));
     }
 
     @Test
@@ -43,7 +49,7 @@ class KycDocumentServiceTest {
                 .thenReturn(new QualityScoreService.QualityResult(0.85, 0.9, 0.8, 0.85, 0.9, true, null));
         when(tamperService.detect(anyString(), anyString()))
                 .thenReturn(new TamperingDetectionService.TamperingResult(false, 0.05, List.of()));
-        when(validationService.validate(anyString(), anyString(), any()))
+        when(validationService.validate(anyString(), anyString(), any(), any()))
                 .thenReturn(VALID_DOC);
         when(ocrService.extract(anyString(), anyString()))
                 .thenReturn(new OcrExtractionService.ExtractedDocumentData(
@@ -88,7 +94,7 @@ class KycDocumentServiceTest {
                 .thenReturn(new QualityScoreService.QualityResult(0.85, 0.9, 0.8, 0.85, 0.9, true, null));
         when(tamperService.detect(anyString(), anyString()))
                 .thenReturn(new TamperingDetectionService.TamperingResult(true, 0.5, List.of("minor colour band")));
-        when(validationService.validate(anyString(), anyString(), any()))
+        when(validationService.validate(anyString(), anyString(), any(), any()))
                 .thenReturn(VALID_DOC);
         when(ocrService.extract(anyString(), anyString()))
                 .thenReturn(new OcrExtractionService.ExtractedDocumentData(

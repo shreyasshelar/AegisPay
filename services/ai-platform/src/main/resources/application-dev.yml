@@ -26,17 +26,19 @@ spring:
     anthropic:
       api-key: "not-used-on-dev"
 
-    # ── OpenRouter via OpenAI-compatible adapter ───────────────────────────────
-    # Spring AI 1.0 appends /v1/chat/completions to base-url, so strip the /v1
-    # here to avoid https://openrouter.ai/api/v1/v1/chat/completions (404).
+    # ── Groq via OpenAI-compatible adapter ────────────────────────────────────
+    # Groq is OpenAI-API-compatible and has native vision support on
+    # meta-llama/llama-4-scout-17b-16e-instruct (fast, free tier).
+    # Spring AI 1.0 appends /v1/chat/completions to base-url automatically.
     openai:
-      base-url: https://openrouter.ai/api
-      # OPENROUTER_API_KEY injected from Vault via ESO → K8s secret aegispay-ai-secret
-      api-key: ${OPENROUTER_API_KEY}
+      base-url: https://api.groq.com/openai
+      # GROQ_API_KEY — get a free key at https://console.groq.com
+      api-key: ${GROQ_API_KEY}
 
       chat:
         options:
-          model: nvidia/nemotron-3-super-120b-a12b:free
+          # llama-4-scout is a multimodal (vision) model — required for KYC document analysis.
+          model: meta-llama/llama-4-scout-17b-16e-instruct
           max-tokens: 2048
           temperature: 0.1
 
@@ -63,8 +65,8 @@ aegispay:
     provider: openrouter
 
     models:
-      chat: "nvidia/nemotron-3-super-120b-a12b:free"
-      vision: "meta-llama/llama-3.2-11b-vision-instruct:free"
+      chat: "meta-llama/llama-4-scout-17b-16e-instruct"
+      vision: "meta-llama/llama-4-scout-17b-16e-instruct"
       # Embeddings — local via Ollama if running, else hash fallback
       embedding: "nomic-embed-text"
 

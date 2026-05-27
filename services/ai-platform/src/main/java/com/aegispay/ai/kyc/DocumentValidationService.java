@@ -91,19 +91,25 @@ public class DocumentValidationService {
      *       routes to MANUAL_REVIEW rather than crashing with a 500.
      *   <li>{@code @Retry} — 2 retries with exponential backoff before opening circuit.
      * </ul>
+     *
+     * @param declaredDocumentType Optional: the document type the user selected in the UI
+     *                             (e.g. "NATIONAL_ID", "PASSPORT"). Passed as a hint to the AI so
+     *                             it can cross-check the user's claim against the image content
+     *                             and report a mismatch in {@code documentTypeDetected}.
      */
     @CircuitBreaker(name = "kyc-ai", fallbackMethod = "validateFallback")
     @Retry(name = "kyc-ai")
     public DocumentValidationResult validate(
             String base64ImageData,
             String mimeType,
-            String registeredName) {
+            String registeredName,
+            String declaredDocumentType) {
 
         long start = System.currentTimeMillis();
         String output = null;
         String error = null;
 
-        String prompt = buildPrompt(registeredName);
+        String prompt = buildPrompt(registeredName, declaredDocumentType);
 
         try {
             byte[] imageBytes = Base64.getDecoder().decode(base64ImageData);
@@ -136,18 +142,38 @@ public class DocumentValidationService {
 
     @SuppressWarnings("unused")   // called reflectively by Resilience4j
     DocumentValidationResult validateFallback(String base64ImageData, String mimeType,
-                                              String registeredName, Throwable cause) {
+                                              String registeredName, String declaredDocumentType,
+                                              Throwable cause) {
         log.warn("Document validation fallback triggered (circuit open or retries exhausted): {}",
                 cause != null ? cause.getMessage() : "unknown");
         return DocumentValidationResult.safeFail(
                 "AI validation service temporarily unavailable — document routed to manual review");
     }
 
-    private String buildPrompt(String registeredName) {
-        if (registeredName != null && !registeredName.isBlank()) {
-            return SYSTEM_PROMPT + "\n\nRegistered name to cross-check: \"" + registeredName + "\"";
+    private String buildPrompt(String registeredName, String declaredDocumentType) {
+        StringBuilder sb = new StringBuilder(SYSTEM_PROMPT);
+
+        // Include the user's declared type as a hint so the AI can cross-check it.
+        // Map UI values to the canonical names the AI understands.
+        if (declaredDocumentType != null && !declaredDocumentType.isBlank()) {
+            String canonicalHint = switch (declaredDocumentType.toUpperCase()) {
+                case "NATIONAL_ID" -> "AADHAAR";
+                case "PAN_CARD"    -> "PAN";
+                default            -> declaredDocumentType.toUpperCase();
+            };
+            sb.append("\n\nThe user declared this document type: \"").append(canonicalHint)
+              .append("\". Cross-check whether the image actually matches that type. " +
+                      "Set documentTypeDetected to the type you observe in the image, " +
+                      "regardless of the user's declaration.");
         }
-        return SYSTEM_PROMPT + "\n\nNo registeredName provided — set nameMatch to null.";
+
+        if (registeredName != null && !registeredName.isBlank()) {
+            sb.append("\n\nRegistered name to cross-check: \"").append(registeredName).append("\"");
+        } else {
+            sb.append("\n\nNo registeredName provided — set nameMatch to null.");
+        }
+
+        return sb.toString();
     }
 
     private DocumentValidationResult parseResult(String json) {

@@ -39,10 +39,11 @@ final class UserService {
         )
     }
 
-    /// Submits a document image to the AI platform for OCR + quality + tamper analysis.
-    /// Returns `KycProcessingResult` (quality score, extracted fields, tampering detection).
-    func processKycDocument(_ request: KycDocumentRequest) async throws -> KycProcessingResult {
-        try await api.post(path: "/api/v1/ai/kyc/process", body: request)
+    /// Submits a document image to the AI platform for async processing.
+    /// The server returns 202 Accepted immediately; the result is delivered via WebSocket
+    /// push notification when the background pipeline finishes (up to ~6 min).
+    func processKycDocument(_ request: KycDocumentRequest) async throws {
+        let _: EmptyResponse = try await api.post(path: "/api/v1/ai/kyc/process", body: request)
     }
 
     /// Registers the device push token with the backend for targeted notifications.
@@ -51,15 +52,6 @@ final class UserService {
         let _: EmptyResponse = try await api.post(
             path: "/api/v1/users/\(userId)/push-token",
             body: Body(token: token, platform: platform)
-        )
-    }
-
-    /// Confirms the AI-extracted KYC data and transitions user status to DOCUMENT_SUBMITTED.
-    func confirmKyc(userId: String, documentType: String) async throws {
-        struct Body: Encodable { let documentType: String }
-        let _: EmptyResponse = try await api.patch(
-            path: "/api/v1/users/\(userId)/kyc",
-            body: Body(documentType: documentType)
         )
     }
 }

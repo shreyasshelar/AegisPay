@@ -76,6 +76,12 @@ aegispay:
       enabled: true
     agent:
       max-iterations: 10
+    # User Service callback for async KYC processing results.
+    # The AI Platform calls PATCH /api/v1/users/{userId}/kyc/status after each
+    # document pipeline completes. Uses X-Internal-Api-Key (no JWT) for auth.
+    user-service:
+      base-url: ${USER_SERVICE_URL:http://user-service:8081}
+      internal-api-key: ${USER_SERVICE_INTERNAL_API_KEY:aegispay-internal-dev-key}
 
 resilience4j:
   circuitbreaker:
@@ -90,11 +96,13 @@ resilience4j:
           - java.lang.RuntimeException
           - java.util.concurrent.TimeoutException
       # KYC vision pipeline (OCR, quality, tampering, validation)
+      # 4 sequential vision calls; each can take 30-90 s on free-tier providers.
+      # Higher failure tolerance (70 %) because free-tier rate limits are common.
       kyc-ai:
-        failure-rate-threshold: 50
+        failure-rate-threshold: 70
         sliding-window-size: 5
         sliding-window-type: COUNT_BASED
-        wait-duration-in-open-state: 30s
+        wait-duration-in-open-state: 60s
         permitted-number-of-calls-in-half-open-state: 2
         minimum-number-of-calls: 3
         record-exceptions:
@@ -121,13 +129,15 @@ resilience4j:
         enable-exponential-backoff: false
         retry-exceptions:
           - java.lang.RuntimeException
-      # KYC vision calls — 2 attempts, fast backoff (vision API is slow; don't pile up)
+      # KYC vision calls — single attempt, no retry.
+      # Vision calls send the full image (large payload) and each takes 30-90 s.
+      # A retry after a timeout would double the latency and almost certainly hit
+      # the same free-tier quota limit again.  The @CircuitBreaker fallback handles
+      # transient failures gracefully (optimistic pass-through for quality/tampering;
+      # MANUAL_REVIEW routing for OCR).  Let the user re-submit rather than retry.
       kyc-ai:
-        max-attempts: 2
+        max-attempts: 1
         wait-duration: 500ms
-        enable-exponential-backoff: true
-        exponential-backoff-multiplier: 2
-        exponential-max-wait-duration: 5s
         retry-exceptions:
           - java.lang.RuntimeException
       # Triage agent — 2 attempts with 1 s backoff
@@ -144,9 +154,11 @@ resilience4j:
       rag-pipeline:
         timeout-duration: 30s
         cancel-running-future: true
-      # Vision API calls take longer — 60 s cap
+      # Vision API calls take longer — 90 s cap per individual step.
+      # The KYC pipeline has 4 sequential calls; the API Gateway's dedicated
+      # "kyc-circuit-breaker" TimeLimiter (360 s) guards the total pipeline.
       kyc-ai:
-        timeout-duration: 60s
+        timeout-duration: 90s
         cancel-running-future: true
       # Triage agent with tool calls — 45 s cap
       triage-agent:

@@ -92,13 +92,13 @@ class UserServiceIT {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated());
 
-        // Second call with same externalId — should return existing, not create duplicate
+        // Second call with same externalId — idempotent: returns existing record with 200 OK (not 201)
         mockMvc.perform(post("/api/v1/users/register")
                         .with(jwt().jwt(j -> j.subject("ext-int-002")))
                         .header("X-Idempotency-Key", "int-idem-003")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isCreated());
+                .andExpect(status().isOk());
 
         assertThat(userRepository.findAll().stream()
                 .filter(u -> "ext-int-002".equals(u.getExternalId()))

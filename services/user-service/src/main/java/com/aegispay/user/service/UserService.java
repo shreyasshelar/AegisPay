@@ -2,7 +2,14 @@ package com.aegispay.user.service;
 
 import com.aegispay.common.domain.enums.KycStatus;
 import com.aegispay.common.domain.exception.AegisPayException;
-import com.aegispay.user.domain.dto.*;
+import com.aegispay.user.domain.dto.KycConfirmRequest;
+import com.aegispay.user.domain.dto.KycDocumentUploadRequest;
+import com.aegispay.user.domain.dto.KycStatusResponse;
+import com.aegispay.user.domain.dto.KycStatusUpdateRequest;
+import com.aegispay.user.domain.dto.PushTokenRequest;
+import com.aegispay.user.domain.dto.RegistrationResult;
+import com.aegispay.user.domain.dto.UserRegistrationRequest;
+import com.aegispay.user.domain.dto.UserResponse;
 import com.aegispay.user.domain.entity.KycDocument;
 import com.aegispay.user.domain.entity.User;
 import com.aegispay.user.domain.mapper.UserMapper;
@@ -41,29 +48,38 @@ public class UserService {
     private final KeycloakAdminService keycloakAdminService;
 
     @Transactional
-    public UserResponse register(UserRegistrationRequest request,
-                                 String idempotencyKey,
-                                 Jwt jwt) {
+    public RegistrationResult register(UserRegistrationRequest request,
+                                       String idempotencyKey,
+                                       Jwt jwt) {
         String externalId = jwt.getSubject();
 
-        // Idempotent registration — return existing user if already registered
+        // Idempotent registration — return existing user if already registered.
+        // Returns RegistrationResult so the controller can emit 200 vs 201 correctly.
         return userRepository.findByExternalId(externalId)
                 .map(existing -> {
-                    log.debug("User already registered: externalId={}", externalId);
-                    return userMapper.toResponse(existing);
+                    log.debug("User already registered (idempotent): externalId={}", externalId);
+                    return new RegistrationResult(userMapper.toResponse(existing), false);
                 })
                 .orElseGet(() -> {
                     idempotencyService.claim(idempotencyKey);
-                    return createUser(request, externalId, jwt);
+                    return new RegistrationResult(createUser(request, externalId, jwt), true);
                 });
     }
 
     private UserResponse createUser(UserRegistrationRequest request,
                                     String externalId,
                                     Jwt jwt) {
+        // Check for email collision BEFORE writing. A collision means a different Keycloak
+        // subject already registered with this email (e.g. the same person used email+password
+        // first, then tries Google login with the same address). We do NOT silently merge
+        // accounts — that could grant access to the wrong user's funds. Instead, return 409
+        // so the caller (auth.ts) can detect EMAIL_ALREADY_EXISTS and fall back gracefully.
         if (userRepository.existsByEmail(request.email())) {
+            log.warn("Registration blocked: email={} already exists for a different externalId. "
+                    + "Requesting externalId={}", request.email(), externalId);
             throw new AegisPayException("EMAIL_ALREADY_EXISTS",
-                    "A user with this email address is already registered.",
+                    "An account with this email address already exists. "
+                    + "Please log in with the original sign-in method or contact support.",
                     HttpStatus.CONFLICT);
         }
 
@@ -102,6 +118,16 @@ public class UserService {
                         "USER_NOT_FOUND",
                         "User not found: " + userId,
                         HttpStatus.NOT_FOUND));
+    }
+
+    /**
+     * Lightweight existence check used by other services (e.g. transaction-service)
+     * to validate a payeeId before initiating a payment. Returns true if a user with
+     * the given internal UUID exists; false otherwise. No data is exposed.
+     */
+    @Transactional(readOnly = true)
+    public boolean existsById(UUID userId) {
+        return userRepository.existsById(userId);
     }
 
     @Transactional(readOnly = true)
@@ -161,25 +187,77 @@ public class UserService {
     @Transactional
     public KycStatusResponse processAiCallback(UUID userId, KycStatusUpdateRequest request) {
         User user = requireUser(userId);
-        KycDocument doc = kycDocumentRepository.findById(request.documentId())
-                .orElseThrow(() -> new AegisPayException(
-                        "KYC_DOCUMENT_NOT_FOUND",
-                        "KYC document not found: " + request.documentId(),
-                        HttpStatus.NOT_FOUND));
 
-        // Transition: DOCUMENT_SUBMITTED → AI_PROCESSING (when AI picks it up)
-        if (user.getKycStatus() == KycStatus.DOCUMENT_SUBMITTED) {
-            kycStateMachine.assertValidTransition(user.getKycStatus(), KycStatus.AI_PROCESSING);
-            user.setKycStatus(KycStatus.AI_PROCESSING);
+        // Don't allow re-processing a user whose KYC already reached a terminal state.
+        if (kycStateMachine.isTerminal(user.getKycStatus())) {
+            throw new AegisPayException("KYC_ALREADY_COMPLETED",
+                    "KYC process is already completed for this user.",
+                    HttpStatus.CONFLICT);
         }
 
-        KycStatus previous = user.getKycStatus();
-        kycStateMachine.assertValidTransition(previous, request.newStatus());
+        // ── Preliminary status updates (DOCUMENT_SUBMITTED / AI_PROCESSING) ─────
+        // These are sent by the AI Platform at the START of the async pipeline to lock
+        // the user out of re-uploading while processing is in progress.  No KycDocument
+        // record is created yet — the final callback (APPROVED / REJECTED / MANUAL_REVIEW)
+        // will create it with the full OCR and validation data.
+        if (request.newStatus() == KycStatus.DOCUMENT_SUBMITTED
+                || request.newStatus() == KycStatus.AI_PROCESSING) {
+            KycStatus previous = user.getKycStatus();
+            user.setKycStatus(request.newStatus());
+            userRepository.save(user);
 
+            OutboxEntry outboxEntry = eventProducer.buildKycStatusChangedEntry(
+                    user, previous, request.documentType(), null);
+            outboxEntryRepository.save(outboxEntry);
+
+            log.info("KYC preliminary status update: userId={} {} → {}",
+                    userId, previous, request.newStatus());
+
+            return KycStatusResponse.builder()
+                    .userId(userId)
+                    .kycStatus(user.getKycStatus())
+                    .documentType(request.documentType())
+                    .ocrStatus("PENDING")
+                    .tamperedFlag(false)
+                    .rejectionReason(null)
+                    .build();
+        }
+
+        // ── Resolve or create the KycDocument record ───────────────────────────
+        // documentId is null in the async direct-upload flow (browser → AI Platform →
+        // callback). In that case we create the document record here rather than
+        // requiring User Service to pre-create it before the AI pipeline runs.
+        KycDocument doc;
+        if (request.documentId() != null) {
+            doc = kycDocumentRepository.findById(request.documentId())
+                    .orElseThrow(() -> new AegisPayException(
+                            "KYC_DOCUMENT_NOT_FOUND",
+                            "KYC document not found: " + request.documentId(),
+                            HttpStatus.NOT_FOUND));
+        } else {
+            // Async direct-upload: create a document record now so the DB has a full audit trail.
+            doc = KycDocument.builder()
+                    .userId(userId)
+                    .documentType(request.documentType() != null ? request.documentType() : "UNKNOWN")
+                    .documentRef("ai-async-upload")
+                    .ocrStatus("PENDING")
+                    .tamperedFlag(false)
+                    .build();
+            kycDocumentRepository.save(doc);
+        }
+
+        // ── Apply final status directly ────────────────────────────────────────
+        // This endpoint is protected by ADMIN role (JWT) or InternalApiKeyFilter
+        // (service-to-service), so it is trusted.  We skip intermediate state machine
+        // transitions (PENDING → DOCUMENT_SUBMITTED → AI_PROCESSING) to allow the async
+        // flow to jump directly to the final decision status regardless of where the user
+        // currently sits in the state machine.  The only guard we keep is the terminal check
+        // above — APPROVED and REJECTED are immutable.
+        KycStatus previous = user.getKycStatus();
         user.setKycStatus(request.newStatus());
 
         doc.setOcrStatus("COMPLETED");
-        doc.setExtractedData(request.extractedData());
+        if (request.extractedData() != null) doc.setExtractedData(request.extractedData());
         if (request.tamperedFlag() != null) doc.setTamperedFlag(request.tamperedFlag());
         if (request.qualityScore() != null) doc.setQualityScore(request.qualityScore());
         if (request.rejectionReason() != null) doc.setRejectionReason(request.rejectionReason());
@@ -187,11 +265,14 @@ public class UserService {
         kycDocumentRepository.save(doc);
         userRepository.save(user);
 
+        // Publish KycStatusChangedEvent via Outbox → Kafka → Notification Service →
+        // WebSocket push so the frontend and mobile apps receive real-time updates.
         OutboxEntry outboxEntry = eventProducer.buildKycStatusChangedEntry(
                 user, previous, doc.getDocumentType(), request.rejectionReason());
         outboxEntryRepository.save(outboxEntry);
 
-        log.info("KYC status updated: userId={} status={}", userId, request.newStatus());
+        log.info("KYC status updated via AI callback: userId={} previous={} new={}",
+                userId, previous, request.newStatus());
 
         return KycStatusResponse.builder()
                 .userId(userId)

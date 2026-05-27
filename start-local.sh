@@ -117,9 +117,7 @@ ok "All ports free"
 
 # ── Build all services ─────────────────────────────────────────────────────────
 step "Building shared libs + all services (skipping tests)..."
-mvn --batch-mode --no-transfer-progress clean package \
-  -pl libs/common-domain,libs/common-security,libs/common-kafka,libs/common-observability \
-  --also-make \
+mvn --batch-mode --no-transfer-progress -f libs/pom.xml clean install \
   -DskipTests -q
 ok "Shared libs built"
 
@@ -178,31 +176,51 @@ if [[ -z "$KC_TOKEN" ]]; then
   warn "Could not obtain Keycloak admin token — skipping IDP seeding (Keycloak may not be ready yet)"
 else
   # Google IDP
+  GOOGLE_BODY="{\"alias\":\"google\",\"providerId\":\"google\",\"displayName\":\"Google\",\"enabled\":true,\"config\":{\"clientId\":\"${GOOGLE_CLIENT_ID}\",\"clientSecret\":\"${GOOGLE_CLIENT_SECRET}\",\"defaultScope\":\"email profile openid\"}}"
   HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
     "${KC_ADMIN_URL}/admin/realms/${KC_REALM}/identity-provider/instances" \
     -H "Authorization: Bearer ${KC_TOKEN}" \
     -H "Content-Type: application/json" \
-    -d "{\"alias\":\"google\",\"providerId\":\"google\",\"displayName\":\"Google\",\"enabled\":true,\"config\":{\"clientId\":\"${GOOGLE_CLIENT_ID}\",\"clientSecret\":\"${GOOGLE_CLIENT_SECRET}\",\"defaultScope\":\"email profile openid\"}}" \
-    2>/dev/null)
+    -d "$GOOGLE_BODY" 2>/dev/null)
   if [[ "$HTTP_STATUS" == "201" ]]; then
     ok "Google IDP created"
   elif [[ "$HTTP_STATUS" == "409" ]]; then
-    ok "Google IDP already exists"
+    # Already exists from realm import — update credentials via PUT so real keys take effect
+    PUT_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X PUT \
+      "${KC_ADMIN_URL}/admin/realms/${KC_REALM}/identity-provider/instances/google" \
+      -H "Authorization: Bearer ${KC_TOKEN}" \
+      -H "Content-Type: application/json" \
+      -d "$GOOGLE_BODY" 2>/dev/null)
+    if [[ "$PUT_STATUS" == "204" ]]; then
+      ok "Google IDP credentials updated"
+    else
+      warn "Google IDP update: HTTP ${PUT_STATUS}"
+    fi
   else
     warn "Google IDP: HTTP ${HTTP_STATUS}"
   fi
 
   # Microsoft IDP
+  MICROSOFT_BODY="{\"alias\":\"microsoft\",\"providerId\":\"microsoft\",\"displayName\":\"Microsoft\",\"enabled\":true,\"config\":{\"clientId\":\"${MICROSOFT_CLIENT_ID}\",\"clientSecret\":\"${MICROSOFT_CLIENT_SECRET}\",\"tenantId\":\"${MICROSOFT_TENANT_ID}\",\"defaultScope\":\"openid email profile\"}}"
   HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
     "${KC_ADMIN_URL}/admin/realms/${KC_REALM}/identity-provider/instances" \
     -H "Authorization: Bearer ${KC_TOKEN}" \
     -H "Content-Type: application/json" \
-    -d "{\"alias\":\"microsoft\",\"providerId\":\"microsoft\",\"displayName\":\"Microsoft\",\"enabled\":true,\"config\":{\"clientId\":\"${MICROSOFT_CLIENT_ID}\",\"clientSecret\":\"${MICROSOFT_CLIENT_SECRET}\",\"tenantId\":\"${MICROSOFT_TENANT_ID}\",\"defaultScope\":\"openid email profile\"}}" \
-    2>/dev/null)
+    -d "$MICROSOFT_BODY" 2>/dev/null)
   if [[ "$HTTP_STATUS" == "201" ]]; then
     ok "Microsoft IDP created"
   elif [[ "$HTTP_STATUS" == "409" ]]; then
-    ok "Microsoft IDP already exists"
+    # Already exists from realm import — update credentials via PUT so real keys take effect
+    PUT_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X PUT \
+      "${KC_ADMIN_URL}/admin/realms/${KC_REALM}/identity-provider/instances/microsoft" \
+      -H "Authorization: Bearer ${KC_TOKEN}" \
+      -H "Content-Type: application/json" \
+      -d "$MICROSOFT_BODY" 2>/dev/null)
+    if [[ "$PUT_STATUS" == "204" ]]; then
+      ok "Microsoft IDP credentials updated"
+    else
+      warn "Microsoft IDP update: HTTP ${PUT_STATUS}"
+    fi
   else
     warn "Microsoft IDP: HTTP ${HTTP_STATUS}"
   fi

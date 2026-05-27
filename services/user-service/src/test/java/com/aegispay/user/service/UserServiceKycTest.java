@@ -185,14 +185,15 @@ class UserServiceKycTest {
             when(outboxEntryRepository.save(any())).thenReturn(null);
             when(eventProducer.buildUserRegisteredEntry(any())).thenReturn(stubOutbox(saved));
 
-            UserResponse response = userService.register(
+            RegistrationResult result = userService.register(
                     new UserRegistrationRequest("google@example.com", null, "Google", "User", "tenant-google"),
                     "idem-google-1", jwt);
 
             ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
             verify(userRepository).save(captor.capture());
             assertThat(captor.getValue().getExternalId()).isEqualTo(googleSub);
-            assertThat(response.kycStatus()).isEqualTo(KycStatus.PENDING);
+            assertThat(result.user().kycStatus()).isEqualTo(KycStatus.PENDING);
+            assertThat(result.created()).isTrue();
         }
     }
 

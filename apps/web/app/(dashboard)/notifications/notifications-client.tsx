@@ -17,6 +17,8 @@ function NotifIcon({ type }: { type: string }) {
     return <CheckCircle2 className="h-5 w-5 text-success-500" />
   if (type === 'TRANSACTION_FAILED' || type === 'TRANSACTION_ROLLED_BACK')
     return <XCircle className="h-5 w-5 text-danger-500" />
+  if (type === 'KYC_STATUS_CHANGED')
+    return <Bell className="h-5 w-5 text-primary-500" />
   return <Info className="h-5 w-5 text-primary-500" />
 }
 

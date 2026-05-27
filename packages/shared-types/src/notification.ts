@@ -4,8 +4,7 @@ export const NotificationTypeSchema = z.enum([
   'TRANSACTION_COMPLETED',
   'TRANSACTION_FAILED',
   'TRANSACTION_ROLLED_BACK',
-  'KYC_APPROVED',
-  'KYC_REJECTED',
+  'KYC_STATUS_CHANGED',
   'USER_REGISTERED',
   'GENERIC',
 ])

@@ -1,6 +1,7 @@
 package com.aegispay.ledger.controller;
 
 import com.aegispay.common.domain.dto.ApiResponse;
+import com.aegispay.ledger.client.UserServiceClient;
 import com.aegispay.ledger.domain.dto.AccountResponse;
 import com.aegispay.ledger.domain.dto.LedgerEntryResponse;
 import com.aegispay.ledger.domain.dto.TopUpConfirmRequest;
@@ -21,26 +22,52 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * REST controller for the ledger — account balances, entry audit trail, and wallet top-up.
+ *
+ * <h3>User ID resolution</h3>
+ * All customer-facing endpoints derive the caller's AegisPay domain UUID via
+ * {@link UserServiceClient#resolveUserId(Jwt)} rather than reading the JWT
+ * {@code sub} claim directly.  This is required because:
+ * <ul>
+ *   <li>The {@code accounts} table uses AegisPay UUIDs (set at account creation from the
+ *       {@code user.registered} Kafka event).</li>
+ *   <li>The JWT {@code sub} claim is the Keycloak internal UUID — a completely different value.</li>
+ *   <li>For first-session users (social login, or Keycloak-native users before async
+ *       attribute write-back completes), the JWT carries no {@code aegispay_user_id} claim.
+ *       Using {@code jwt.sub} as a fallback would always return an empty/404 account
+ *       because no account is keyed by the Keycloak sub.</li>
+ * </ul>
+ */
 @Validated
 @RestController
 @RequestMapping("/api/v1/ledger")
 @RequiredArgsConstructor
 public class LedgerController {
 
-    private final LedgerService ledgerService;
-    private final TopUpService  topUpService;
+    private final LedgerService     ledgerService;
+    private final TopUpService      topUpService;
+    private final UserServiceClient userServiceClient;
 
-    /** Customer: get own account balances. */
+    /**
+     * Customer: get own account balances (one entry per currency).
+     *
+     * <p>UUID resolution: {@link UserServiceClient#resolveUserId(Jwt)} — fast path reads
+     * {@code aegispay_user_id} claim; slow path calls {@code /api/v1/users/me} for
+     * first-session users whose JWT doesn't carry the claim yet.
+     */
     @GetMapping("/accounts/me")
     @PreAuthorize("hasRole('CUSTOMER')")
     public ResponseEntity<ApiResponse<List<AccountResponse>>> getMyAccounts(
             @AuthenticationPrincipal Jwt jwt) {
-        String claim = jwt.getClaimAsString("aegispay_user_id");
-        UUID userId = UUID.fromString(claim != null ? claim : jwt.getSubject());
+        UUID userId = userServiceClient.resolveUserId(jwt);
         return ResponseEntity.ok(ApiResponse.ok(ledgerService.getAccountsForUser(userId)));
     }
 
-    /** Back-office: get any user's accounts by userId. */
+    /**
+     * Back-office: get any user's accounts by their AegisPay domain UUID.
+     * Only accessible to BACK_OFFICE, ADMIN, and MERCHANT_OPS roles.
+     */
     @GetMapping("/accounts/{userId}")
     @PreAuthorize("hasAnyRole('BACK_OFFICE', 'ADMIN', 'MERCHANT_OPS')")
     public ResponseEntity<ApiResponse<List<AccountResponse>>> getAccountsForUser(
@@ -48,7 +75,10 @@ public class LedgerController {
         return ResponseEntity.ok(ApiResponse.ok(ledgerService.getAccountsForUser(userId)));
     }
 
-    /** Get ledger entries for a specific transaction (audit trail). */
+    /**
+     * Get ledger entries for a specific transaction (double-entry audit trail).
+     * Only accessible to BACK_OFFICE and ADMIN roles.
+     */
     @GetMapping("/entries")
     @PreAuthorize("hasAnyRole('BACK_OFFICE', 'ADMIN')")
     public ResponseEntity<ApiResponse<List<LedgerEntryResponse>>> getEntriesForTransaction(
@@ -60,32 +90,33 @@ public class LedgerController {
 
     /**
      * Step 1: Create a Stripe PaymentIntent.
-     * Returns {@code clientSecret} that the mobile/web Stripe SDK uses to confirm payment.
+     *
+     * <p>Returns {@code clientSecret} that the Stripe SDK uses on the client to confirm payment.
+     * The caller's AegisPay UUID is resolved via {@link UserServiceClient#resolveUserId(Jwt)}
+     * so first-session social users can top up without needing {@code aegispay_user_id} in their JWT.
      */
     @PostMapping("/topup/intent")
     @PreAuthorize("hasRole('CUSTOMER')")
     public ResponseEntity<ApiResponse<TopUpIntentResponse>> createTopUpIntent(
             @AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody TopUpIntentRequest request) {
-        UUID userId = UUID.fromString(jwt.getClaimAsString("aegispay_user_id") != null
-                ? jwt.getClaimAsString("aegispay_user_id")
-                : jwt.getSubject());
+        UUID userId = userServiceClient.resolveUserId(jwt);
         TopUpIntentResponse response = topUpService.createIntent(userId, request);
         return ResponseEntity.ok(ApiResponse.ok(response));
     }
 
     /**
      * Step 2: Confirm top-up after the client has completed Stripe payment.
-     * Verifies the PaymentIntent status with Stripe, then credits the account balance.
+     *
+     * <p>Verifies the Stripe PaymentIntent status server-side, then credits the caller's
+     * account balance.  UUID resolution uses the same strategy as {@link #createTopUpIntent}.
      */
     @PostMapping("/topup/confirm")
     @PreAuthorize("hasRole('CUSTOMER')")
     public ResponseEntity<ApiResponse<TopUpConfirmResponse>> confirmTopUp(
             @AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody TopUpConfirmRequest request) {
-        UUID userId = UUID.fromString(jwt.getClaimAsString("aegispay_user_id") != null
-                ? jwt.getClaimAsString("aegispay_user_id")
-                : jwt.getSubject());
+        UUID userId = userServiceClient.resolveUserId(jwt);
         TopUpConfirmResponse response = topUpService.confirmTopUp(userId, request);
         return ResponseEntity.ok(ApiResponse.ok(response));
     }

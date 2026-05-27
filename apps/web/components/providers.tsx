@@ -3,10 +3,10 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { SessionProvider, signOut, useSession } from 'next-auth/react'
-import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query'
+import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
-import { ApiProvider, ApiError } from '@aegispay/api-client'
-import { Toaster } from 'sonner'
+import { ApiProvider, ApiError, useApiClient, userKeys } from '@aegispay/api-client'
+import { toast, Toaster } from 'sonner'
 
 // ── QueryClient singleton (per browser tab) ──────────────────────────────────
 
@@ -16,10 +16,11 @@ function makeQueryClient() {
       queries: {
         staleTime:            30_000,
         gcTime:               5 * 60_000,
-        // Never retry 401s — they trigger sign-out immediately via onUnauthorized.
+        // Never retry 401s (trigger sign-out) or USER_NOT_FOUND 404s (trigger sign-out).
         // Retry once for transient 5xx / network errors.
         retry: (failureCount, error) => {
           if (error instanceof ApiError && error.status === 401) return false
+          if (error instanceof ApiError && error.status === 404 && error.errorCode === 'USER_NOT_FOUND') return false
           return failureCount < 1
         },
         refetchOnWindowFocus: false,
@@ -50,6 +51,35 @@ function makeGate(alreadySettled: boolean): Gate {
   let resolve!: () => void
   const promise = new Promise<void>(r => { resolve = r })
   return { settled: false, resolve, promise }
+}
+
+// ── User session bridge — must be inside ApiProvider ─────────────────────────
+// Silently calls GET /me once per authenticated session (React Query caches the
+// result for 5 min, so this costs at most one request per cache window across the
+// entire tab, regardless of how many pages the user visits).
+//
+// Purpose: detect USER_NOT_FOUND on any page, not just /profile.  Without this,
+// a stale-session user who lands on /dashboard never triggers onUserNotFound and
+// sits with broken/empty data until they navigate to Profile.
+//
+// If the query fails with USER_NOT_FOUND the Axios interceptor calls onUserNotFound()
+// → toast + triggerSignOut() → /login → fresh login → auth.ts /register →
+// DB record re-provisioned → all subsequent calls succeed.
+function UserSessionBridge() {
+  const { users }  = useApiClient()
+  const { status } = useSession()
+
+  useQuery({
+    queryKey: userKeys.me(),
+    queryFn:  () => users.getMe(),
+    enabled:  status === 'authenticated',
+    staleTime: 5 * 60_000,
+    // No retry — USER_NOT_FOUND is deterministic; the interceptor already handles recovery.
+    // Other errors (503, network) are surfaced to the page that owns the relevant UI.
+    retry: false,
+  })
+
+  return null
 }
 
 // ── Inner bridge — must be inside QueryClientProvider ────────────────────────
@@ -125,10 +155,41 @@ function ApiProviderWithSession({ children }: { children: React.ReactNode }) {
     triggerSignOut()
   }, [triggerSignOut])
 
+  // onUserNotFound: fired by Axios interceptor when GET /api/v1/users/me returns
+  // HTTP 404 + errorCode "USER_NOT_FOUND".  This means the session JWT is valid in
+  // Keycloak but the AegisPay DB record is absent — common after a dev DB wipe, or
+  // when the user's session predates the always-register auth.ts deployment.
+  //
+  // Recovery path:
+  //   sign-out → /login → fresh Keycloak login → auth.ts jwt() account&&user block
+  //   → POST /register (idempotent) → DB record created → session.userId updated
+  //   → all subsequent API calls succeed.
+  //
+  // The toast fires before queryClient.clear() so it has time to display; signOut()
+  // is async (calls /api/auth/signout then redirects) so the user sees the message
+  // for ~1 second before being redirected to /login.
+  const onUserNotFound = useCallback(() => {
+    toast.warning('Session refresh required', {
+      description: 'Your account needs to be re-provisioned. Signing you out…',
+      duration: 3_000,
+    })
+    triggerSignOut()
+  }, [triggerSignOut])
+
   const baseURL = process.env.NEXT_PUBLIC_API_BASE_URL ?? ''
 
   return (
-    <ApiProvider baseURL={baseURL} getAccessToken={getAccessToken} onUnauthorized={onUnauthorized}>
+    <ApiProvider
+      baseURL={baseURL}
+      getAccessToken={getAccessToken}
+      onUnauthorized={onUnauthorized}
+      onUserNotFound={onUserNotFound}
+    >
+      {/* Silent bootstrap check — detects USER_NOT_FOUND on every authenticated page,
+          not only when the user navigates to /profile. Must live inside ApiProvider so
+          it can call useApiClient().  Shares the ['user','me'] React Query cache entry
+          with useMe() in profile-client.tsx — no duplicate network requests. */}
+      <UserSessionBridge />
       {children}
     </ApiProvider>
   )

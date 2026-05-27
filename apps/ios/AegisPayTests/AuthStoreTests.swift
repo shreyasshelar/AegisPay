@@ -72,11 +72,10 @@ final class AuthStoreMockUserService: UserServiceProtocol {
     func getProfile(userId: String) async throws -> UserProfile {
         fatalError("not used in AuthStore tests")
     }
-    func processKycDocument(_ request: KycDocumentRequest) async throws -> KycProcessingResult {
+    func processKycDocument(_ request: KycDocumentRequest) async throws {
         fatalError("not used in AuthStore tests")
     }
     func registerPushToken(userId: String, token: String, platform: String) async throws {}
-    func confirmKyc(userId: String, documentType: String) async throws {}
 }
 
 // MARK: - Tests

@@ -16,9 +16,11 @@ export const metadata: Metadata = {
   },
   description:  'Production-grade event-driven payment platform',
   manifest:     '/manifest.json',
+  // icon.svg lives in app/ — Next.js App Router auto-generates the <link rel="icon">
+  // from that file, no explicit entry needed here.  The apple entry is kept for
+  // iOS home-screen bookmarks (falls back to icon.svg on modern iOS versions).
   icons: {
-    icon:  '/favicon.ico',
-    apple: '/apple-touch-icon.png',
+    shortcut: '/icon.svg',
   },
   openGraph: {
     type:        'website',
