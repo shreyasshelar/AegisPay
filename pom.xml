@@ -19,10 +19,11 @@
   <description>Production-grade event-driven fintech platform</description>
 
   <modules>
-    <module>libs/common-domain</module>
-    <module>libs/common-security</module>
-    <module>libs/common-kafka</module>
-    <module>libs/common-observability</module>
+    <!-- libs aggregator: Maven resolves aegispay-libs parent and builds sub-modules
+         in declared dependency order (domain, security, kafka, observability).
+         Previously modules were listed flat here, bypassing libs/pom.xml and
+         breaking the reactor parent resolution for the also-make flag. -->
+    <module>libs</module>
     <module>services/api-gateway</module>
     <module>services/user-service</module>
     <module>services/transaction-service</module>

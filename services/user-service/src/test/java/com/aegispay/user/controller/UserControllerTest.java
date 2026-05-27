@@ -2,6 +2,7 @@ package com.aegispay.user.controller;
 
 import com.aegispay.common.domain.enums.KycStatus;
 import com.aegispay.user.config.SecurityConfig;
+import com.aegispay.user.domain.dto.RegistrationResult;
 import com.aegispay.user.domain.dto.UserRegistrationRequest;
 import com.aegispay.user.domain.dto.UserResponse;
 import com.aegispay.user.service.UserService;
@@ -46,8 +47,9 @@ class UserControllerTest {
                 "alice@example.com", "+919876543210", "Alice", "Smith", null);
 
         UserResponse mockResponse = buildUserResponse();
+        // register() now returns RegistrationResult; created=true → controller emits 201
         when(userService.register(any(), eq("idem-123"), any(Jwt.class)))
-                .thenReturn(mockResponse);
+                .thenReturn(new RegistrationResult(mockResponse, true));
 
         mockMvc.perform(post("/api/v1/users/register")
                         .with(jwt().jwt(j -> j.subject("ext-123").claim("aegispay_role", "CUSTOMER")))

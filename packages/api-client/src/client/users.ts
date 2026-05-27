@@ -3,11 +3,9 @@ import type { AegisApiClient } from './base'
 import {
   UserSchema,
   KycStatusSchema,
-  KycProcessingResultSchema,
   type User,
   type KycStatus,
   type KycUploadRequest,
-  type KycProcessingResult,
 } from '@aegispay/shared-types'
 
 // ── Back-office user list ─────────────────────────────────────────────────────
@@ -57,9 +55,17 @@ export class UsersClient {
     await this.client.patch(`/api/v1/users/${userId}/kyc/status`, { status })
   }
 
-  async processKycDocument(request: KycUploadRequest): Promise<KycProcessingResult> {
-    const data = await this.client.post<unknown>('/api/v1/ai/kyc/process', request)
-    return KycProcessingResultSchema.parse(data)
+  /**
+   * Submits a KYC document for async AI processing.
+   *
+   * The server returns 202 Accepted immediately — the 4-step vision pipeline runs
+   * in the background (up to ~6 min on free-tier providers). When the pipeline
+   * finishes the AI Platform calls back User Service, which publishes a
+   * KycStatusChangedEvent → Kafka → Notification Service → WebSocket push.
+   * The frontend receives the result via the existing notification channel.
+   */
+  async processKycDocument(request: KycUploadRequest): Promise<void> {
+    await this.client.post<unknown>('/api/v1/ai/kyc/process', request)
   }
 
   async confirmKyc(userId: string, documentType: string): Promise<void> {

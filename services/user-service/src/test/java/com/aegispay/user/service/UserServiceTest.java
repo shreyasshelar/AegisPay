@@ -4,6 +4,7 @@ import com.aegispay.common.domain.enums.KycStatus;
 import com.aegispay.common.domain.exception.AegisPayException;
 import com.aegispay.user.domain.dto.KycDocumentUploadRequest;
 import com.aegispay.user.domain.dto.KycStatusResponse;
+import com.aegispay.user.domain.dto.RegistrationResult;
 import com.aegispay.user.domain.dto.UserRegistrationRequest;
 import com.aegispay.user.domain.dto.UserResponse;
 import com.aegispay.user.domain.entity.User;
@@ -74,12 +75,13 @@ class UserServiceTest {
                 .eventType("UserRegisteredEvent").topic("user.registered")
                 .messageKey(saved.getId().toString()).payload("{}").build());
 
-        UserResponse response = userService.register(
+        RegistrationResult result = userService.register(
                 new UserRegistrationRequest("alice@example.com", "+919876543210",
                         "Alice", "Smith", "tenant-1"),
                 "idem-key-1", jwt);
 
-        assertThat(response).isNotNull();
+        assertThat(result.user()).isNotNull();
+        assertThat(result.created()).isTrue();
         verify(idempotencyService).claim("idem-key-1");
         verify(userRepository).save(any(User.class));
         verify(outboxEntryRepository).save(any());
@@ -90,11 +92,12 @@ class UserServiceTest {
         User existing = buildUser();
         when(userRepository.findByExternalId("ext-user-123")).thenReturn(Optional.of(existing));
 
-        UserResponse response = userService.register(
+        RegistrationResult result = userService.register(
                 new UserRegistrationRequest("alice@example.com", null, "Alice", "Smith", null),
                 "idem-key-2", jwt);
 
-        assertThat(response).isNotNull();
+        assertThat(result.user()).isNotNull();
+        assertThat(result.created()).isFalse();    // existing user — not a new creation
         verifyNoInteractions(idempotencyService);
         verify(userRepository, never()).save(any());
     }

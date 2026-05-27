@@ -19,7 +19,7 @@ import {
   Wallet,
   Stethoscope,
 } from 'lucide-react'
-import { useTransactionSocket } from '@aegispay/api-client'
+import { useTransactionSocket, userKeys } from '@aegispay/api-client'
 import { useNotificationStore } from '@/lib/useNotificationStore'
 import { cn, resolveWsUrl } from '@/lib/utils'
 import type { TransactionNotification } from '@aegispay/shared-types'
@@ -52,7 +52,7 @@ const BACKOFFICE_ITEMS: NavItem[] = [
 
 export function Sidebar() {
   const pathname          = usePathname()
-  const { data: session } = useSession()
+  const { data: session, status: sessionStatus } = useSession()
   const queryClient        = useQueryClient()
   const role              = session?.user?.role ?? 'CUSTOMER'
   const wsBaseUrl         = resolveWsUrl(process.env.NEXT_PUBLIC_WS_BASE_URL ?? 'ws://localhost:8086')
@@ -77,7 +77,26 @@ export function Sidebar() {
         pathname.startsWith('/send') ||
         pathname.startsWith('/transactions/')
       if (!pathname.startsWith('/notifications') && !pageHandlesOwnToast) {
-        toast.info(notification.title, { description: notification.body })
+        // Use a success toast for KYC approval, warning for others, info for generic
+        const notifType = (notification as { type?: string }).type ?? ''
+        if (notifType === 'KYC_STATUS_CHANGED') {
+          // Invalidate the user profile cache so the KYC status banner on /profile
+          // updates instantly without a manual page refresh.
+          queryClient.invalidateQueries({ queryKey: userKeys.me() })
+
+          const isApproved = notification.body?.toLowerCase().includes('approved')
+          const isRejected = notification.body?.toLowerCase().includes('rejected')
+          if (isApproved) {
+            toast.success(notification.title, { description: notification.body, duration: 12_000 })
+          } else if (isRejected) {
+            // 15 s gives the user time to read it even if the upload-timeout toast also fires
+            toast.error(notification.title, { description: notification.body, duration: 15_000 })
+          } else {
+            toast.info(notification.title, { description: notification.body, duration: 8_000 })
+          }
+        } else {
+          toast.info(notification.title, { description: notification.body })
+        }
       }
     },
   })
@@ -157,17 +176,28 @@ export function Sidebar() {
 
       {/* User + sign-out */}
       <div className="border-t border-slate-100 p-3">
-        <div className="mb-2 flex items-center gap-3 rounded-lg px-3 py-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-100 text-primary-700 text-xs font-bold uppercase">
-            {session?.user?.name?.charAt(0) ?? '?'}
+        {sessionStatus === 'loading' ? (
+          /* Skeleton while NextAuth re-hydrates on first load / SSO redirect */
+          <div className="mb-2 flex items-center gap-3 rounded-lg px-3 py-2">
+            <div className="skeleton h-8 w-8 shrink-0 rounded-full" />
+            <div className="min-w-0 flex-1 space-y-1.5">
+              <div className="skeleton h-3.5 w-24 rounded" />
+              <div className="skeleton h-3 w-14 rounded" />
+            </div>
           </div>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium text-slate-900">
-              {session?.user?.name ?? 'Unknown'}
-            </p>
-            <p className="truncate text-xs text-slate-400">{role}</p>
+        ) : (
+          <div className="mb-2 flex items-center gap-3 rounded-lg px-3 py-2">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-100 text-primary-700 text-xs font-bold uppercase">
+              {session?.user?.name?.charAt(0) ?? '?'}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium text-slate-900">
+                {session?.user?.name ?? 'Unknown'}
+              </p>
+              <p className="truncate text-xs text-slate-400">{role}</p>
+            </div>
           </div>
-        </div>
+        )}
         <button
           onClick={() => {
             queryClient.clear()

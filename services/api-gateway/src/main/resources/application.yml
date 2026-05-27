@@ -20,94 +20,18 @@ spring:
           type: disabled
 
     # ── Spring Cloud CircuitBreaker (Resilience4j) ──────────────────────────────
-    # THIS is the namespace the Gateway circuitBreaker() filter reads.
-    # The native resilience4j.circuitbreaker.* namespace below is for @CircuitBreaker
-    # annotations only — it does NOT affect gateway filters.
+    # !! IMPORTANT: CB instance configuration is managed programmatically in     !!
+    # !! CircuitBreakerCustomizerConfig.java — NOT here.                         !!
+    #                                                                             #
+    # Reason: the spring.cloud.circuitbreaker.resilience4j YAML namespace does   #
+    # NOT expose recordException/ignoreExceptions. The Customizer bean is the    #
+    # only way to set those predicates; and because a Customizer replaces YAML   #
+    # instance settings wholesale, keeping per-instance values in both places    #
+    # would make YAML values silently dead.  See CircuitBreakerCustomizerConfig  #
+    # for per-service parameters and the rationale behind each tuning decision.  #
     circuitbreaker:
       resilience4j:
-        instances:
-          # Baseline: applied to any named CB that has no explicit override.
-          # minimumNumberOfCalls MUST be <= slidingWindowSize; if omitted it
-          # defaults to 100, which means the circuit never opens on low traffic.
-          default:
-            slidingWindowSize: 10
-            minimumNumberOfCalls: 10
-            failureRateThreshold: 50
-            waitDurationInOpenState: 10s
-            permittedNumberOfCallsInHalfOpenState: 5
-            slowCallDurationThreshold: 10s
-            slowCallRateThreshold: 80
-
-          user-service:
-            slidingWindowSize: 20
-            minimumNumberOfCalls: 5
-            failureRateThreshold: 60
-            waitDurationInOpenState: 15s
-            permittedNumberOfCallsInHalfOpenState: 5
-            slowCallDurationThreshold: 8s
-            slowCallRateThreshold: 80
-
-          transaction-service:
-            slidingWindowSize: 20
-            minimumNumberOfCalls: 10
-            failureRateThreshold: 60
-            waitDurationInOpenState: 15s
-            permittedNumberOfCallsInHalfOpenState: 5
-            slowCallDurationThreshold: 10s
-            slowCallRateThreshold: 80
-
-          ledger-service:
-            slidingWindowSize: 10
-            minimumNumberOfCalls: 5
-            failureRateThreshold: 50
-            waitDurationInOpenState: 10s
-            permittedNumberOfCallsInHalfOpenState: 3
-            slowCallDurationThreshold: 5s
-            slowCallRateThreshold: 80
-
-          payment-orchestrator:
-            slidingWindowSize: 10
-            minimumNumberOfCalls: 5
-            failureRateThreshold: 50
-            waitDurationInOpenState: 20s
-            permittedNumberOfCallsInHalfOpenState: 3
-            slowCallDurationThreshold: 15s
-            slowCallRateThreshold: 80
-
-          risk-engine:
-            slidingWindowSize: 10
-            minimumNumberOfCalls: 5
-            failureRateThreshold: 50
-            waitDurationInOpenState: 10s
-            permittedNumberOfCallsInHalfOpenState: 3
-            slowCallDurationThreshold: 8s
-            slowCallRateThreshold: 80
-
-          notification-service:
-            slidingWindowSize: 10
-            minimumNumberOfCalls: 5
-            failureRateThreshold: 60
-            # Notifications are best-effort; recover faster
-            waitDurationInOpenState: 8s
-            permittedNumberOfCallsInHalfOpenState: 3
-            slowCallDurationThreshold: 5s
-            slowCallRateThreshold: 80
-
-          # AI platform — loose thresholds because:
-          #   1. LLM calls are inherently slow (OpenRouter free tier: 30-90s)
-          #   2. AI platform has its own internal CB that returns 200 fallback on failure
-          #      so 5xx from the AI platform is rare; only a hard crash opens this CB.
-          #   slowCallRateThreshold: 100 → slow calls never count toward opening the CB.
-          #   failureRateThreshold: 80 → needs 80% true errors (5xx/timeout) to open.
-          #   waitDurationInOpenState: 10s → recover fast when the platform comes back.
-          ai-platform:
-            slidingWindowSize: 20
-            minimumNumberOfCalls: 10
-            failureRateThreshold: 80
-            waitDurationInOpenState: 10s
-            permittedNumberOfCallsInHalfOpenState: 3
-            slowCallDurationThreshold: 90s
-            slowCallRateThreshold: 100
+        instances: {}
 
   security:
     oauth2:

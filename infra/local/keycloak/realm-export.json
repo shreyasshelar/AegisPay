@@ -515,10 +515,10 @@
       "emailVerified": true,
       "attributes": {
         "aegispay_user_id": [
-          "59295e61-a284-40ed-8d3b-9e15bedeb040"
+          "3f951f39-c51e-4713-9b40-4209b0c4942b"
         ],
         "aegispay_tenant_id": [
-          "aegispay"
+          "default"
         ],
         "aegispay_role": [
           "CUSTOMER"
@@ -554,10 +554,10 @@
       "emailVerified": true,
       "attributes": {
         "aegispay_user_id": [
-          "3bf3e523-9de8-4254-9cc9-d5fa50ff8d4a"
+          "be0f53e9-ac88-4a0c-9f09-913df3c8f0eb"
         ],
         "aegispay_tenant_id": [
-          "aegispay"
+          "default"
         ],
         "aegispay_role": [
           "CUSTOMER"
@@ -1916,27 +1916,11 @@
           "userSetupAllowed": false
         },
         {
-          "authenticator": "idp-auto-link",
-          "authenticatorFlow": false,
-          "requirement": "ALTERNATIVE",
-          "priority": 1,
-          "autheticatorFlow": false,
-          "userSetupAllowed": false
-        },
-        {
-          "authenticator": "idp-create-user-if-unique",
-          "authenticatorFlow": false,
-          "requirement": "ALTERNATIVE",
-          "priority": 2,
-          "autheticatorFlow": false,
-          "userSetupAllowed": false
-        },
-        {
           "authenticatorFlow": true,
-          "requirement": "ALTERNATIVE",
-          "priority": 3,
+          "requirement": "REQUIRED",
+          "priority": 1,
           "autheticatorFlow": true,
-          "flowAlias": "Handle Existing Account",
+          "flowAlias": "aegispay-link-or-create",
           "userSetupAllowed": false
         }
       ]
@@ -2246,6 +2230,84 @@
           "authenticatorFlow": false,
           "requirement": "REQUIRED",
           "priority": 10,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        }
+      ]
+    },
+    {
+      "id": "887cb947-2e17-4480-a8ba-5cf966335f8c",
+      "alias": "aegispay-link-or-create",
+      "description": "Link or create account",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "idp-auto-link",
+          "authenticatorFlow": false,
+          "requirement": "ALTERNATIVE",
+          "priority": 0,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticator": "idp-create-user-if-unique",
+          "authenticatorFlow": false,
+          "requirement": "ALTERNATIVE",
+          "priority": 1,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticatorFlow": true,
+          "requirement": "ALTERNATIVE",
+          "priority": 2,
+          "autheticatorFlow": true,
+          "flowAlias": "aegispay-handle-existing",
+          "userSetupAllowed": false
+        }
+      ]
+    },
+    {
+      "id": "d008f91d-13af-4f6c-8398-69fd9d395f64",
+      "alias": "aegispay-handle-existing",
+      "description": "Handle existing account with same email",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "idp-confirm-link",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 0,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticatorFlow": true,
+          "requirement": "REQUIRED",
+          "priority": 1,
+          "autheticatorFlow": true,
+          "flowAlias": "aegispay-account-verification",
+          "userSetupAllowed": false
+        }
+      ]
+    },
+    {
+      "id": "5d221816-f2fd-43d8-a665-a2bb675232c5",
+      "alias": "aegispay-account-verification",
+      "description": "Method to verify existing account",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "idp-email-verification",
+          "authenticatorFlow": false,
+          "requirement": "ALTERNATIVE",
+          "priority": 0,
           "autheticatorFlow": false,
           "userSetupAllowed": false
         }

@@ -46,12 +46,18 @@ export function TransactionDetailClient({
   const { data: tx, isLoading, isError } = useTransaction(transactionId)
   const resolveError = useResolveError()
 
-  // WebSocket: subscribe to transaction-service per-transaction status topic
+  // WebSocket: subscribe to transaction-service per-transaction status topic.
+  // Skip the connection entirely when the transaction is already in a terminal
+  // state (COMPLETED / FAILED / ROLLED_BACK) — nothing more will arrive on the
+  // topic and keeping a dead socket alive wastes resources.
   const txWsBaseUrl = resolveWsUrl(process.env.NEXT_PUBLIC_TX_WS_BASE_URL ?? 'ws://localhost:8082')
   useTransactionStatusSocket({
     transactionId,
     accessToken: session?.accessToken ?? null,
     wsBaseUrl:   txWsBaseUrl,
+    // tx is undefined while loading — default to enabled so we can catch the
+    // status transition live. Once tx loads and is terminal, disconnect.
+    enabled: !tx || !TERMINAL.has(tx.status),
     onStatusUpdate(update: TransactionStatusUpdate) {
       // Patch cache immediately — no extra fetch
       queryClient.setQueryData(

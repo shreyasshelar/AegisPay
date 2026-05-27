@@ -16,7 +16,12 @@ import { useRouter } from 'next/navigation'
  * a page when their session expires (no navigation event to trigger middleware),
  * or when a hard-refresh races against a stale session cookie.
  *
- * Returns `true` while the session is still resolving (caller should render null).
+ * Returns `true` only when the session is definitively invalid (unauthenticated
+ * or broken refresh token). Does NOT block on `'loading'` — DashboardLayout has
+ * already verified the session server-side via getServerSession, so blocking on
+ * the client's re-hydration phase causes an unnecessary blank-page flash on every
+ * hard-refresh and SSO redirect. The useEffect below will still redirect as soon
+ * as the revalidation resolves to unauthenticated.
  */
 export function useAuthGuard(): boolean {
   const { status, data: session } = useSession()
@@ -35,7 +40,8 @@ export function useAuthGuard(): boolean {
     }
   }, [status, session?.error, router])
 
-  return status === 'loading'
-      || status === 'unauthenticated'
+  // 'loading' is intentionally excluded: server layout already confirmed auth.
+  // Blocking here produces a blank page flash on every SSO redirect / hard-refresh.
+  return status === 'unauthenticated'
       || (status === 'authenticated' && !!session?.error)
 }

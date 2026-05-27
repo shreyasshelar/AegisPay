@@ -23,18 +23,19 @@ interface ApiContextValue {
 const ApiContext = createContext<ApiContextValue | null>(null)
 
 interface ApiProviderProps {
-  children:        ReactNode
-  baseURL:         string
-  getAccessToken:  () => Promise<string | null>
-  onUnauthorized?: () => void
+  children:         ReactNode
+  baseURL:          string
+  getAccessToken:   () => Promise<string | null>
+  onUnauthorized?:  () => void
+  onUserNotFound?:  () => void
 }
 
-export function ApiProvider({ children, baseURL, getAccessToken, onUnauthorized }: ApiProviderProps) {
+export function ApiProvider({ children, baseURL, getAccessToken, onUnauthorized, onUserNotFound }: ApiProviderProps) {
   // Memoize on the callback identities. When the parent uses useCallback([])
   // these are stable for the lifetime of the component, so the axios client
   // and all service clients are created exactly once.
   const value = useMemo<ApiContextValue>(() => {
-    const client = new AegisApiClient({ baseURL, getAccessToken, onUnauthorized })
+    const client = new AegisApiClient({ baseURL, getAccessToken, onUnauthorized, onUserNotFound })
     return {
       transactions:  new TransactionsClient(client),
       users:         new UsersClient(client),
@@ -43,7 +44,7 @@ export function ApiProvider({ children, baseURL, getAccessToken, onUnauthorized 
       notifications: new NotificationsClient(client),
       risk:          new RiskClient(client),
     }
-  }, [baseURL, getAccessToken, onUnauthorized])
+  }, [baseURL, getAccessToken, onUnauthorized, onUserNotFound])
 
   return <ApiContext.Provider value={value}>{children}</ApiContext.Provider>
 }

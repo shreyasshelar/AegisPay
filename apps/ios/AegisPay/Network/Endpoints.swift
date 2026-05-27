@@ -132,61 +132,6 @@ struct KycDocumentRequest: Encodable {
     let registeredName:  String?   // cross-matched against extracted name by AI platform
 }
 
-struct KycQuality: Codable {
-    let overallScore:    Double
-    let sharpness:       Double
-    let brightness:      Double
-    let crop:            Double
-    let glare:           Double
-    let acceptable:      Bool
-    let rejectionReason: String?
-}
-
-struct KycTampering: Codable {
-    let tampered:   Bool
-    let confidence: Double
-    let indicators: [String]
-}
-
-struct KycExtractedData: Codable {
-    let fullName:       String?
-    let dateOfBirth:    String?
-    let documentNumber: String?
-    let documentType:   String?
-    let expiryDate:     String?
-    let address:        String?
-}
-
-struct KycValidationResult: Codable {
-    let documentTypeDetected:      String?
-    let formatValid:               Bool?
-    let formatDetails:             String?
-    let notExpired:                Bool?
-    let ageVerified:               Bool?
-    let securityFeaturesPresent:   Bool?
-    let missingSecurityFeatures:   [String]?
-    let nameMatch:                 Bool?
-    let nameMatchDetails:          String?
-    let issuingAuthorityVisible:   Bool?
-    let photoPresent:              Bool?
-    let extractedDocumentNumber:   String?
-    let extractedExpiry:           String?
-    let extractedDob:              String?
-    let extractedName:             String?
-    let overallValid:              Bool
-    let failureReasons:            [String]?
-}
-
-struct KycProcessingResult: Codable {
-    let status:          String   // APPROVED | MANUAL_REVIEW | REJECTED
-    let rejectionCode:   String?
-    let rejectionReason: String?
-    let quality:         KycQuality
-    let tampering:       KycTampering?
-    let extractedData:   KycExtractedData?
-    let validation:      KycValidationResult?
-}
-
 // MARK: — Risk / Back-office
 
 enum RiskDecision: String, Codable {

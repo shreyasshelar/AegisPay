@@ -159,8 +159,16 @@ public class LedgerService {
         if (event.getPayeeId() != null) {
             List<Account> receiverAccounts = accountRepository.findByUserId(event.getPayeeId());
             if (receiverAccounts.isEmpty()) {
-                log.warn("commitBalance: no account found for payeeId={} txn={} — receiver credit skipped",
-                        event.getPayeeId(), event.getTransactionId());
+                // Defense-in-depth: transaction-service should have rejected this at creation
+                // time via the payee-existence gate.  If we still arrive here (e.g. a race
+                // condition where the user registered after the check but before the saga), we
+                // MUST NOT silently skip the credit — that would charge the sender and deliver
+                // nothing to the receiver (permanent money loss).  Throw so the Kafka consumer
+                // retries; after max retries the event goes to the DLQ for manual investigation.
+                throw new AccountNotFoundException(
+                        "commitBalance: no ledger account for payeeId=" + event.getPayeeId()
+                        + " txn=" + event.getTransactionId()
+                        + " — refusing to skip credit; failing for Kafka retry/DLQ");
             } else {
                 Account receiverAccount = accountRepository.findByIdForUpdate(receiverAccounts.get(0).getId())
                         .orElseThrow();

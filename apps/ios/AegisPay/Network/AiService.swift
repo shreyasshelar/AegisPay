@@ -34,7 +34,10 @@ final class AiService {
 
     // ── KYC document processing ───────────────────────────────────────────────
 
-    func processKycDocument(_ request: KycDocumentRequest) async throws -> KycProcessingResult {
-        try await api.post(path: "/api/v1/ai/kyc/process", body: request)
+    /// Submits a document for async AI processing. Returns immediately (202 Accepted);
+    /// the result arrives via push notification / WebSocket when the pipeline finishes.
+    func processKycDocument(_ request: KycDocumentRequest) async throws {
+        struct Accepted: Decodable {}
+        let _: Accepted = try await api.post(path: "/api/v1/ai/kyc/process", body: request)
     }
 }

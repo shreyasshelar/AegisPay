@@ -10,7 +10,6 @@ import com.aegispay.android.auth.AuthRepository
 import com.aegispay.android.network.AegisApiService
 import com.aegispay.android.network.KycDocumentRequest
 import com.aegispay.android.network.KycDocumentType
-import com.aegispay.android.network.KycProcessingResult
 import com.aegispay.android.network.UserProfile
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
@@ -21,22 +20,19 @@ import javax.inject.Inject
 private const val MAX_BYTES = 5 * 1024 * 1024 // 5 MB
 
 data class ProfileUiState(
-    val isLoading:      Boolean              = true,
-    val profile:        UserProfile?         = null,
-    val error:          String?              = null,
+    val isLoading:      Boolean           = true,
+    val profile:        UserProfile?      = null,
+    val error:          String?           = null,
 
     // Document type the user has selected before upload
-    val selectedDocType: KycDocumentType    = KycDocumentType.NATIONAL_ID,
+    val selectedDocType: KycDocumentType = KycDocumentType.NATIONAL_ID,
 
     // Upload / processing state
-    val isProcessing:   Boolean              = false,
-    val kycResult:      KycProcessingResult? = null,
-    val processError:   String?              = null,
-
-    // Confirm step
-    val isConfirming:   Boolean              = false,
-    val confirmSuccess: Boolean              = false,
-    val confirmError:   String?              = null,
+    val isProcessing:   Boolean           = false,
+    /** True once the server has accepted the document (202). AI pipeline runs in background;
+     *  result arrives via push notification / WebSocket. */
+    val uploadSuccess:  Boolean           = false,
+    val processError:   String?           = null,
 )
 
 @HiltViewModel
@@ -74,7 +70,7 @@ class ProfileViewModel @Inject constructor(
 
     fun processDocumentUri(uri: Uri, contentResolver: ContentResolver) {
         viewModelScope.launch {
-            _uiState.update { it.copy(isProcessing = true, processError = null, kycResult = null) }
+            _uiState.update { it.copy(isProcessing = true, processError = null, uploadSuccess = false) }
 
             val bytes = runCatching {
                 contentResolver.openInputStream(uri)?.use { it.readBytes() }
@@ -98,7 +94,7 @@ class ProfileViewModel @Inject constructor(
 
     fun processDocumentBitmap(bitmap: Bitmap) {
         viewModelScope.launch {
-            _uiState.update { it.copy(isProcessing = true, processError = null, kycResult = null) }
+            _uiState.update { it.copy(isProcessing = true, processError = null, uploadSuccess = false) }
 
             val bos = ByteArrayOutputStream()
             bitmap.compress(Bitmap.CompressFormat.JPEG, 85, bos)
@@ -116,6 +112,8 @@ class ProfileViewModel @Inject constructor(
         val base64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
         val docType = _uiState.value.selectedDocType.value
 
+        // Server returns 202 immediately; AI pipeline runs in the background.
+        // Result arrives via push notification / WebSocket when processing completes.
         runCatching {
             api.processKycDocument(
                 KycDocumentRequest(
@@ -126,41 +124,14 @@ class ProfileViewModel @Inject constructor(
                 )
             )
         }
-            .onSuccess { result ->
-                _uiState.update { it.copy(isProcessing = false, kycResult = result) }
+            .onSuccess {
+                _uiState.update { it.copy(isProcessing = false, uploadSuccess = true) }
+                loadProfile() // refresh so status banner shows DOCUMENT_SUBMITTED / AI_PROCESSING
             }
             .onFailure { e ->
                 _uiState.update { it.copy(isProcessing = false, processError = e.message) }
             }
     }
 
-    // ── Confirm extracted data ────────────────────────────────────────────────
-
-    fun confirmKyc() {
-        val userId  = authRepository.currentUserId ?: return
-        val docType = _uiState.value.selectedDocType.value
-        viewModelScope.launch {
-            _uiState.update { it.copy(isConfirming = true, confirmError = null) }
-            runCatching {
-                api.confirmKyc(userId, mapOf("documentType" to docType))
-            }
-                .onSuccess {
-                    _uiState.update { it.copy(isConfirming = false, confirmSuccess = true, kycResult = null) }
-                    loadProfile() // refresh KYC status
-                }
-                .onFailure { e ->
-                    _uiState.update { it.copy(isConfirming = false, confirmError = e.message) }
-                }
-        }
-    }
-
-    fun resetResult() = _uiState.update { it.copy(kycResult = null, processError = null, confirmError = null) }
-
-    val canConfirm: Boolean
-        get() {
-            val r = _uiState.value.kycResult ?: return false
-            if (r.tampering?.tampered == true) return false
-            if (r.validation?.overallValid == false) return false
-            return r.quality.acceptable
-        }
+    fun resetResult() = _uiState.update { it.copy(processError = null, uploadSuccess = false) }
 }

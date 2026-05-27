@@ -4,6 +4,14 @@ export interface ApiClientConfig {
   baseURL: string
   getAccessToken: () => Promise<string | null>
   onUnauthorized?: () => void
+  /**
+   * Called when any backend endpoint returns HTTP 404 with errorCode "USER_NOT_FOUND".
+   * This happens when the AegisPay DB record doesn't exist for the authenticated Keycloak sub
+   * (e.g. post-DB-wipe with a stale session, or a session created before auto-registration was
+   * deployed). The handler should trigger sign-out so the user re-authenticates and the
+   * auth.ts jwt callback can call /register to re-provision the account.
+   */
+  onUserNotFound?: () => void
 }
 
 /**
@@ -69,6 +77,25 @@ export class AegisApiClient {
         if (err.response?.status === 401) {
           config.onUnauthorized?.()
         }
+        // USER_NOT_FOUND on the caller's own identity endpoint means the Keycloak JWT is
+        // valid but the AegisPay DB record is absent (stale session / post-DB-wipe /
+        // deployment gap where auth.ts ran before always-register was shipped).
+        // Trigger sign-out so the user re-authenticates; auth.ts then calls /register
+        // (always-idempotent) and re-provisions the record before the first API call.
+        //
+        // ⚠  CRITICAL SCOPE GUARD: only fire for /users/me — never for /users/{id} calls
+        // that resolve a different user (payee lookup, back-office read, etc.).  Those are
+        // legitimate 404s and must NEVER sign the caller out mid-session.
+        if (err.response?.status === 404) {
+          const url      = err.config?.url ?? ''
+          const envelope = err.response?.data as ApiEnvelope<never> | undefined
+          if (
+            envelope?.error?.code === 'USER_NOT_FOUND' &&
+            /\/users\/me(\?|$)/.test(url)
+          ) {
+            config.onUserNotFound?.()
+          }
+        }
         return Promise.reject(mapApiError(err))
       },
     )
@@ -96,10 +123,20 @@ export class AegisApiClient {
 }
 
 export class ApiError extends Error {
+  /**
+   * @param status         HTTP status code (0 = network error before any response)
+   * @param errorCode      Backend {@code ErrorResponse.errorCode}, e.g. "SERVICE_UNAVAILABLE"
+   * @param retryAfterSecs Value of the {@code Retry-After} response header (seconds).
+   *                       Present on 503 responses from the gateway circuit-breaker fallback.
+   * @param failedService  Value of the {@code X-Failed-Service} header — which downstream
+   *                       route tripped the circuit (e.g. "ai-platform", "user-service").
+   */
   constructor(
     message: string,
     public readonly status: number,
     public readonly errorCode?: string,
+    public readonly retryAfterSecs?: number,
+    public readonly failedService?: string,
   ) {
     super(message)
     this.name = 'ApiError'
@@ -107,9 +144,17 @@ export class ApiError extends Error {
 }
 
 function mapApiError(err: AxiosError): ApiError {
-  const envelope = err.response?.data as ApiEnvelope<never> | undefined
-  const status = err.response?.status ?? 0
-  const message = envelope?.error?.message ?? err.message ?? 'Unknown error'
-  const errorCode = envelope?.error?.code
-  return new ApiError(message, status, errorCode)
+  const envelope    = err.response?.data as ApiEnvelope<never> | undefined
+  const headers     = err.response?.headers
+  const status      = err.response?.status ?? 0
+  const message     = envelope?.error?.message ?? err.message ?? 'Unknown error'
+  const errorCode   = envelope?.error?.code
+
+  // Parse Retry-After header (integer seconds) injected by FallbackController on 503.
+  const retryAfter  = headers?.['retry-after']
+  const retryAfterSecs = retryAfter ? parseInt(String(retryAfter), 10) || undefined : undefined
+
+  const failedService = headers?.['x-failed-service'] as string | undefined
+
+  return new ApiError(message, status, errorCode, retryAfterSecs, failedService)
 }

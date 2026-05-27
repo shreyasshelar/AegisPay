@@ -4,6 +4,7 @@ import com.aegispay.common.domain.dto.ApiResponse;
 import com.aegispay.common.domain.dto.ErrorResponse;
 import com.aegispay.common.domain.exception.AegisPayException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -79,6 +80,31 @@ public class GlobalExceptionHandler {
                         .errorCode("FORBIDDEN")
                         .message("You do not have permission to perform this action.")
                         .httpStatus(HttpStatus.FORBIDDEN.value())
+                        .build()
+        ));
+    }
+
+    /**
+     * Catches DB unique-constraint and foreign-key violations before they surface as 500.
+     *
+     * <p>The most common trigger is a concurrent first-time registration: two requests for
+     * the same JWT {@code sub} arrive simultaneously and both pass the
+     * {@code findByExternalId} check before either writes.  The second write violates the
+     * UNIQUE constraint on {@code external_id} or {@code email}.
+     *
+     * <p>The controller's own try-catch already handles the concurrent-registration race on
+     * {@code /register} and retries the lookup there.  This handler is a safety net for any
+     * other endpoint that performs a guarded write without a controller-level catch.
+     */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDataIntegrity(DataIntegrityViolationException ex) {
+        log.warn("Data integrity violation (likely concurrent write or duplicate key): {}",
+                ex.getMostSpecificCause().getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.error(
+                ErrorResponse.builder()
+                        .errorCode("DATA_CONFLICT")
+                        .message("A resource with the same identifier already exists.")
+                        .httpStatus(HttpStatus.CONFLICT.value())
                         .build()
         ));
     }
