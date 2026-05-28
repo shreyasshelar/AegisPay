@@ -4,6 +4,14 @@ spring:
   lifecycle:
     timeout-per-shutdown-phase: 30s
 
+  # KYC document uploads arrive as multipart/form-data (up to 5 MB raw binary).
+  # Spring Cloud Gateway (WebFlux / Netty) defaults to 256 KB in-memory codec buffer,
+  # which causes Netty to abort the connection (ECONNRESET at the Next.js proxy) for any
+  # body exceeding this limit.  Raise to 10 MB — consistent with the AI Platform's
+  # multipart max-request-size so the same ceiling applies end-to-end.
+  codec:
+    max-in-memory-size: 10MB
+
   cloud:
     gateway:
       # Routes are configured programmatically in GatewayRoutingConfig

@@ -2,25 +2,25 @@ package com.aegispay.ai.controller;
 
 import com.aegispay.ai.kyc.KycDocumentService;
 import com.aegispay.ai.service.UserLookupService;
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
-import org.springframework.validation.annotation.Validated;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.util.Base64;
 import java.util.Map;
 import java.util.UUID;
 
 @Slf4j
-@Validated
 @RestController
 @RequestMapping("/api/v1/ai/kyc")
 @RequiredArgsConstructor
@@ -30,7 +30,8 @@ public class KycDocumentController {
     private final UserLookupService  userLookupService;
 
     /**
-     * Accepts a KYC document image and starts the AI analysis pipeline in the background.
+     * Accepts a KYC document image (multipart/form-data) and starts the AI analysis
+     * pipeline in the background.
      *
      * <p>Returns {@code 202 Accepted} immediately — the 4-step vision pipeline
      * (quality → tampering → validation → OCR) can take up to 6 minutes on free-tier
@@ -38,6 +39,14 @@ public class KycDocumentController {
      * ({@code PATCH /api/v1/users/{userId}/kyc/status}) which transitions the KYC state
      * and publishes a {@code KycStatusChangedEvent}.  The Notification Service then
      * delivers a WebSocket push so the frontend updates without polling.
+     *
+     * <h3>Why multipart instead of base64 JSON</h3>
+     * <p>Sending the image as a base64-encoded JSON string adds 33 % overhead (5 MB → 6.7 MB)
+     * and forces the Next.js dev proxy to buffer the entire JSON body before forwarding,
+     * which regularly causes the browser's 30 s Axios timeout to fire before the 202
+     * arrives.  Multipart/form-data lets the proxy stream the binary body without buffering
+     * and keeps the wire size at the raw file size.  The base64 encoding required by the
+     * downstream vision AI API is done once, server-side, from the raw bytes.
      *
      * <h3>userId resolution</h3>
      * <p>On the first session after a social SSO login (Google, Microsoft), Keycloak issues
@@ -51,10 +60,26 @@ public class KycDocumentController {
      * <p>{@code registeredName} is optional but recommended: when provided, the AI will
      * cross-check the name printed on the document against the registered account name.
      */
-    @PostMapping("/process")
+    @PostMapping(value = "/process", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<Map<String, String>> process(
-            @Valid @RequestBody ProcessRequest request,
-            @AuthenticationPrincipal Jwt jwt) {
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "documentType", defaultValue = "NATIONAL_ID") String documentType,
+            @RequestParam(required = false) String registeredName,
+            @AuthenticationPrincipal Jwt jwt) throws IOException {
+
+        if (file == null || file.isEmpty()) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("message", "A document image file is required."));
+        }
+
+        // Encode the raw binary to base64 once, server-side.
+        // The downstream vision AI APIs expect base64; doing it here instead of in the
+        // browser reduces the HTTP payload by ~33 % and avoids buffering a giant JSON
+        // string in the Next.js dev proxy.
+        String mimeType = file.getContentType() != null ? file.getContentType() : "image/jpeg";
+        String base64ImageData = Base64.getEncoder().encodeToString(file.getBytes());
+
+        ProcessRequest request = new ProcessRequest(base64ImageData, mimeType, documentType, registeredName);
 
         String aeId = jwt != null ? jwt.getClaimAsString("aegispay_user_id") : null;
         UUID userId = (aeId != null && !aeId.isBlank()) ? UUID.fromString(aeId) : null;
@@ -83,12 +108,12 @@ public class KycDocumentController {
                     jwt != null ? jwt.getSubject() : "null");
         }
 
-        log.info("KYC document received for async processing: userId={} mimeType={}",
-                userId, request.mimeType());
+        log.info("KYC document received for async processing: userId={} mimeType={} size={}KB",
+                userId, mimeType, file.getSize() / 1024);
 
         // Synchronously mark the user as DOCUMENT_SUBMITTED in User Service before
         // returning 202 so the frontend's immediate refetch sees the updated status.
-        kycDocumentService.markDocumentSubmitted(userId, request.documentType());
+        kycDocumentService.markDocumentSubmitted(userId, documentType);
 
         // Fire-and-forget — Spring's @Async task executor picks this up immediately.
         kycDocumentService.processAsync(userId, request);
@@ -99,9 +124,10 @@ public class KycDocumentController {
         ));
     }
 
+    /** Internal request record — populated server-side from the multipart upload. */
     public record ProcessRequest(
-            @NotBlank String base64ImageData,
-            @NotBlank String mimeType,
+            String base64ImageData,
+            String mimeType,
             /** Document type (NATIONAL_ID, PASSPORT, DRIVING_LICENSE, PAN_CARD). */
             String documentType,
             /** Optional: registered full name for name cross-validation. */
