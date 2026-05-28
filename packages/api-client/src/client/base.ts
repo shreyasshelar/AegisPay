@@ -111,6 +111,32 @@ export class AegisApiClient {
     return res.data
   }
 
+  /**
+   * POST with a FormData body (multipart/form-data).
+   *
+   * DO NOT pass Content-Type manually — Axios must set it automatically so the
+   * multipart boundary parameter is included.  The default instance Content-Type
+   * (application/json) is cleared here to let Axios detect the FormData body.
+   *
+   * Uses a 120 s timeout instead of the default 30 s: even though the server
+   * returns 202 in ~1 s, large binary uploads must stream through the Next.js dev
+   * proxy and the API Gateway before the response arrives.  120 s matches the
+   * Gateway's response-timeout and gives plenty of headroom on slow connections.
+   */
+  async postFormData<T>(url: string, data: FormData, config?: AxiosRequestConfig): Promise<T> {
+    const res = await this.axios.post<T>(url, data, {
+      ...config,
+      headers: {
+        ...config?.headers,
+        // Setting to undefined removes the instance-level 'application/json' default
+        // so Axios can write 'multipart/form-data; boundary=<uuid>' automatically.
+        'Content-Type': undefined,
+      },
+      timeout: 120_000,
+    })
+    return res.data
+  }
+
   async patch<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
     const res = await this.axios.patch<T>(url, data, config)
     return res.data

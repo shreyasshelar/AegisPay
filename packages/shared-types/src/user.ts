@@ -37,14 +37,22 @@ export const UserSchema = z.object({
 })
 export type User = z.infer<typeof UserSchema>
 
-export const KycUploadRequestSchema = z.object({
-  base64ImageData: z.string().min(1),
-  mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp']),
-  /** Document category sent to AI Platform so it can include it in the User Service callback. */
-  documentType: z.string().optional(),
-  registeredName: z.string().optional(),
-})
-export type KycUploadRequest = z.infer<typeof KycUploadRequestSchema>
+/**
+ * Payload for KYC document upload.
+ *
+ * The file is sent as raw binary via multipart/form-data — no base64 encoding in
+ * the browser.  The AI Platform server reads the bytes and encodes them once for the
+ * downstream vision AI API.  This keeps the HTTP payload 33 % smaller than the old
+ * base64-JSON approach and allows the Next.js proxy to stream rather than buffer.
+ */
+export interface KycUploadRequest {
+  /** Raw image file selected by the user (JPEG / PNG / WebP, max 5 MB). */
+  file: File
+  /** Document type declared by the user (NATIONAL_ID, PASSPORT, DRIVING_LICENSE, PAN_CARD). */
+  documentType?: string
+  /** Optional registered account name for AI cross-validation against the document. */
+  registeredName?: string
+}
 
 export const KycProcessingResultSchema = z.object({
   status: z.enum(['APPROVED', 'MANUAL_REVIEW', 'REJECTED']),
