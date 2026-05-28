@@ -48,6 +48,14 @@
         dimensions: 1536
         initialize-schema: false
 
+  servlet:
+    multipart:
+      # KYC document images can be up to 5 MB; base64 encoding is done server-side
+      # (binary multipart payload is 33 % smaller than base64 JSON and streams through
+      # the Next.js proxy without buffering, eliminating the 30 s Axios timeout).
+      max-file-size: 6MB
+      max-request-size: 8MB
+
   security:
     oauth2:
       resourceserver:
@@ -57,6 +65,14 @@
 server:
   port: ${SERVER_PORT:8091}
   shutdown: graceful
+  tomcat:
+    # Tomcat's default maxPostSize is 2 MB — this limit applies to multipart/form-data
+    # bodies and hard-aborts the TCP connection when exceeded (ECONNRESET at the
+    # API Gateway proxy layer).  It is SEPARATE from spring.servlet.multipart.*
+    # which only controls Spring's MultipartResolver after Tomcat has already accepted
+    # the body.  Setting -1 removes the connector-level cap so KYC document images
+    # up to the Spring multipart max-request-size (8 MB above) are accepted cleanly.
+    max-http-form-post-size: -1
 
 management:
   endpoints:

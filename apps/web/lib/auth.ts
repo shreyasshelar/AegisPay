@@ -184,6 +184,47 @@ export const authOptions: NextAuthOptions = {
                 if (u.needsRegistration) {
                   console.log('[auth] User provisioned — aegispay_user_id=%s sub=%s',
                     userId, user.rawSub ?? user.id)
+
+                  // ── Propagate aegispay_user_id into the access token ────────────
+                  // writeUserAttributes is @Async in User Service — it writes the
+                  // aegispay_user_id attribute to Keycloak after /register returns.
+                  // The STOMP channel interceptor uses this claim to set the principal
+                  // for convertAndSendToUser routing.  Without refreshing, the current
+                  // session token lacks the claim → STOMP principal falls back to the
+                  // Keycloak sub → WebSocket notifications are silently dropped.
+                  // Wait 1.2 s (covers the @Async Keycloak admin write latency), then
+                  // refresh so the new token carries aegispay_user_id.
+                  try {
+                    await new Promise<void>(r => setTimeout(r, 1200))
+                    const kcTokenUrl = `${process.env.KEYCLOAK_ISSUER}/protocol/openid-connect/token`
+                    const refreshParams: Record<string, string> = {
+                      grant_type:    'refresh_token',
+                      client_id:     process.env.KEYCLOAK_ID!,
+                      refresh_token: account.refresh_token ?? '',
+                    }
+                    if (process.env.KEYCLOAK_SECRET) {
+                      refreshParams.client_secret = process.env.KEYCLOAK_SECRET
+                    }
+                    const kcResp = await fetch(kcTokenUrl, {
+                      method:  'POST',
+                      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                      body:    new URLSearchParams(refreshParams),
+                    })
+                    if (kcResp.ok) {
+                      const refreshed = await kcResp.json() as {
+                        access_token: string; expires_in: number; refresh_token?: string
+                      }
+                      account.access_token = refreshed.access_token
+                      account.expires_at   = Math.floor(Date.now() / 1000) + refreshed.expires_in
+                      if (refreshed.refresh_token) account.refresh_token = refreshed.refresh_token
+                      console.log('[auth] Token refreshed after provisioning — aegispay_user_id claim now in JWT')
+                    } else {
+                      console.warn('[auth] Post-provisioning token refresh failed: HTTP', kcResp.status)
+                    }
+                  } catch (refreshErr) {
+                    console.warn('[auth] Post-provisioning token refresh threw:', refreshErr)
+                  }
+                  // ───────────────────────────────────────────────────────────────
                 } else if (userId !== user.id) {
                   // Stale-attribute case: the DB returned a different UUID than what Keycloak
                   // had stored.  Use the authoritative DB value for this session.

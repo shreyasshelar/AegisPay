@@ -84,16 +84,23 @@ export function Sidebar() {
           // updates instantly without a manual page refresh.
           queryClient.invalidateQueries({ queryKey: userKeys.me() })
 
-          const isApproved = notification.body?.toLowerCase().includes('approved')
-          const isRejected = notification.body?.toLowerCase().includes('rejected')
+          // Only toast for FINAL states — the /profile banner already shows
+          // DOCUMENT_SUBMITTED / AI_PROCESSING with a spinner, so a toast for
+          // those intermediate states is redundant noise.
+          const body  = (notification.body  ?? '').toLowerCase()
+          const title = (notification.title ?? '').toLowerCase()
+          const isApproved     = body.includes('approved')  || title.includes('approved')
+          const isRejected     = body.includes('rejected')  || title.includes('rejected')
+          const isManualReview = body.includes('manual')    || title.includes('manual')
+
           if (isApproved) {
             toast.success(notification.title, { description: notification.body, duration: 12_000 })
           } else if (isRejected) {
-            // 15 s gives the user time to read it even if the upload-timeout toast also fires
             toast.error(notification.title, { description: notification.body, duration: 15_000 })
-          } else {
-            toast.info(notification.title, { description: notification.body, duration: 8_000 })
+          } else if (isManualReview) {
+            toast.info(notification.title, { description: notification.body, duration: 10_000 })
           }
+          // DOCUMENT_SUBMITTED / AI_PROCESSING → no toast; the /profile banner covers it.
         } else {
           toast.info(notification.title, { description: notification.body })
         }

@@ -56,16 +56,28 @@ export class UsersClient {
   }
 
   /**
-   * Submits a KYC document for async AI processing.
+   * Submits a KYC document for async AI processing via multipart/form-data.
    *
    * The server returns 202 Accepted immediately — the 4-step vision pipeline runs
    * in the background (up to ~6 min on free-tier providers). When the pipeline
    * finishes the AI Platform calls back User Service, which publishes a
    * KycStatusChangedEvent → Kafka → Notification Service → WebSocket push.
    * The frontend receives the result via the existing notification channel.
+   *
+   * Multipart is used instead of base64 JSON to avoid buffering a ~6.7 MB JSON
+   * string in the Next.js dev proxy.  The raw binary file (≤ 5 MB) streams through
+   * the proxy transparently; the server encodes it to base64 for the vision AI API.
    */
   async processKycDocument(request: KycUploadRequest): Promise<void> {
-    await this.client.post<unknown>('/api/v1/ai/kyc/process', request)
+    const formData = new FormData()
+    formData.append('file', request.file)
+    if (request.documentType) {
+      formData.append('documentType', request.documentType)
+    }
+    if (request.registeredName) {
+      formData.append('registeredName', request.registeredName)
+    }
+    await this.client.postFormData<unknown>('/api/v1/ai/kyc/process', formData)
   }
 
   async confirmKyc(userId: string, documentType: string): Promise<void> {

@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState, useCallback } from 'react'
+import { useRef, useState, useCallback, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { useAuthGuard } from '@/lib/useAuthGuard'
 import { toast } from 'sonner'
@@ -34,13 +34,13 @@ const KYC_CONFIG: Record<KycStatus, { label: string; icon: React.ElementType; bg
     text:  'text-warning-700',
   },
   DOCUMENT_SUBMITTED: {
-    label: 'Document received — AI is analysing it in the background',
+    label: 'Document received — AI analysis running in the background (takes a few minutes)',
     icon:  Loader2,
     bg:    'bg-primary-50 ring-primary-200',
     text:  'text-primary-700',
   },
   AI_PROCESSING: {
-    label: 'AI processing your document…',
+    label: 'AI is reviewing your document — you\'ll be notified when done',
     icon:  Loader2,
     bg:    'bg-primary-50 ring-primary-200',
     text:  'text-primary-700',
@@ -95,6 +95,21 @@ export function ProfileClient({ userId }: { userId: string }) {
   const KycIcon = cfg.icon
   const canUpload = kycStatus === 'PENDING' || kycStatus === 'REJECTED'
 
+  // ── Safety-net polling while AI pipeline is in flight ────────────────────────
+  // The banner transitions DOCUMENT_SUBMITTED → APPROVED/REJECTED via a WebSocket
+  // KYC_STATUS_CHANGED notification (sidebar handler invalidates userKeys.me()).
+  // On the very first login the session access-token lacks the aegispay_user_id
+  // claim (written to Keycloak asynchronously after registration), so the STOMP
+  // principal falls back to the Keycloak sub and the WebSocket message is silently
+  // dropped.  Poll every 10 s as a fallback so the banner still auto-updates
+  // without requiring a manual page refresh.
+  useEffect(() => {
+    const isProcessing = kycStatus === 'DOCUMENT_SUBMITTED' || kycStatus === 'AI_PROCESSING'
+    if (!isProcessing) return
+    const id = setInterval(() => { void refetch() }, 10_000)
+    return () => clearInterval(id)
+  }, [kycStatus, refetch])
+
   // ── File handling ──────────────────────────────────────────────────────────
 
   const handleFile = useCallback(async (file: File) => {
@@ -107,39 +122,26 @@ export function ProfileClient({ userId }: { userId: string }) {
       return
     }
 
-    const buffer = await file.arrayBuffer()
-    const bytes = new Uint8Array(buffer)
-    // Chunked base64 encoding — avoids O(n²) string concatenation that freezes the
-    // browser tab for several seconds on document-scan-sized images (1–5 MB).
-    // String.fromCharCode.apply() processes 8 KB at a time; stays well within the
-    // JS engine call-stack limit and runs in O(n) time.
-    const CHUNK = 8192
-    let binary = ''
-    for (let i = 0; i < bytes.byteLength; i += CHUNK) {
-      binary += String.fromCharCode.apply(
-        null,
-        bytes.subarray(i, i + CHUNK) as unknown as number[],
-      )
-    }
-    const base64 = btoa(binary)
-
+    // No base64 encoding needed — the raw File is sent as multipart/form-data.
+    // The server encodes to base64 for the vision AI API.  This keeps the HTTP
+    // payload at the raw file size (≤ 5 MB) instead of ~6.7 MB base64 JSON,
+    // and allows the Next.js proxy to stream rather than buffer the request.
     try {
       await processKyc.mutateAsync({
-        base64ImageData: base64,
-        mimeType: file.type as 'image/jpeg' | 'image/png' | 'image/webp',
+        file,
         documentType,
         registeredName: session?.user?.name ?? undefined,
       })
 
-      // 202 Accepted — AI pipeline is now running in the background.
-      toast.success('Document submitted', {
-        description:
-          'Your document is being analysed by AI. You will receive a notification ' +
-          'when processing is complete (usually within a few minutes).',
-        duration: 6000,
-      })
-
-      // Refresh the user profile so the KYC status banner updates to DOCUMENT_SUBMITTED.
+      // 202 Accepted — the document is queued; the KYC status banner on this
+      // page transitions to DOCUMENT_SUBMITTED automatically via refetch().
+      // We do NOT show a separate "Document submitted" toast here because:
+      //  1. The banner state change is immediate and visible on this page.
+      //  2. A success toast followed seconds later by "KYC Rejected" is jarring
+      //     and contradictory from the user's perspective.
+      // The final result (APPROVED / REJECTED / MANUAL_REVIEW) is surfaced via
+      // a WebSocket notification toast from the sidebar — that single toast is
+      // the meaningful user-facing signal.
       refetch()
     } catch (err) {
       if (err instanceof ApiError && (err.status === 503 || err.errorCode === 'SERVICE_UNAVAILABLE')) {
@@ -155,18 +157,14 @@ export function ProfileClient({ userId }: { userId: string }) {
         err.status === 0 &&
         err.message.toLowerCase().includes('timeout')
       ) {
-        // Axios timed out waiting for the 202 Accepted response.
-        // The document may already have been received and queued by the AI pipeline —
-        // a network timeout doesn't mean the upload failed, only that the browser
-        // didn't receive the acknowledgement in time (common on first upload after
-        // a cold start or while the dev server is recompiling).
-        // Refresh the profile data; if the status changed to DOCUMENT_SUBMITTED the
-        // KYC banner will update and the user will know the document is being processed.
+        // Network timeout — the 202 didn't arrive in time but the document may
+        // already be queued.  Refetch; the banner will show DOCUMENT_SUBMITTED
+        // if the server received it, or remain PENDING/REJECTED if it didn't.
         refetch()
         toast.warning('Upload is taking longer than expected', {
           description:
             'Your document may already be queued for verification — ' +
-            'check the status banner below. If it still shows Pending, please try again.',
+            'check the status banner below. If it still shows Pending or Rejected, please try again.',
           duration: 12_000,
         })
       } else {
@@ -395,7 +393,8 @@ export function ProfileClient({ userId }: { userId: string }) {
               {processKyc.isPending ? (
                 <>
                   <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
-                  <p className="text-sm text-slate-500">Uploading…</p>
+                  <p className="text-sm font-medium text-slate-600">Sending document…</p>
+                  <p className="text-xs text-slate-400">AI analysis starts once received</p>
                 </>
               ) : (
                 <>

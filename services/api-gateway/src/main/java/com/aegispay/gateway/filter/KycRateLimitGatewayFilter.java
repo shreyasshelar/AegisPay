@@ -64,11 +64,19 @@ public class KycRateLimitGatewayFilter implements GatewayFilter {
                                 }
 
                                 long remaining = Math.max(0, cfg.getMaxAttempts() - count);
-                                exchange.getResponse().getHeaders()
-                                        .set("X-KYC-RateLimit-Remaining", String.valueOf(remaining));
-                                exchange.getResponse().getHeaders()
-                                        .set("X-KYC-RateLimit-Limit",
-                                                String.valueOf(cfg.getMaxAttempts()));
+                                // Best-effort informational headers.  Spring Security's filter-chain
+                                // wraps the exchange and can seal response headers as ReadOnlyHttpHeaders
+                                // by the time this Lettuce IO-thread callback executes.  Swallow rather
+                                // than crashing the entire request with a 500 INTERNAL_SERVER_ERROR.
+                                try {
+                                    exchange.getResponse().getHeaders()
+                                            .set("X-KYC-RateLimit-Remaining", String.valueOf(remaining));
+                                    exchange.getResponse().getHeaders()
+                                            .set("X-KYC-RateLimit-Limit",
+                                                    String.valueOf(cfg.getMaxAttempts()));
+                                } catch (UnsupportedOperationException ignored) {
+                                    // Rate-limit info headers are informational only; skip if read-only
+                                }
 
                                 if (count > cfg.getMaxAttempts()) {
                                     log.warn("KYC rate limit exceeded: userId={} count={}", userId, count);
@@ -89,7 +97,11 @@ public class KycRateLimitGatewayFilter implements GatewayFilter {
 
     private Mono<Void> rejectServiceUnavailable(ServerWebExchange exchange) {
         exchange.getResponse().setStatusCode(HttpStatus.SERVICE_UNAVAILABLE);
-        exchange.getResponse().getHeaders().setContentType(MediaType.APPLICATION_JSON);
+        try {
+            exchange.getResponse().getHeaders().setContentType(MediaType.APPLICATION_JSON);
+        } catch (UnsupportedOperationException ignored) {
+            // Headers may already be sealed; body is still valid JSON
+        }
 
         ErrorResponse error = ErrorResponse.builder()
                 .errorCode("RATE_LIMITER_UNAVAILABLE")
@@ -111,7 +123,11 @@ public class KycRateLimitGatewayFilter implements GatewayFilter {
 
     private Mono<Void> rejectKycExceeded(ServerWebExchange exchange, int windowHours) {
         exchange.getResponse().setStatusCode(HttpStatus.TOO_MANY_REQUESTS);
-        exchange.getResponse().getHeaders().setContentType(MediaType.APPLICATION_JSON);
+        try {
+            exchange.getResponse().getHeaders().setContentType(MediaType.APPLICATION_JSON);
+        } catch (UnsupportedOperationException ignored) {
+            // Headers may already be sealed; body is still valid JSON
+        }
 
         ErrorResponse error = ErrorResponse.builder()
                 .errorCode("KYC_RATE_LIMIT_EXCEEDED")
