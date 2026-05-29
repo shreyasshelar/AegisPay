@@ -20,6 +20,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+// Sentinel: all-zeros nil UUID used when a required field is absent from the payload.
+// Rows with this userId are trivially queryable and can be quarantined / backfilled.
+// Using UUID.randomUUID() instead (the old pattern) creates untraceable orphaned rows.
+
 /**
  * Kafka Streams topology for risk-assessment events.
  *
@@ -109,10 +113,20 @@ public class RiskAnalyticsStream {
         }
     }
 
+    private static final UUID NIL_UUID = new UUID(0, 0);
+
     private UUID uuidFrom(Map<String, Object> map, String key) {
         Object val = map.get(key);
-        if (val == null) return UUID.randomUUID();
-        return val instanceof UUID u ? u : UUID.fromString(val.toString());
+        if (val == null) {
+            log.warn("Missing required UUID field '{}' in risk.assessed payload — storing nil UUID sentinel", key);
+            return NIL_UUID;
+        }
+        try {
+            return val instanceof UUID u ? u : UUID.fromString(val.toString());
+        } catch (IllegalArgumentException ex) {
+            log.warn("Invalid UUID value for field '{}': '{}' — storing nil UUID sentinel", key, val);
+            return NIL_UUID;
+        }
     }
 
     private int intFrom(Map<String, Object> map, String key) {

@@ -1,4 +1,4 @@
-﻿spring:
+spring:
   application:
     name: ledger-service
   lifecycle:
@@ -63,6 +63,7 @@
 server:
   port: ${SERVER_PORT:8083}
   shutdown: graceful
+  max-http-request-header-size: 32KB
 
 management:
   endpoints:

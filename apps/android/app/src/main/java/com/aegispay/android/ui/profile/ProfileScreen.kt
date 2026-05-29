@@ -1,6 +1,7 @@
 package com.aegispay.android.ui.profile
 
 import android.Manifest
+import android.app.Activity
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.net.Uri
@@ -15,6 +16,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -28,6 +31,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
@@ -331,10 +336,14 @@ fun ProfileScreen(
                         Text("Account", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold), color = AegisColor.Text)
                         ProfileInfoRow("User ID",  viewModel.currentUserId ?: "—")
                         ProfileInfoRow("Email",    viewModel.currentUserEmail ?: "—")
+                        ProfileInfoRow("Phone",    profile.phone ?: "Not set")
                         ProfileInfoRow("Role",     profile.role)
                     }
                 }
             }
+
+            // ── Phone number (OTP verification) ──────────────────────────────
+            PhoneCard(uiState = uiState, viewModel = viewModel)
 
             // ── Security (biometric toggle) ───────────────────────────────────
             if (biometricAvailable) {
@@ -416,5 +425,179 @@ private fun ProfileInfoRow(label: String, value: String) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Text(label, style = MaterialTheme.typography.bodySmall, color = AegisColor.TextMuted)
         Text(value, style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium), color = AegisColor.Text)
+    }
+}
+
+/**
+ * Phone number card with Firebase OTP verification flow.
+ *
+ * Flow: [IDLE] → tap Add/Update → [ENTER_PHONE] → tap "Send OTP" → [SENDING]
+ *   → SMS arrives → [ENTER_OTP] → tap "Verify & Save" → [SAVING] → [SAVED]
+ *
+ * Firebase verifies phone ownership; AegisPay backend is updated only after
+ * Firebase confirms the credential.  The Firebase session is signed out immediately
+ * after, keeping it completely separate from the Keycloak session.
+ */
+@Composable
+private fun PhoneCard(uiState: ProfileUiState, viewModel: ProfileViewModel) {
+    val context  = LocalContext.current
+    val activity = context as? Activity
+
+    AegisCard {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+
+            // ── Header row ────────────────────────────────────────────────────
+            Row(
+                verticalAlignment     = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Box(
+                    modifier         = Modifier
+                        .size(36.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(AegisColor.Primary.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Default.Phone, null, tint = AegisColor.Primary, modifier = Modifier.size(20.dp))
+                }
+                Column(Modifier.weight(1f)) {
+                    Text("Phone Number",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                        color = AegisColor.Text)
+                    Text("Required for SMS notifications",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = AegisColor.TextMuted)
+                }
+                if (uiState.phoneStep == PhoneStep.IDLE) {
+                    TextButton(onClick = { viewModel.openPhoneSheet() }) {
+                        Text(
+                            text  = if (uiState.profile?.phone != null) "Update" else "Add",
+                            color = AegisColor.Primary,
+                        )
+                    }
+                }
+            }
+
+            // Current (masked) phone — only shown when idle and a number is on file
+            if (uiState.phoneStep == PhoneStep.IDLE && uiState.profile?.phone != null) {
+                Text(
+                    uiState.profile.phone,
+                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                    color = AegisColor.Text,
+                )
+            }
+
+            // ── Saved success banner ──────────────────────────────────────────
+            if (uiState.phoneStep == PhoneStep.SAVED) {
+                Surface(
+                    color  = AegisColor.SuccessLight,
+                    shape  = MaterialTheme.shapes.small,
+                    border = BorderStroke(1.dp, AegisColor.Success.copy(alpha = 0.3f)),
+                ) {
+                    Row(
+                        verticalAlignment     = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier              = Modifier.fillMaxWidth().padding(10.dp),
+                    ) {
+                        Icon(Icons.Default.CheckCircle, null, tint = AegisColor.Success, modifier = Modifier.size(20.dp))
+                        Text("Phone number saved",
+                            style = MaterialTheme.typography.bodySmall, color = AegisColor.Success,
+                            modifier = Modifier.weight(1f))
+                        TextButton(
+                            onClick      = { viewModel.openPhoneSheet() },
+                            contentPadding = PaddingValues(horizontal = 4.dp),
+                        ) { Text("Update", color = AegisColor.Primary, style = MaterialTheme.typography.bodySmall) }
+                    }
+                }
+            }
+
+            // ── Phone entry step ──────────────────────────────────────────────
+            if (uiState.phoneStep == PhoneStep.ENTER_PHONE || uiState.phoneStep == PhoneStep.SENDING) {
+                OutlinedTextField(
+                    value         = uiState.phoneInput,
+                    onValueChange = { viewModel.onPhoneChange(it) },
+                    label         = { Text("Phone number") },
+                    placeholder   = { Text("+919876543210") },
+                    leadingIcon   = { Icon(Icons.Default.Phone, null) },
+                    singleLine    = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Phone,
+                        imeAction    = ImeAction.Send,
+                    ),
+                    keyboardActions = KeyboardActions(onSend = {
+                        activity?.let { viewModel.sendOtp(it) }
+                    }),
+                    isError  = uiState.phoneError != null,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors   = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor   = AegisColor.Primary,
+                        unfocusedBorderColor = AegisColor.Border,
+                    ),
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = { viewModel.cancelPhone() }) { Text("Cancel", color = AegisColor.TextMuted) }
+                    Spacer(Modifier.weight(1f))
+                    Button(
+                        onClick  = { activity?.let { viewModel.sendOtp(it) } },
+                        enabled  = uiState.phoneStep == PhoneStep.ENTER_PHONE && uiState.phoneInput.isNotBlank(),
+                        colors   = ButtonDefaults.buttonColors(containerColor = AegisColor.Primary),
+                        shape    = RoundedCornerShape(8.dp),
+                    ) {
+                        if (uiState.phoneStep == PhoneStep.SENDING) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
+                            Spacer(Modifier.width(6.dp))
+                        }
+                        Text("Send OTP", fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+
+            // ── OTP entry step ────────────────────────────────────────────────
+            if (uiState.phoneStep == PhoneStep.ENTER_OTP || uiState.phoneStep == PhoneStep.SAVING) {
+                Text(
+                    "Enter the 6-digit code sent to ${uiState.phoneInput}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = AegisColor.TextMuted,
+                )
+                OutlinedTextField(
+                    value         = uiState.otpInput,
+                    onValueChange = { if (it.length <= 6) viewModel.onOtpChange(it) },
+                    label         = { Text("6-digit OTP") },
+                    singleLine    = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.NumberPassword,
+                        imeAction    = ImeAction.Done,
+                    ),
+                    keyboardActions = KeyboardActions(onDone = { viewModel.verifyOtp() }),
+                    isError  = uiState.phoneError != null,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors   = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor   = AegisColor.Primary,
+                        unfocusedBorderColor = AegisColor.Border,
+                    ),
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = { viewModel.cancelPhone() }) { Text("Cancel", color = AegisColor.TextMuted) }
+                    Spacer(Modifier.weight(1f))
+                    Button(
+                        onClick  = { viewModel.verifyOtp() },
+                        enabled  = uiState.phoneStep == PhoneStep.ENTER_OTP && uiState.otpInput.length == 6,
+                        colors   = ButtonDefaults.buttonColors(containerColor = AegisColor.Primary),
+                        shape    = RoundedCornerShape(8.dp),
+                    ) {
+                        if (uiState.phoneStep == PhoneStep.SAVING) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
+                            Spacer(Modifier.width(6.dp))
+                        }
+                        Text("Verify & Save", fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+
+            // ── Error ─────────────────────────────────────────────────────────
+            uiState.phoneError?.let {
+                Text(it, color = AegisColor.Danger, style = MaterialTheme.typography.bodySmall)
+            }
+        }
     }
 }

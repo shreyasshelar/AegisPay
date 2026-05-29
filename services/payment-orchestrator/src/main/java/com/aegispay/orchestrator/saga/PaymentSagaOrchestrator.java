@@ -397,8 +397,13 @@ public class PaymentSagaOrchestrator {
         TransactionCompletedEvent event = TransactionCompletedEvent.builder()
                 .eventId(UUID.randomUUID()).occurredAt(Instant.now()).schemaVersion(1)
                 .transactionId(saga.getTransactionId()).userId(saga.getUserId())
+                // payeeId required by the notification service to send "You received" alerts to User B.
+                .payeeId(saga.getPayeeId())
                 .amount(saga.getAmount()).currency(saga.getCurrency())
                 .completedAt(saga.getCompletedAt()).externalReference(saga.getExternalReference())
+                // sagaStartedAt enables the data pipeline to compute real end-to-end latency.
+                // saga.getStartedAt() is set by @PrePersist when the saga entity is first persisted.
+                .sagaStartedAt(saga.getStartedAt())
                 .build();
         writeOutbox(saga, "TransactionCompletedEvent", KafkaTopics.TRANSACTION_COMPLETED, event);
     }
@@ -408,6 +413,9 @@ public class PaymentSagaOrchestrator {
                 .eventId(UUID.randomUUID()).occurredAt(Instant.now()).schemaVersion(1)
                 .transactionId(saga.getTransactionId()).userId(saga.getUserId())
                 .failureReason(reason).failureCode(failureCode)
+                // amount + currency required by the data pipeline so failed-transaction
+                // volume is recorded correctly in ClickHouse (was always ZERO/UNKNOWN).
+                .amount(saga.getAmount()).currency(saga.getCurrency())
                 .build();
         writeOutbox(saga, "TransactionFailedEvent", KafkaTopics.TRANSACTION_FAILED, event);
     }

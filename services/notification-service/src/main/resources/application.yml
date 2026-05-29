@@ -1,4 +1,4 @@
-﻿spring:
+spring:
   application:
     name: notification-service
   lifecycle:
@@ -43,6 +43,7 @@
 server:
   port: ${SERVER_PORT:8086}
   shutdown: graceful
+  max-http-request-header-size: 32KB
 
 management:
   endpoints:

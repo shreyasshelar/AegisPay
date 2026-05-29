@@ -82,6 +82,7 @@ struct ProfileView: View {
                         verifiedBadge
                     }
                     kycUploadSection
+                    phoneSection
                     securitySection
                     signOutButton
                 }
@@ -327,6 +328,165 @@ struct ProfileView: View {
                                 .lineLimit(3)
                         }
                         .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: — Phone section (OTP verification)
+
+    @ViewBuilder
+    private var phoneSection: some View {
+        AegisCard {
+            VStack(alignment: .leading, spacing: 12) {
+
+                // Header
+                HStack(spacing: 10) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color.aegisPrimaryLight)
+                            .frame(width: 34, height: 34)
+                        Image(systemName: "phone.fill")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(Color.aegisPrimary)
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Phone Number")
+                            .font(.aegisSubhead)
+                            .foregroundStyle(Color.aegisText)
+                        Text("Required for SMS notifications")
+                            .font(.aegisCaption)
+                            .foregroundStyle(Color.aegisTextSubtle)
+                    }
+                    Spacer()
+                    if vm.phoneStep == .idle {
+                        Button(vm.profile?.phone != nil ? "Update" : "Add") {
+                            vm.openPhoneSheet()
+                        }
+                        .font(.aegisBodySmall.weight(.semibold))
+                        .foregroundStyle(Color.aegisPrimary)
+                    }
+                }
+
+                // Masked phone (idle state only)
+                if vm.phoneStep == .idle, let phone = vm.profile?.phone {
+                    Text(phone)
+                        .font(.aegisBodySmall.weight(.medium))
+                        .foregroundStyle(Color.aegisText)
+                }
+
+                // Saved banner
+                if vm.phoneStep == .saved {
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(Color.aegisSuccess)
+                        Text("Phone number saved")
+                            .font(.aegisBodySmall)
+                            .foregroundStyle(Color.aegisSuccess)
+                        Spacer()
+                        Button("Update again") { vm.openPhoneSheet() }
+                            .font(.aegisCaption.weight(.semibold))
+                            .foregroundStyle(Color.aegisPrimary)
+                    }
+                    .padding(10)
+                    .background(Color.aegisSuccessLight)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.aegisSuccess.opacity(0.3), lineWidth: 1))
+                }
+
+                // Phone entry step
+                if vm.phoneStep == .enterPhone || vm.phoneStep == .sending {
+                    TextField("+919876543210", text: $vm.phoneInput)
+                        .keyboardType(.phonePad)
+                        .textContentType(.telephoneNumber)
+                        .padding(12)
+                        .background(Color.aegisSurface)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.aegisBorder, lineWidth: 1.5))
+
+                    HStack {
+                        Button("Cancel") { vm.cancelPhone() }
+                            .font(.aegisBodySmall)
+                            .foregroundStyle(Color.aegisTextMuted)
+                        Spacer()
+                        Button {
+                            Task { await vm.sendOtp() }
+                        } label: {
+                            HStack(spacing: 6) {
+                                if vm.phoneStep == .sending {
+                                    ProgressView().scaleEffect(0.75).tint(Color.white)
+                                }
+                                Text("Send OTP")
+                                    .font(.aegisBodySmall.weight(.semibold))
+                            }
+                            .foregroundStyle(Color.white)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .background(
+                                vm.phoneStep == .sending || vm.phoneInput.trimmingCharacters(in: .whitespaces).isEmpty
+                                    ? Color.aegisPrimary.opacity(0.5)
+                                    : Color.aegisPrimary
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                        }
+                        .disabled(vm.phoneStep == .sending || vm.phoneInput.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
+                }
+
+                // OTP entry step
+                if vm.phoneStep == .enterOtp || vm.phoneStep == .saving {
+                    Text("Enter the 6-digit code sent to \(vm.phoneInput)")
+                        .font(.aegisCaption)
+                        .foregroundStyle(Color.aegisTextMuted)
+
+                    TextField("123456", text: $vm.otpInput)
+                        .keyboardType(.numberPad)
+                        .textContentType(.oneTimeCode)
+                        .padding(12)
+                        .background(Color.aegisSurface)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.aegisBorder, lineWidth: 1.5))
+
+                    HStack {
+                        Button("Cancel") { vm.cancelPhone() }
+                            .font(.aegisBodySmall)
+                            .foregroundStyle(Color.aegisTextMuted)
+                        Spacer()
+                        Button {
+                            Task { await vm.verifyOtp() }
+                        } label: {
+                            HStack(spacing: 6) {
+                                if vm.phoneStep == .saving {
+                                    ProgressView().scaleEffect(0.75).tint(Color.white)
+                                }
+                                Text("Verify & Save")
+                                    .font(.aegisBodySmall.weight(.semibold))
+                            }
+                            .foregroundStyle(Color.white)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .background(
+                                vm.phoneStep == .saving || vm.otpInput.count != 6
+                                    ? Color.aegisPrimary.opacity(0.5)
+                                    : Color.aegisPrimary
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                        }
+                        .disabled(vm.phoneStep == .saving || vm.otpInput.count != 6)
+                    }
+                }
+
+                // Error
+                if let err = vm.phoneError {
+                    HStack(spacing: 6) {
+                        Image(systemName: "exclamationmark.circle.fill")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Color.aegisDanger)
+                        Text(err)
+                            .font(.aegisCaption)
+                            .foregroundStyle(Color.aegisDanger)
+                            .lineLimit(3)
                     }
                 }
             }

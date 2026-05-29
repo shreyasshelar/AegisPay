@@ -24,9 +24,23 @@ public interface TransactionMapper {
     @Mapping(target = "failureCode",     source = "failureCode")
     TransactionStatusResponse toStatusResponse(TransactionView view);
 
-    /** Maps a MongoDB read-model view to the full response shape used by the list endpoint. */
-    default TransactionResponse toListItemResponse(TransactionView view) {
+    /**
+     * Maps a MongoDB read-model view to the full response shape used by the list endpoint.
+     *
+     * @param view         the read-model document
+     * @param callerUserId the authenticated user making the request — used to compute
+     *                     {@code direction}: {@code "SENT"} when the caller is the payer,
+     *                     {@code "RECEIVED"} when the caller is the payee.
+     */
+    default TransactionResponse toListItemResponse(TransactionView view, UUID callerUserId) {
         if (view == null) return null;
+
+        String direction = null;
+        if (callerUserId != null) {
+            String callerId = callerUserId.toString();
+            direction = callerId.equals(view.getPayerId()) ? "SENT" : "RECEIVED";
+        }
+
         return TransactionResponse.builder()
                 .id(UUID.fromString(view.getId()))
                 .userId(view.getUserId() != null ? UUID.fromString(view.getUserId()) : null)
@@ -43,6 +57,7 @@ public interface TransactionMapper {
                 .failureReason(view.getFailureReason())
                 .failureCode(view.getFailureCode())
                 .externalReference(view.getExternalReference())
+                .direction(direction)
                 .build();
     }
 }

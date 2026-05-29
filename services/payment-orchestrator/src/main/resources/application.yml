@@ -1,4 +1,4 @@
-﻿spring:
+spring:
   application:
     name: payment-orchestrator
   lifecycle:
@@ -53,6 +53,7 @@
 server:
   port: ${SERVER_PORT:8084}
   shutdown: graceful
+  max-http-request-header-size: 32KB
 
 management:
   endpoints:

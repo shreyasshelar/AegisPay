@@ -55,6 +55,14 @@ public class TransactionMetricsStream {
     private static final String STATUS_COMPLETED = "COMPLETED";
     private static final String STATUS_FAILED    = "FAILED";
 
+    /**
+     * Sentinel UUID used when a required UUID field is absent from an event payload.
+     * All-zeros UUID (nil UUID per RFC 4122) is distinguishable from any real entity
+     * UUID and makes orphaned rows easy to detect in ClickHouse:
+     * {@code SELECT * FROM transaction_facts WHERE user_id = '00000000-0000-0000-0000-000000000000'}
+     */
+    private static final UUID NIL_UUID = new UUID(0, 0);
+
     private final StreamsBuilder  streamsBuilder;
     private final ClickHouseSink  clickHouseSink;
 
@@ -77,24 +85,30 @@ public class TransactionMetricsStream {
                 Map<String, Object> payload = parseJson(value);
                 if (payload == null) return;
 
-                UUID transactionId = uuidFrom(payload, "transactionId");
-                UUID userId        = uuidFrom(payload, "userId");
-                BigDecimal amount  = decimalFrom(payload, "amount");
-                String currency    = stringFrom(payload, "currency", "UNKNOWN");
-                Instant completedAt = instantFrom(payload, "completedAt");
+                UUID      transactionId = uuidFrom(payload, "transactionId");
+                UUID      userId        = uuidFrom(payload, "userId");
+                BigDecimal amount       = decimalFrom(payload, "amount");
+                String    currency      = stringFrom(payload, "currency", "UNKNOWN");
+                Instant   completedAt   = instantFrom(payload, "completedAt");
+
+                // sagaStartedAt was added to TransactionCompletedEvent to enable real
+                // latency tracking. For events published before this change, the field
+                // will be absent and latencyMs stays 0 (same as the old behaviour).
+                Instant sagaStartedAt = instantFromNullable(payload, "sagaStartedAt");
+                long    latencyMs     = sagaStartedAt != null
+                        ? completedAt.toEpochMilli() - sagaStartedAt.toEpochMilli()
+                        : 0L;
 
                 clickHouseSink.writeTransactionFact(new TransactionFactRecord(
                         transactionId, userId, amount, currency,
-                        STATUS_COMPLETED, null, completedAt, 0L));
+                        STATUS_COMPLETED, null, completedAt, latencyMs));
 
-                // Saga latency: processingLatencyMs not in event yet → store 0 until
-                // orchestrator adds saga timing to TransactionCompletedEvent
                 clickHouseSink.writeSagaLatency(new ClickHouseSink.SagaLatencyRecord(
                         transactionId,
-                        null,         // sagaId not in event → null → nil UUID in flush
-                        null,         // startedAt not in event → null → completedAt used
+                        null,           // sagaId not in event → nil UUID in flush
+                        sagaStartedAt,  // null for old events → completedAt used as fallback in flush
                         completedAt,
-                        0L,
+                        latencyMs,
                         STATUS_COMPLETED));
 
             } catch (Exception ex) {
@@ -111,21 +125,24 @@ public class TransactionMetricsStream {
                 Map<String, Object> payload = parseJson(value);
                 if (payload == null) return;
 
-                UUID transactionId = uuidFrom(payload, "transactionId");
-                UUID userId        = uuidFrom(payload, "userId");
-                String failureCode = stringFrom(payload, "failureCode", "UNKNOWN");
+                UUID       transactionId = uuidFrom(payload, "transactionId");
+                UUID       userId        = uuidFrom(payload, "userId");
+                // amount + currency are now present in TransactionFailedEvent (added to fix
+                // the missing failed-transaction volume in ClickHouse dashboards).
+                BigDecimal amount        = decimalFrom(payload, "amount");
+                String     currency      = stringFrom(payload, "currency", "UNKNOWN");
+                String     failureCode   = stringFrom(payload, "failureCode", "UNKNOWN");
 
-                TransactionFactRecord record = new TransactionFactRecord(
+                clickHouseSink.writeTransactionFact(new TransactionFactRecord(
                         transactionId,
                         userId,
-                        BigDecimal.ZERO,    // amount not available in failed event
-                        "UNKNOWN",
+                        amount,
+                        currency,
                         STATUS_FAILED,
                         failureCode,
                         Instant.now(),
-                        0L
-                );
-                clickHouseSink.writeTransactionFact(record);
+                        0L   // saga latency not tracked for failed sagas (no sagaStartedAt in failed event)
+                ));
 
             } catch (Exception ex) {
                 log.error("Error processing transaction.failed message key={}: {}", key, ex.getMessage(), ex);
@@ -185,10 +202,27 @@ public class TransactionMetricsStream {
         }
     }
 
+    /**
+     * Extracts a UUID from the payload map.
+     *
+     * <p>Returns {@link #NIL_UUID} (all-zeros) when the key is absent or the value
+     * cannot be parsed as a UUID. This replaces the previous {@code UUID.randomUUID()}
+     * fallback which created untraceable orphaned rows in ClickHouse — nil-UUID rows
+     * are easy to detect and quarantine:
+     * <pre>SELECT * FROM transaction_facts WHERE user_id = '00000000-...'</pre>
+     */
     private UUID uuidFrom(Map<String, Object> map, String key) {
         Object val = map.get(key);
-        if (val == null) return UUID.randomUUID(); // fallback; should not happen in prod
-        return val instanceof UUID u ? u : UUID.fromString(val.toString());
+        if (val == null) {
+            log.warn("Missing required UUID field '{}' in event payload — storing nil UUID sentinel", key);
+            return NIL_UUID;
+        }
+        try {
+            return val instanceof UUID u ? u : UUID.fromString(val.toString());
+        } catch (IllegalArgumentException ex) {
+            log.warn("Invalid UUID value for field '{}': '{}' — storing nil UUID sentinel", key, val);
+            return NIL_UUID;
+        }
     }
 
     private BigDecimal decimalFrom(Map<String, Object> map, String key) {
@@ -208,11 +242,27 @@ public class TransactionMetricsStream {
         Object val = map.get(key);
         if (val == null) return Instant.now();
         try {
-            // Jackson with JavaTimeModule deserialises Instant as a string ISO-8601
             return val instanceof String s ? Instant.parse(s) : Instant.now();
         } catch (Exception ex) {
             log.warn("Could not parse Instant for key={}, value={}", key, val);
             return Instant.now();
+        }
+    }
+
+    /**
+     * Like {@link #instantFrom} but returns {@code null} when the field is absent.
+     * Used for optional fields added in later schema versions (e.g. {@code sagaStartedAt})
+     * so that events published before the upgrade still produce {@code latencyMs = 0}
+     * rather than a nonsensical negative value.
+     */
+    private Instant instantFromNullable(Map<String, Object> map, String key) {
+        Object val = map.get(key);
+        if (val == null) return null;
+        try {
+            return val instanceof String s ? Instant.parse(s) : null;
+        } catch (Exception ex) {
+            log.warn("Could not parse optional Instant for key={}, value={}", key, val);
+            return null;
         }
     }
 

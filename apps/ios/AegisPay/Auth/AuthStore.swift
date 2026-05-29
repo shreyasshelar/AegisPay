@@ -142,6 +142,10 @@ final class AuthStore: ObservableObject {
                     userId:       profile.id,
                     userRole:     tokenStore.userRole
                 )
+                // Refresh so aegispay_user_id appears in the JWT claim —
+                // required for STOMP session routing via StompAuthChannelInterceptor.
+                // Best-effort: if refresh fails the app still works via HTTP.
+                try? await refreshTokens()
                 currentUser = buildUser()
                 state = .authenticated
             } else {
@@ -156,8 +160,10 @@ final class AuthStore: ObservableObject {
     }
 
     /// Called by `OnboardingViewModel` after successful `/register`.
-    /// Stores the new AegisPay user ID and transitions to `.authenticated`.
-    func completeRegistration(userId: String) {
+    /// Stores the new AegisPay user ID, waits for the @Async Keycloak attribute
+    /// write to propagate, refreshes the token so `aegispay_user_id` appears in
+    /// the JWT claim, then transitions to `.authenticated`.
+    func completeRegistration(userId: String) async {
         guard let accessToken = tokenStore.accessToken,
               let refreshToken = tokenStore.refreshToken
         else { return }
@@ -170,6 +176,12 @@ final class AuthStore: ObservableObject {
             userId:       userId,
             userRole:     tokenStore.userRole
         )
+        // The aegispay_user_id Keycloak attribute is written @Async — wait ~1.2 s
+        // for it to propagate before refreshing so the new JWT carries the claim.
+        // Without this, STOMP auth falls back to Keycloak sub and push notifications
+        // are silently lost.
+        try? await Task.sleep(for: .seconds(1.2))
+        try? await refreshTokens()
         currentUser = buildUser()
         state = .authenticated
     }

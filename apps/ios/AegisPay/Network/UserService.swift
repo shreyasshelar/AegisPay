@@ -39,11 +39,32 @@ final class UserService {
         )
     }
 
-    /// Submits a document image to the AI platform for async processing.
-    /// The server returns 202 Accepted immediately; the result is delivered via WebSocket
-    /// push notification when the background pipeline finishes (up to ~6 min).
-    func processKycDocument(_ request: KycDocumentRequest) async throws {
-        let _: EmptyResponse = try await api.post(path: "/api/v1/ai/kyc/process", body: request)
+    /// Submits a document image to the AI platform for async processing via multipart/form-data.
+    /// The server returns 202 Accepted immediately; the result is delivered via WebSocket / push
+    /// notification when the background pipeline finishes (up to ~6 min).
+    ///
+    /// - Parameters:
+    ///   - data: Raw image bytes (JPEG or PNG, max 5 MB).
+    ///   - mimeType: MIME type of the image, e.g. `"image/jpeg"`.
+    ///   - documentType: One of `NATIONAL_ID`, `PASSPORT`, `DRIVING_LICENSE`, `PAN_CARD`.
+    ///   - registeredName: Optional name for cross-matching against the document.
+    func processKycDocument(
+        data:           Data,
+        mimeType:       String,
+        documentType:   String,
+        registeredName: String?
+    ) async throws {
+        let extension_ = mimeType.contains("png") ? "png" : "jpg"
+        try await api.postMultipart(
+            path:     "/api/v1/ai/kyc/process",
+            fileData: data,
+            mimeType: mimeType,
+            fileName: "kyc_document.\(extension_)",
+            additionalFields: [
+                "documentType":    documentType,
+                "registeredName":  registeredName,
+            ]
+        )
     }
 
     /// Registers the device push token with the backend for targeted notifications.
@@ -52,6 +73,17 @@ final class UserService {
         let _: EmptyResponse = try await api.post(
             path: "/api/v1/users/\(userId)/push-token",
             body: Body(token: token, platform: platform)
+        )
+    }
+
+    /// Persists a Firebase-OTP-verified phone number to the AegisPay backend.
+    /// Pass `nil` to remove an existing phone number.
+    /// Called immediately after `Auth.auth().signIn(with: credential)` succeeds.
+    func updatePhone(userId: String, phone: String?) async throws -> UserProfile {
+        struct Body: Encodable { let phone: String? }
+        return try await api.patch(
+            path: "/api/v1/users/\(userId)/phone",
+            body: Body(phone: phone)
         )
     }
 }

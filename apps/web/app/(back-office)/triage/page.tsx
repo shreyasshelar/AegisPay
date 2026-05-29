@@ -15,7 +15,7 @@ export default async function TriagePage({
   const session = await getServerSession(authOptions)
 
   if (!session) redirect('/login')
-  if (session.user.role !== 'ADMIN') redirect('/back-office/incidents')
+  if (session.user.role !== 'ADMIN') redirect('/incidents')
 
   return (
     <TriageClient

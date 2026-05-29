@@ -65,6 +65,10 @@
 server:
   port: ${SERVER_PORT:8091}
   shutdown: graceful
+  # KYC uploads arrive with a large Cookie header (chunked next-auth session token)
+  # plus the Authorization Bearer JWT.  Together they exceed Tomcat's 8 KB default,
+  # causing a 400 "Request header is too large" before the body is read.
+  max-http-request-header-size: 32KB
   tomcat:
     # Tomcat's default maxPostSize is 2 MB — this limit applies to multipart/form-data
     # bodies and hard-aborts the TCP connection when exceeded (ECONNRESET at the

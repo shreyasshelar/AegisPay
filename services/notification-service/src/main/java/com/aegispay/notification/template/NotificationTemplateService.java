@@ -18,6 +18,11 @@ public class NotificationTemplateService {
                     vars.getOrDefault("currency", "") + " has been processed successfully. " +
                     "Reference: " + vars.getOrDefault("externalReference", "N/A"));
 
+            case MONEY_RECEIVED -> new RenderedNotification(
+                    "Money Received",
+                    "You've received " + vars.getOrDefault("amount", "?") + " " +
+                    vars.getOrDefault("currency", "") + " in your AegisPay account.");
+
             case TRANSACTION_FAILED -> new RenderedNotification(
                     "Payment Failed",
                     "Your payment could not be processed. Reason: " +

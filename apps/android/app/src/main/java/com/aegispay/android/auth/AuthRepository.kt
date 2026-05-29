@@ -7,6 +7,7 @@ import com.aegispay.android.BuildConfig
 import com.aegispay.android.network.AegisApiService
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -222,17 +223,24 @@ class AuthRepository @Inject constructor(
         // Slow path: first login — resolve via Keycloak sub
         try {
             val profile = api.getMe()
+            val storedId = profile.id
             val ttl = ((tokenStore.expiresAtMs - System.currentTimeMillis()) / 1_000L).coerceAtLeast(60L)
             tokenStore.store(
                 accessToken  = tokenStore.accessToken!!,
                 refreshToken = tokenStore.refreshToken,
                 idToken      = tokenStore.idToken,
                 expiresInSec = ttl,
-                userId       = profile.id,
+                userId       = storedId,
                 userRole     = tokenStore.userRole,
                 userEmail    = tokenStore.userEmail,
                 userName     = tokenStore.userName,
             )
+            // Refresh the access token so aegispay_user_id claim appears in the JWT.
+            // The claim is required for STOMP session routing via StompAuthChannelInterceptor.
+            // Best-effort: if refresh fails the app still works via HTTP (token has userId in store).
+            runCatching { refresh() }
+            // persistTokens() nulls userId if claim is absent — restore it from the known value.
+            if (tokenStore.userId.isNullOrBlank()) tokenStore.userId = storedId
             _authState.value = AuthState.Authenticated(buildUser())
         } catch (e: HttpException) {
             if (e.code() == 404) {
@@ -261,6 +269,14 @@ class AuthRepository @Inject constructor(
             userEmail    = tokenStore.userEmail,
             userName     = tokenStore.userName,
         )
+        // Wait for the @Async Keycloak attribute write to propagate (~1 s), then
+        // refresh so aegispay_user_id appears in the JWT claim. Without this, STOMP
+        // auth falls back to the Keycloak sub and push notifications are silently lost.
+        // Best-effort: if refresh fails the app still works via HTTP.
+        delay(1_200)
+        runCatching { refresh() }
+        // persistTokens() removes userId if the claim is still absent — restore it.
+        if (tokenStore.userId.isNullOrBlank()) tokenStore.userId = userId
         _authState.value = AuthState.Authenticated(buildUser())
     }
 

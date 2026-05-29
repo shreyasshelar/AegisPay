@@ -387,7 +387,7 @@ echo if (-not $r -or -not $r.access_token) { Write-Host '  No admin token - IDP 
 echo $h = @{ Authorization = "Bearer $($r.access_token)"; 'Content-Type' = 'application/json' } >> "!KC_SEED_PS!"
 echo $idps = @( >> "!KC_SEED_PS!"
 echo @{ n='Google';    alias='google';    b='{"alias":"google","providerId":"google","displayName":"Google","enabled":true,"config":{"clientId":"!GOOGLE_CLIENT_ID!","clientSecret":"!GOOGLE_CLIENT_SECRET!","defaultScope":"email profile openid"}}' }, >> "!KC_SEED_PS!"
-echo @{ n='Microsoft'; alias='microsoft'; b='{"alias":"microsoft","providerId":"microsoft","displayName":"Microsoft","enabled":true,"config":{"clientId":"!MICROSOFT_CLIENT_ID!","clientSecret":"!MICROSOFT_CLIENT_SECRET!","tenantId":"!MICROSOFT_TENANT_ID!","defaultScope":"openid email profile"}}' } >> "!KC_SEED_PS!"
+echo @{ n='Microsoft'; alias='microsoft'; b='{"alias":"microsoft","providerId":"microsoft","displayName":"Microsoft","enabled":true,"config":{"clientId":"!MICROSOFT_CLIENT_ID!","clientSecret":"!MICROSOFT_CLIENT_SECRET!","tenantId":"!MICROSOFT_TENANT_ID!","defaultScope":"openid email profile User.Read"}}' } >> "!KC_SEED_PS!"
 echo ) >> "!KC_SEED_PS!"
 echo foreach ($idp in $idps) { >> "!KC_SEED_PS!"
 echo     try { >> "!KC_SEED_PS!"
@@ -408,6 +408,52 @@ echo     } >> "!KC_SEED_PS!"
 echo } >> "!KC_SEED_PS!"
 powershell -NoProfile -ExecutionPolicy Bypass -File "!KC_SEED_PS!"
 del "!KC_SEED_PS!" >nul 2>&1
+
+REM ── Seed admin and back-office users in Keycloak ──────────────────────────
+echo.
+echo Seeding admin and back-office users in Keycloak...
+set "KC_USERS_PS=%TEMP%\aegispay_kc_users.ps1"
+echo $ErrorActionPreference = 'SilentlyContinue' > "!KC_USERS_PS!"
+echo $url = 'http://localhost:8180'; $realm = 'aegispay' >> "!KC_USERS_PS!"
+echo try { $r = Invoke-RestMethod -Method Post -Uri ($url+'/realms/master/protocol/openid-connect/token') -Body @{grant_type='password';client_id='admin-cli';username='admin';password='admin'} -ErrorAction Stop } catch { Write-Host '  Keycloak not reachable - user seed skipped'; exit 0 } >> "!KC_USERS_PS!"
+echo if (-not $r -or -not $r.access_token) { Write-Host '  No admin token - user seed skipped'; exit 0 } >> "!KC_USERS_PS!"
+echo $h = @{ Authorization = "Bearer $($r.access_token)"; 'Content-Type' = 'application/json' } >> "!KC_USERS_PS!"
+echo $users = @( >> "!KC_USERS_PS!"
+echo     @{ username='admin';      firstName='AegisPay'; lastName='Admin';  email='admin@aegispay.local';      password='Admin@1234'; role='ADMIN';       attr='ADMIN' }, >> "!KC_USERS_PS!"
+echo     @{ username='backoffice'; firstName='Back';     lastName='Office'; email='backoffice@aegispay.local'; password='BO@1234';    role='BACK_OFFICE'; attr='BACK_OFFICE' } >> "!KC_USERS_PS!"
+echo ) >> "!KC_USERS_PS!"
+echo foreach ($u in $users) { >> "!KC_USERS_PS!"
+echo     $bodyObj = @{ username=$u.username; firstName=$u.firstName; lastName=$u.lastName; email=$u.email; emailVerified=$true; enabled=$true; credentials=@(@{type='password';value=$u.password;temporary=$false}); attributes=@{aegispay_role=@($u.attr);aegispay_tenant_id=@('default')} } >> "!KC_USERS_PS!"
+echo     $body = $bodyObj ^| ConvertTo-Json -Depth 5 -Compress >> "!KC_USERS_PS!"
+echo     try { >> "!KC_USERS_PS!"
+echo         Invoke-RestMethod -Method Post -Uri ($url+'/admin/realms/'+$realm+'/users') -Headers $h -Body $body -ContentType 'application/json' -ErrorAction Stop ^| Out-Null >> "!KC_USERS_PS!"
+echo         Write-Host ("  "+$u.username+" user created") >> "!KC_USERS_PS!"
+echo     } catch { >> "!KC_USERS_PS!"
+echo         if ($_.Exception.Response -and $_.Exception.Response.StatusCode.value__ -eq 409) { >> "!KC_USERS_PS!"
+echo             Write-Host ("  "+$u.username+" user already exists") >> "!KC_USERS_PS!"
+echo         } else { >> "!KC_USERS_PS!"
+echo             Write-Host ("  "+$u.username+" user create failed: "+$_.Exception.Message) >> "!KC_USERS_PS!"
+echo         } >> "!KC_USERS_PS!"
+echo     } >> "!KC_USERS_PS!"
+echo     try { >> "!KC_USERS_PS!"
+echo         $found = Invoke-RestMethod -Method Get -Uri ($url+'/admin/realms/'+$realm+'/users?username='+$u.username+'^&exact=true') -Headers $h -ErrorAction Stop >> "!KC_USERS_PS!"
+echo         if ($found -and $found.Count -gt 0) { >> "!KC_USERS_PS!"
+echo             $uid = $found[0].id >> "!KC_USERS_PS!"
+echo             $roleObj = Invoke-RestMethod -Method Get -Uri ($url+'/admin/realms/'+$realm+'/roles/'+$u.role) -Headers $h -ErrorAction Stop >> "!KC_USERS_PS!"
+echo             $roleBody = ('[{"id":"'+$roleObj.id+'","name":"'+$roleObj.name+'"}]') >> "!KC_USERS_PS!"
+echo             try { >> "!KC_USERS_PS!"
+echo                 Invoke-RestMethod -Method Post -Uri ($url+'/admin/realms/'+$realm+'/users/'+$uid+'/role-mappings/realm') -Headers $h -Body $roleBody -ContentType 'application/json' -ErrorAction Stop ^| Out-Null >> "!KC_USERS_PS!"
+echo                 Write-Host ("  "+$u.username+" -> role "+$u.role+" assigned") >> "!KC_USERS_PS!"
+echo             } catch { >> "!KC_USERS_PS!"
+echo                 Write-Host ("  "+$u.username+" -> role assign: "+$_.Exception.Message) >> "!KC_USERS_PS!"
+echo             } >> "!KC_USERS_PS!"
+echo         } >> "!KC_USERS_PS!"
+echo     } catch { >> "!KC_USERS_PS!"
+echo         Write-Host ("  "+$u.username+" -> lookup failed: "+$_.Exception.Message) >> "!KC_USERS_PS!"
+echo     } >> "!KC_USERS_PS!"
+echo } >> "!KC_USERS_PS!"
+powershell -NoProfile -ExecutionPolicy Bypass -File "!KC_USERS_PS!"
+del "!KC_USERS_PS!" >nul 2>&1
 
 REM =========================================================
 REM WAIT FOR CLICKHOUSE
@@ -682,6 +728,18 @@ echo.
 echo # WebSocket - browser connects directly, must use LAN IP
 echo NEXT_PUBLIC_WS_BASE_URL=ws://!LAN_IP!:8086
 ) > apps\web\.env.local
+
+REM Append Firebase vars from .secrets.bat (only if set — phone OTP verification).
+REM NEXT_PUBLIC_* vars must be embedded at Next.js startup so they go into .env.local.
+IF NOT "!NEXT_PUBLIC_FIREBASE_API_KEY!"=="" (
+    echo.>> apps\web\.env.local
+    echo # Firebase - phone OTP verification>> apps\web\.env.local
+    echo NEXT_PUBLIC_FIREBASE_API_KEY=!NEXT_PUBLIC_FIREBASE_API_KEY!>> apps\web\.env.local
+    echo NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=!NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN!>> apps\web\.env.local
+    echo NEXT_PUBLIC_FIREBASE_PROJECT_ID=!NEXT_PUBLIC_FIREBASE_PROJECT_ID!>> apps\web\.env.local
+    echo NEXT_PUBLIC_FIREBASE_APP_ID=!NEXT_PUBLIC_FIREBASE_APP_ID!>> apps\web\.env.local
+    echo Firebase vars written to .env.local
+)
 echo Generated apps\web\.env.local with LAN_IP=!LAN_IP!
 
 call npm install --silent
@@ -838,8 +896,10 @@ echo   ClickHouse     -^>  http://localhost:8123
 echo   PostgreSQL     -^>  localhost:5433          (aegispay / aegispay_dev)
 echo.
 echo   Test accounts:
-echo     Sender : customer@aegispay.local / Test@1234  (INR 100000)
-echo     Payee  : payee@aegispay.local    / Test@1234  (INR 100000)
+echo     Sender     : customer@aegispay.local    / Test@1234    ^(INR 100000^)
+echo     Payee      : payee@aegispay.local       / Test@1234    ^(INR 100000^)
+echo     Admin      : admin@aegispay.local        / Admin@1234   ^(role: ADMIN^)
+echo     Back-office: backoffice@aegispay.local   / BO@1234      ^(role: BACK_OFFICE^)
 echo     Payee AegisPay ID: !PAYEE_ID!
 echo.
 

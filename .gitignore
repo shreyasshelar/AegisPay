@@ -119,3 +119,8 @@ logs/
 
 # ── Claude Code ─────────────────────────────────────────────
 **/.claude/
+
+# already ignore patterns to verify exist:
+apps/android/app/google-services.json
+apps/ios/AegisPay/GoogleService-Info.plist
+apps/web/.env.local
