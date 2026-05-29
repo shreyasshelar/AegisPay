@@ -20,11 +20,7 @@ const STATUS_OPTIONS: { label: string; value: TransactionStatus | '' }[] = [
   { label: 'Rolled Back',  value: 'ROLLED_BACK' },
 ]
 
-interface TransactionsClientProps {
-  userId: string
-}
-
-export function TransactionsClient({ userId }: TransactionsClientProps) {
+export function TransactionsClient() {
   const blocking = useAuthGuard()
   const router = useRouter()
 
@@ -167,7 +163,7 @@ export function TransactionsClient({ userId }: TransactionsClientProps) {
                   <AegisTransactionRow
                     key={tx.transactionId}
                     transaction={tx}
-                    currentUserId={userId}
+                    direction={tx.direction === 'RECEIVED' ? 'received' : 'sent'}
                     onClick={() =>
                       router.push(`/transactions/${tx.transactionId}`)
                     }

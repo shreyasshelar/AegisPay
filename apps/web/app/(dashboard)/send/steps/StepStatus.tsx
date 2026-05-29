@@ -12,6 +12,7 @@ import {
   ExternalLink,
   Lightbulb,
 } from 'lucide-react'
+import ReactMarkdown from 'react-markdown'
 import { toast } from 'sonner'
 import {
   useTransaction,
@@ -181,9 +182,15 @@ export function StepStatus() {
             </div>
           ) : resolveError.data ? (
             <div className="space-y-1">
-              <p className="text-sm text-amber-800 leading-relaxed">
+              <ReactMarkdown
+                components={{
+                  p:      ({ children }) => <p className="text-sm text-amber-800 leading-relaxed">{children}</p>,
+                  strong: ({ children }) => <strong className="font-semibold text-amber-900">{children}</strong>,
+                  em:     ({ children }) => <em className="italic">{children}</em>,
+                }}
+              >
                 {resolveError.data.resolution}
-              </p>
+              </ReactMarkdown>
               {resolveError.data.errorCode && resolveError.data.errorCode !== 'null' && (
                 <p className="font-mono text-xs text-amber-600">
                   Code: {resolveError.data.errorCode}

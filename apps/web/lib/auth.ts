@@ -15,6 +15,20 @@ if (process.env.NODE_ENV === 'production') {
 // localhost → ::1 on macOS; Keycloak only listens on 127.0.0.1 → 3.5s timeout.
 const ipv4Agent = new http.Agent({ family: 4 })
 
+/**
+ * Derive the AegisPay role from a list of Keycloak realm roles.
+ * Priority: ADMIN > BACK_OFFICE > MERCHANT_OPS > PARTNER > CUSTOMER.
+ * Single source of truth — used by both profile() (ID token) and the
+ * jwt() callback (access token decode).
+ */
+export function extractRole(realmRoles: string[]): string {
+  if (realmRoles.includes('ADMIN'))        return 'ADMIN'
+  if (realmRoles.includes('BACK_OFFICE'))  return 'BACK_OFFICE'
+  if (realmRoles.includes('MERCHANT_OPS')) return 'MERCHANT_OPS'
+  if (realmRoles.includes('PARTNER'))      return 'PARTNER'
+  return 'CUSTOMER'
+}
+
 async function refreshAccessToken(token: JWT): Promise<JWT> {
   try {
     const url = `${process.env.KEYCLOAK_ISSUER}/protocol/openid-connect/token`
@@ -49,12 +63,32 @@ async function refreshAccessToken(token: JWT): Promise<JWT> {
       return { ...token, error: 'RefreshAccessTokenError' as const }
     }
 
+    // If the refreshed access token carries aegispay_user_id (written by User
+    // Service async attribute write-back) adopt it so the STOMP principal
+    // updates without requiring a full re-login.
+    let updatedUserId: string = token.userId
+    try {
+      const parts = refreshed.access_token?.split('.')
+      if (parts?.length === 3 && parts[1]) {
+        const payload = JSON.parse(
+          Buffer.from(parts[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString(),
+        ) as Record<string, unknown>
+        const newId = payload['aegispay_user_id']
+        if (typeof newId === 'string' && newId) updatedUserId = newId
+      }
+    } catch { /* keep existing userId on decode failure */ }
+
     return {
       ...token,
+      userId:               updatedUserId,
       error:                undefined,
       accessToken:          refreshed.access_token,
       accessTokenExpiresAt: Date.now() + refreshed.expires_in * 1000,
       refreshToken:         refreshed.refresh_token ?? token.refreshToken,
+      // Keycloak re-issues an id_token on refresh when openid scope is present.
+      // Carry it forward so end_session always has a valid id_token_hint.
+      // Never store empty string — end_session rejects id_token_hint=''.
+      idToken:              (refreshed as { id_token?: string }).id_token || token.idToken,
     }
   } catch (err) {
     console.error('[auth] refreshAccessToken threw:', err)
@@ -95,15 +129,7 @@ export const authOptions: NextAuthOptions = {
           name:              profile.name ?? profile.preferred_username,
           email:             profile.email,
           image:             profile.picture,
-          role:              (profile.realm_access?.roles ?? []).includes('ADMIN')
-                               ? 'ADMIN'
-                               : (profile.realm_access?.roles ?? []).includes('BACK_OFFICE')
-                                 ? 'BACK_OFFICE'
-                                 : (profile.realm_access?.roles ?? []).includes('MERCHANT_OPS')
-                                   ? 'MERCHANT_OPS'
-                                   : (profile.realm_access?.roles ?? []).includes('PARTNER')
-                                     ? 'PARTNER'
-                                     : 'CUSTOMER',
+          role:              extractRole(profile.realm_access?.roles ?? []),
           // Extra fields forwarded to jwt callback for auto-registration
           rawSub:            profile.sub,
           firstName:         (p.given_name as string | undefined) ?? profile.preferred_username ?? '',
@@ -117,7 +143,11 @@ export const authOptions: NextAuthOptions = {
   session: {
     strategy:   'jwt',
     maxAge:     24 * 60 * 60,  // absolute expiry: 24 h
-    updateAge:   5 * 60,       // sliding: re-issue JWT every 5 min of activity
+    // Always rewrite the JWT cookie on every session check so a freshly-rotated
+    // Keycloak refresh token (refreshTokenMaxReuse=0) is immediately persisted.
+    // Without this, the new RT can miss the updateAge window and the old RT gets
+    // reused on the next poll → Keycloak rejects it → RefreshAccessTokenError.
+    updateAge:  0,
   },
 
   debug: process.env.NODE_ENV === 'development',
@@ -305,14 +335,34 @@ export const authOptions: NextAuthOptions = {
           }
         }
 
+        // Access token carries the authoritative realm_access.roles regardless
+        // of whether the Keycloak ID-token mapper is configured.  Decode it to
+        // get the role; fall back to profile()-derived role on any failure
+        // (opaque token, malformed JWT, missing payload segment).
+        let role: string = u.role ?? 'CUSTOMER'
+        try {
+          const parts = account.access_token?.split('.')
+          if (parts && parts.length === 3 && parts[1]) {
+            const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/')
+            const atPayload = JSON.parse(Buffer.from(b64, 'base64').toString())
+            role = extractRole(atPayload?.realm_access?.roles ?? [])
+          }
+        } catch { /* keep profile-derived role on decode failure */ }
+
         return {
           ...token,
           error:                undefined,          // clear any previous error
           accessToken:          account.access_token!,
           accessTokenExpiresAt: account.expires_at! * 1000,
           refreshToken:         account.refresh_token ?? '',
+          // Stored for Keycloak end_session logout — lets us terminate the
+          // Keycloak SSO session so sign-out actually requires re-authentication.
+          // Only store idToken when Keycloak actually issued one.
+          // An empty string would be sent as id_token_hint='' to end_session
+          // which Keycloak rejects (400), silently leaving the SSO session alive.
+          ...(account.id_token ? { idToken: account.id_token } : {}),
           userId,
-          role:                 u.role ?? 'CUSTOMER',
+          role,
         }
       }
 
@@ -321,10 +371,11 @@ export const authOptions: NextAuthOptions = {
         return token
       }
 
-      // ── Token still valid (60-second proactive buffer) ──────────────────────
-      // Buffer must be much smaller than the token lifetime.
-      // Keycloak default access token = 5 min → 60s buffer leaves 4 min headroom.
-      if (Date.now() < token.accessTokenExpiresAt - 60 * 1000) {
+      // ── Token still valid — proactive refresh buffer ─────────────────────────
+      // Buffer must be larger than the polling interval (SessionProvider
+      // refetchInterval = 4 min = 240 s) so the refresh triggers at the poll
+      // *before* expiry, not at/after it.  5 min (300 s) > 240 s. ✓
+      if (Date.now() < token.accessTokenExpiresAt - 5 * 60 * 1000) {
         return token
       }
 
@@ -338,6 +389,10 @@ export const authOptions: NextAuthOptions = {
     },
 
     async session({ session, token }): Promise<Session> {
+      // idToken is intentionally NOT included here: it lives only in the
+      // encrypted server-side JWT cookie and is used by refreshAccessToken
+      // for Keycloak end_session. Exposing it in the browser-visible session
+      // response would leak Keycloak user claims to any client-side code.
       return {
         ...session,
         user: {
@@ -363,6 +418,8 @@ export const authOptions: NextAuthOptions = {
 declare module 'next-auth' {
   interface Session {
     accessToken: string
+    // idToken is server-side only (JWT cookie) — not included in the session
+    // response to avoid exposing raw Keycloak claims to browser-side code.
     error?: string
     user: {
       id:     string
@@ -386,6 +443,7 @@ declare module 'next-auth/jwt' {
     accessToken:          string
     accessTokenExpiresAt: number
     refreshToken:         string
+    idToken?:             string   // absent when Keycloak didn't issue an id_token
     userId:               string
     role:                 string
     error?:               string

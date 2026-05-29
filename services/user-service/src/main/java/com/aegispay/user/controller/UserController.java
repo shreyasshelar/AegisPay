@@ -263,6 +263,31 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.ok(response));
     }
 
+    // ── Contact details ────────────────────────────────────────────────────────
+
+    /**
+     * Add or replace the phone number for a user.
+     *
+     * <p>Self-service only — the authenticated caller must match the path {@code userId}.
+     * Primary use-case: SSO users (Google, GitHub, Apple, Microsoft) who register without
+     * a phone number because OAuth providers don't share them.  Without a phone on file,
+     * SMS notifications (payment received, payment failed) are silently skipped.
+     *
+     * <p>Sends a {@code UserContactUpdatedEvent} via the outbox so the notification-service
+     * read-model is updated and SMS delivery starts immediately for future events.
+     *
+     * <p>Send {@code "phone": null} or omit the field to remove an existing number.
+     */
+    @PatchMapping("/{userId}/phone")
+    public ResponseEntity<ApiResponse<UserResponse>> updatePhone(
+            @PathVariable UUID userId,
+            @Valid @RequestBody UpdatePhoneRequest request,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        UserResponse response = userService.updatePhone(userId, request.phone(), jwt.getSubject());
+        return ResponseEntity.ok(ApiResponse.ok(response));
+    }
+
     // ── Device tokens ──────────────────────────────────────────────────────────
 
     /**

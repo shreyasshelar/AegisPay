@@ -45,9 +45,10 @@ const nextConfig = {
 
     // 'unsafe-eval' is required by Next.js hot-reload in development.
     // Strip it in production so script execution is locked to same-origin + nonces.
+    // www.google.com + www.gstatic.com are required for Firebase Phone Auth reCAPTCHA.
     const scriptSrc = isDev
-      ? "script-src 'self' 'unsafe-eval' 'unsafe-inline'"
-      : "script-src 'self' 'unsafe-inline'"
+      ? "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://www.google.com https://www.gstatic.com"
+      : "script-src 'self' 'unsafe-inline' https://www.google.com https://www.gstatic.com"
 
     return [
       {
@@ -75,6 +76,9 @@ const nextConfig = {
               "img-src 'self' data: blob: https:",
               "font-src 'self' data:",
               connectSrc,
+              // reCAPTCHA (Firebase Phone Auth) renders inside a Google-hosted iframe.
+              // *.firebaseapp.com covers the Firebase Auth popup/redirect flow.
+              "frame-src https://www.google.com https://*.firebaseapp.com",
               "frame-ancestors 'none'",
             ].join('; '),
           },

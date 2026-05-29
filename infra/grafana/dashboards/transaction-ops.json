@@ -79,7 +79,7 @@
       "targets": [
         {
           "datasource": { "type": "grafana-clickhouse-datasource", "uid": "aegispay-clickhouse" },
-          "rawSql": "SELECT sum(amount) AS volume FROM aegispay_analytics.transaction_facts WHERE event_time >= now() - INTERVAL 24 HOUR AND currency = 'INR'",
+          "rawSql": "SELECT ifNull(sum(amount), 0) AS volume FROM aegispay_analytics.transaction_facts WHERE event_time >= now() - INTERVAL 24 HOUR AND currency = 'INR'",
           "refId": "A",
           "format": "table"
         }

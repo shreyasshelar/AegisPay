@@ -132,9 +132,10 @@ dependencies {
     // Image loading
     implementation(libs.coil.compose)
 
-    // Firebase / FCM
+    // Firebase / FCM + Phone Auth
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.messaging)
+    implementation(libs.firebase.auth)
 
     // WorkManager + Hilt integration for offline queue
     implementation(libs.work.runtime.ktx)

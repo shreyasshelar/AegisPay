@@ -108,6 +108,7 @@ data class UserProfile(
     @Json(name = "name")      val name:      String?,
     @Json(name = "kycStatus") val kycStatus: KycStatus,
     @Json(name = "role")      val role:      String,
+    @Json(name = "phone")     val phone:     String? = null, // null for SSO users until added via OTP flow
 )
 
 enum class KycDocumentType(val value: String, val label: String) {

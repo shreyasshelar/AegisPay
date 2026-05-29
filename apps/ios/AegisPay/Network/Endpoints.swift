@@ -105,6 +105,7 @@ struct UserProfile: Codable, Identifiable {
     let id:        String
     let email:     String
     let name:      String?
+    let phone:     String?   // null for SSO users until added via OTP flow
     let kycStatus: KycStatus
     let role:      String
 }

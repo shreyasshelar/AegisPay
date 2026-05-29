@@ -2,6 +2,7 @@ package com.aegispay.user.kafka;
 
 import com.aegispay.common.domain.enums.KycStatus;
 import com.aegispay.common.domain.event.KycStatusChangedEvent;
+import com.aegispay.common.domain.event.UserContactUpdatedEvent;
 import com.aegispay.common.domain.event.UserRegisteredEvent;
 import com.aegispay.common.kafka.KafkaTopics;
 import com.aegispay.user.domain.entity.User;
@@ -45,6 +46,25 @@ public class UserEventProducer {
                 .aggregateType("User")
                 .eventType("UserRegisteredEvent")
                 .topic(KafkaTopics.USER_REGISTERED)
+                .messageKey(user.getId().toString())
+                .payload(serialize(event))
+                .build();
+    }
+
+    public OutboxEntry buildUserContactUpdatedEntry(User user) {
+        UserContactUpdatedEvent event = UserContactUpdatedEvent.builder()
+                .eventId(UUID.randomUUID())
+                .occurredAt(Instant.now())
+                .schemaVersion(1)
+                .userId(user.getId())
+                .phoneNumber(user.getPhone())
+                .build();
+
+        return OutboxEntry.builder()
+                .aggregateId(user.getId().toString())
+                .aggregateType("User")
+                .eventType("UserContactUpdatedEvent")
+                .topic(KafkaTopics.USER_CONTACT_UPDATED)
                 .messageKey(user.getId().toString())
                 .payload(serialize(event))
                 .build();

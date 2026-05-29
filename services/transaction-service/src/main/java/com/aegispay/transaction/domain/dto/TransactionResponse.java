@@ -27,5 +27,12 @@ public record TransactionResponse(
     Instant completedAt,
     String failureReason,
     String failureCode,
-    String externalReference
+    String externalReference,
+    /**
+     * Direction of this transaction from the perspective of the requesting user.
+     * {@code "SENT"} when the caller is the payer; {@code "RECEIVED"} when the caller
+     * is the payee. {@code null} on write-side responses (create/getById) where no
+     * caller context is available.
+     */
+    String direction
 ) {}

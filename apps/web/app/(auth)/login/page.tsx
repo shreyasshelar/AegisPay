@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { signIn, signOut, useSession } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Loader2, ShieldCheck, AlertCircle } from 'lucide-react'
+import { ROLE_LANDING } from '@/lib/role-routing'
 
 const RATE_LIMIT_MS = 3_000 // 3 s cooldown between sign-in attempts
 
@@ -21,9 +22,10 @@ export default function LoginPage() {
   // the middleware. Let providers.tsx call signOut() to clear the cookie first.
   useEffect(() => {
     if (status === 'authenticated' && !session?.error) {
-      router.replace('/dashboard')
+      const dest = ROLE_LANDING[session?.user?.role ?? ''] ?? '/dashboard'
+      router.replace(dest)
     }
-  }, [status, session?.error, router])
+  }, [status, session?.error, session?.user?.role, router])
 
   // Map NextAuth error codes to friendly messages
   useEffect(() => {
@@ -48,7 +50,9 @@ export default function LoginPage() {
     setLoading(true)
     setError(null)
     try {
-      await signIn('keycloak', { callbackUrl: '/dashboard' })
+      // prompt=login forces Keycloak to always show its login form,
+      // preventing silent SSO re-authentication after sign-out.
+      await signIn('keycloak', { callbackUrl: '/' }, { prompt: 'login' })
     } catch {
       setError('Sign-in failed. Please try again.')
       setLoading(false)

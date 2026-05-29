@@ -195,7 +195,8 @@
       "Bash(curl -s http://localhost:8190/actuator)",
       "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(k\\) for k in d.get\\('_links',{}\\).keys\\(\\)]\")",
       "Bash(curl -s \"http://localhost:8190/actuator\")",
-      "Bash(python -c \"import sys,json; [print\\(json.dumps\\(json.loads\\(l\\), indent=2\\)\\) for l in sys.stdin if l.strip\\(\\)]\")"
+      "Bash(python -c \"import sys,json; [print\\(json.dumps\\(json.loads\\(l\\), indent=2\\)\\) for l in sys.stdin if l.strip\\(\\)]\")",
+      "Bash(mvn test *)"
     ],
     "additionalDirectories": [
       "/Users/shreyasshelar/Downloads/Shreyas/projects/AegisPay/apps/web/app/(dashboard)/transactions/[id]"

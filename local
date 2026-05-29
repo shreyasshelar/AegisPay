@@ -112,3 +112,42 @@ Real incident history ingestion — needs actual production incidents to build a
 taskkill /F /IM "com.docker.build.exe"
 
 taskkill /F /IM "Docker Desktop.exe"
+
+
+
+No, SMS OTP is NOT free even though Firebase itself has a free tier. Phone Auth requires the Blaze (pay-as-you-go) plan — Firebase blocks it entirely on Spark (free). You do get a free quota after upgrading:
+
+10,000 SMS verifications/month free (most regions including India)
+Beyond that: ~₹0.07–0.10 per SMS
+Requires a credit card added to the GCP billing account — but you won't be charged unless you exceed the free quota
+To fix it:
+
+Go to console.firebase.google.com → your project
+Click the Spark badge (bottom-left) → Upgrade
+Select Blaze → add a billing account / credit card
+Firebase will automatically unlock Phone Auth
+After upgrading, the auth/billing-not-enabled error goes away and real OTPs start working.
+
+
+The root cause is next-auth's session cookie being 5304 bytes, which splits into two chunks (.0 = 4096 B, .1 = 1534 B) sent as Cookie headers on every request. That session is large because it carries the full encrypted Keycloak access token (a signed JWT itself, ~1–1.1 KB), refresh token, id token, role, userId, and expiry — all AES-256-GCM encrypted by next-auth into a single blob.
+
+So every request from the browser to the backend carries:
+
+Cookie: next-auth.session-token.0 (~4 KB) + .1 (~1.5 KB)
+Authorization: Bearer <Keycloak JWT> (~1.1 KB)
+Standard browser headers (~0.3 KB)
+Total ≈ 7 KB, which blows the 8 KB Tomcat default.
+
+The real fix would be to shrink the session, not raise the limit. Options:
+
+Don't store tokens inside the next-auth session — store only userId and role, keep the Keycloak access token server-side in Redis keyed by session ID (database strategy instead of JWT strategy). Browsers send a tiny opaque session ID cookie.
+Strip the id token from the session — the idToken (needed only for sign-out) adds ~1 KB; it could be fetched on-demand server-side at logout time instead of being carried in every cookie.
+Shorter Keycloak tokens — reduce the claims in the JWT (remove unnecessary Keycloak defaults like realm_access, resource_access, session_state, acr, azp).
+Why 32 KB is still reasonable for now: the backends are internal services behind the API Gateway — they never face the public internet directly, so a generous header limit has no meaningful attack surface. For a full production hardening pass, option 1 (Redis session store) is the right long-term answer since it also enables instant server-side session invalidation.
+
+
+sms 
+keycloak social sign on + sign out issue 
+admin page triage and all users risk look up account 
+android ios 
+gcp deploy 

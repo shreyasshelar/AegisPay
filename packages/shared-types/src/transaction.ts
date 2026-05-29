@@ -27,6 +27,12 @@ export const TransactionSchema = z.object({
   failureCode: z.string().nullable().optional(),
   note: z.string().nullable(),
   externalReference: z.string().nullable().optional(),
+  /**
+   * Direction of the transaction relative to the requesting user.
+   * "SENT" = caller is payer; "RECEIVED" = caller is payee.
+   * Null on write-side responses (create / getById).
+   */
+  direction: z.enum(['SENT', 'RECEIVED']).nullable().optional(),
 })
 export type Transaction = z.infer<typeof TransactionSchema>
 
@@ -38,6 +44,7 @@ export const TransactionSummarySchema = TransactionSchema.pick({
   initiatedAt: true,
   completedAt: true,
   payeeId: true,
+  direction: true,
 })
 export type TransactionSummary = z.infer<typeof TransactionSummarySchema>
 

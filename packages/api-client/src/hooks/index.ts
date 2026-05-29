@@ -3,6 +3,6 @@ export { useTransaction, useTransactionList, useInfiniteTransactions, useCreateT
 export { useAccount, useAccounts, useAccountsByUser, useTopUp, accountKeys } from './useAccount'
 export { useTransactionSocket, useTransactionStatusSocket } from './useWebSocket'
 export { useResolveError, useExplainFraud, useTriageIncident } from './useAi'
-export { useMe, useUser, useUserList, useProcessKyc, useConfirmKyc, userKeys } from './useUsers'
+export { useMe, useUser, useUserList, useProcessKyc, useConfirmKyc, useUpdatePhone, userKeys } from './useUsers'
 export { useRiskCases, riskKeys } from './useRisk'
 export { useBiometric, type BiometricState } from './useBiometric'

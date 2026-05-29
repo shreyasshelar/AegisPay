@@ -11,7 +11,10 @@ import java.util.Set;
 
 /**
  * Enforces valid KYC state transitions.
- * APPROVED and REJECTED are terminal — no transitions out of them.
+ *
+ * <p>APPROVED is the only truly terminal state — no further transitions are allowed.
+ * REJECTED allows re-submission (REJECTED → DOCUMENT_SUBMITTED) so users can
+ * upload a corrected document after a failed verification attempt.
  */
 @Component
 public class KycStateMachine {
@@ -20,7 +23,9 @@ public class KycStateMachine {
         KycStatus.PENDING,            EnumSet.of(KycStatus.DOCUMENT_SUBMITTED),
         KycStatus.DOCUMENT_SUBMITTED, EnumSet.of(KycStatus.AI_PROCESSING),
         KycStatus.AI_PROCESSING,      EnumSet.of(KycStatus.APPROVED, KycStatus.REJECTED, KycStatus.MANUAL_REVIEW),
-        KycStatus.MANUAL_REVIEW,      EnumSet.of(KycStatus.APPROVED, KycStatus.REJECTED)
+        KycStatus.MANUAL_REVIEW,      EnumSet.of(KycStatus.APPROVED, KycStatus.REJECTED),
+        // Users may re-upload after rejection — REJECTED is not a dead end
+        KycStatus.REJECTED,           EnumSet.of(KycStatus.DOCUMENT_SUBMITTED)
     );
 
     public void assertValidTransition(KycStatus current, KycStatus next) {
@@ -34,7 +39,8 @@ public class KycStateMachine {
         }
     }
 
+    /** Only APPROVED is terminal. REJECTED allows re-upload via REJECTED → DOCUMENT_SUBMITTED. */
     public boolean isTerminal(KycStatus status) {
-        return status == KycStatus.APPROVED || status == KycStatus.REJECTED;
+        return status == KycStatus.APPROVED;
     }
 }

@@ -87,4 +87,15 @@ export class UsersClient {
   async registerPushToken(userId: string, token: string, platform: 'ios' | 'android'): Promise<void> {
     await this.client.post(`/api/v1/users/${userId}/push-token`, { token, platform })
   }
+
+  /**
+   * Persist a Firebase-OTP-verified phone number to the backend.
+   * Must be called after successful Firebase Phone Auth verification — the server
+   * trusts the caller; OTP challenge is handled entirely by Firebase on the client.
+   * Pass `null` to remove an existing number.
+   */
+  async updatePhone(userId: string, phone: string | null): Promise<User> {
+    const data = await this.client.patch<unknown>(`/api/v1/users/${userId}/phone`, { phone })
+    return UserSchema.parse(data)
+  }
 }

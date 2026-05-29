@@ -1,4 +1,4 @@
-﻿spring:
+spring:
   application:
     name: data-pipeline
   lifecycle:
@@ -24,6 +24,7 @@
 server:
   port: ${SERVER_PORT:8089}
   shutdown: graceful
+  max-http-request-header-size: 32KB
 
 management:
   endpoints:
