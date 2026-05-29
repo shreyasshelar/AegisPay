@@ -2,6 +2,8 @@ package com.aegispay.ai.controller;
 
 import com.aegispay.ai.kyc.KycDocumentService;
 import com.aegispay.ai.service.UserLookupService;
+import com.aegispay.common.domain.dto.ApiResponse;
+import com.aegispay.common.domain.dto.ErrorResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -61,15 +63,19 @@ public class KycDocumentController {
      * cross-check the name printed on the document against the registered account name.
      */
     @PostMapping(value = "/process", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<Map<String, String>> process(
+    public ResponseEntity<ApiResponse<?>> process(
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "documentType", defaultValue = "NATIONAL_ID") String documentType,
             @RequestParam(required = false) String registeredName,
             @AuthenticationPrincipal Jwt jwt) throws IOException {
 
         if (file == null || file.isEmpty()) {
-            return ResponseEntity.badRequest()
-                    .body(Map.of("message", "A document image file is required."));
+            return ResponseEntity.badRequest().body(ApiResponse.error(
+                    ErrorResponse.builder()
+                            .errorCode("FILE_REQUIRED")
+                            .message("A document image file is required.")
+                            .httpStatus(HttpStatus.BAD_REQUEST.value())
+                            .build()));
         }
 
         // Encode the raw binary to base64 once, server-side.
@@ -99,10 +105,12 @@ public class KycDocumentController {
                 log.error("KYC submission rejected: userId could not be resolved "
                         + "(User Service unreachable or user not yet provisioned). sub={}",
                         jwt != null ? jwt.getSubject() : "null");
-                return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                        .body(Map.of("message",
-                                "Unable to verify your identity. "
-                                + "Please wait a moment and try again."));
+                return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(ApiResponse.error(
+                        ErrorResponse.builder()
+                                .errorCode("SERVICE_UNAVAILABLE")
+                                .message("Unable to verify your identity. Please wait a moment and try again.")
+                                .httpStatus(HttpStatus.SERVICE_UNAVAILABLE.value())
+                                .build()));
             }
             log.info("Resolved userId={} via /me for sub={}", userId,
                     jwt != null ? jwt.getSubject() : "null");
@@ -118,10 +126,10 @@ public class KycDocumentController {
         // Fire-and-forget — Spring's @Async task executor picks this up immediately.
         kycDocumentService.processAsync(userId, request);
 
-        return ResponseEntity.accepted().body(Map.of(
+        return ResponseEntity.accepted().body(ApiResponse.ok(Map.of(
                 "message", "Document submitted for KYC processing. "
                         + "You will receive a notification when analysis is complete."
-        ));
+        )));
     }
 
     /** Internal request record — populated server-side from the multipart upload. */

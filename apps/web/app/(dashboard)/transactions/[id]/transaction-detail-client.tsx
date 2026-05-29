@@ -13,6 +13,7 @@ import {
   RefreshCw,
   Stethoscope,
 } from 'lucide-react'
+import ReactMarkdown from 'react-markdown'
 import { toast } from 'sonner'
 import {
   useTransaction,
@@ -219,9 +220,15 @@ export function TransactionDetailClient({
               </p>
             ) : resolveError.data ? (
               <div className="space-y-2">
-                <p className="text-sm text-amber-800 leading-relaxed">
+                <ReactMarkdown
+                  components={{
+                    p:      ({ children }) => <p className="text-sm text-amber-800 leading-relaxed">{children}</p>,
+                    strong: ({ children }) => <strong className="font-semibold text-amber-900">{children}</strong>,
+                    em:     ({ children }) => <em className="italic">{children}</em>,
+                  }}
+                >
                   {resolveError.data.resolution}
-                </p>
+                </ReactMarkdown>
                 {resolveError.data.errorCode && resolveError.data.errorCode !== 'null' && (
                   <p className="text-xs text-amber-600 font-mono">
                     Code: {resolveError.data.errorCode}
@@ -240,7 +247,7 @@ export function TransactionDetailClient({
             <button
               onClick={() =>
                 router.push(
-                  `/back-office/triage?txId=${tx.transactionId}&service=payment-orchestrator`,
+                  `/triage?txId=${tx.transactionId}&service=payment-orchestrator`,
                 )
               }
               className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm hover:border-indigo-300 hover:text-indigo-700 transition-colors"

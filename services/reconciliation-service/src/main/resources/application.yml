@@ -1,4 +1,4 @@
-﻿spring:
+spring:
   application:
     name: reconciliation-service
   lifecycle:
@@ -49,6 +49,7 @@
 server:
   port: ${SERVER_PORT:8087}
   shutdown: graceful
+  max-http-request-header-size: 32KB
 
 management:
   endpoints:

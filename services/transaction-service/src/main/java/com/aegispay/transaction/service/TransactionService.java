@@ -154,7 +154,15 @@ public class TransactionService {
 
         // Build dynamic criteria — each condition added only when param is present
         java.util.List<Criteria> conditions = new java.util.ArrayList<>();
-        conditions.add(Criteria.where("userId").is(userId.toString()));
+        // Visibility rules:
+        //   SENT  (userId == caller): all statuses — the sender sees every state of their outgoing payment.
+        //   RECEIVED (payeeId == caller): COMPLETED only — money that actually arrived.
+        //     In-flight and failed legs of a saga the caller received nothing from are
+        //     not actionable for the payee and would only cause confusion.
+        conditions.add(new Criteria().orOperator(
+                Criteria.where("userId").is(userId.toString()),
+                Criteria.where("payeeId").is(userId.toString()).and("status").is("COMPLETED")
+        ));
 
         if (status != null && !status.isBlank()) {
             conditions.add(Criteria.where("status").is(status.toUpperCase()));
@@ -180,7 +188,7 @@ public class TransactionService {
         Page<TransactionView> views = PageableExecutionUtils.getPage(content, pageable, () -> total);
 
         return PagedResponse.<TransactionResponse>builder()
-                .content(views.map(transactionMapper::toListItemResponse).getContent())
+                .content(views.map(view -> transactionMapper.toListItemResponse(view, userId)).getContent())
                 .page(views.getNumber())
                 .size(views.getSize())
                 .totalElements(views.getTotalElements())

@@ -1,45 +1,36 @@
 {
   "project_info": {
-    "project_number": "000000000000",
-    "project_id": "aegispay-local-dev",
-    "storage_bucket": "aegispay-local-dev.appspot.com"
+    "project_number": "807559318432",
+    "project_id": "aegispay",
+    "storage_bucket": "aegispay.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:000000000000:android:0000000000000000000000",
+        "mobilesdk_app_id": "1:807559318432:android:ecb7c8b47b31c5d433b2c5",
         "android_client_info": {
           "package_name": "com.aegispay.android"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "807559318432-bm5598bns9o0lru85p4sm9dlcq399df3.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
-          "current_key": "placeholder_local_dev_key"
+          "current_key": "AIzaSyA2X6G-4VrnjVqshLjJUd5E4Ir_l9tUCQE"
         }
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
-        }
-      }
-    },
-    {
-      "client_info": {
-        "mobilesdk_app_id": "1:000000000000:android:1111111111111111111111",
-        "android_client_info": {
-          "package_name": "com.aegispay.android.debug"
-        }
-      },
-      "oauth_client": [],
-      "api_key": [
-        {
-          "current_key": "placeholder_local_dev_key"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "807559318432-bm5598bns9o0lru85p4sm9dlcq399df3.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

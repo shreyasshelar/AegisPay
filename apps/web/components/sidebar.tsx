@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { signOut, useSession } from 'next-auth/react'
+import { useSession } from 'next-auth/react'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   ShieldCheck,
@@ -42,12 +42,12 @@ const NAV_ITEMS: NavItem[] = [
 ]
 
 const BACKOFFICE_ITEMS: NavItem[] = [
-  { label: 'Users',      href: '/back-office/users',     icon: Users2,        roles: ['BACK_OFFICE', 'ADMIN'] },
-  { label: 'Risk Cases', href: '/back-office/risk',      icon: AlertTriangle, roles: ['BACK_OFFICE', 'ADMIN'] },
-  { label: 'Incidents',  href: '/back-office/incidents', icon: ShieldCheck,   roles: ['BACK_OFFICE', 'ADMIN'] },
-  { label: 'Ledger',     href: '/back-office/ledger',    icon: Database,      roles: ['BACK_OFFICE', 'ADMIN'] },
+  { label: 'Users',      href: '/users',     icon: Users2,        roles: ['BACK_OFFICE', 'ADMIN'] },
+  { label: 'Risk Cases', href: '/risk',      icon: AlertTriangle, roles: ['BACK_OFFICE', 'ADMIN'] },
+  { label: 'Incidents',  href: '/incidents', icon: ShieldCheck,   roles: ['BACK_OFFICE', 'ADMIN'] },
+  { label: 'Ledger',     href: '/ledger',    icon: Database,      roles: ['BACK_OFFICE', 'ADMIN'] },
   // ── ADMIN-only ─────────────────────────────────────────────────────────────
-  { label: 'AI Triage',  href: '/back-office/triage',    icon: Stethoscope,   roles: ['ADMIN'] },
+  { label: 'AI Triage',  href: '/triage',    icon: Stethoscope,   roles: ['ADMIN'] },
 ]
 
 export function Sidebar() {
@@ -208,7 +208,10 @@ export function Sidebar() {
         <button
           onClick={() => {
             queryClient.clear()
-            void signOut({ callbackUrl: '/login' })
+            // Navigate to the server-side signout route which ends the Keycloak
+            // SSO session (via end_session endpoint) AND clears all NextAuth
+            // session cookies (including chunks) in one redirect chain.
+            window.location.href = '/api/auth/keycloak-signout'
           }}
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition-all hover:bg-red-50 hover:text-red-600"
         >

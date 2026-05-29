@@ -1,4 +1,4 @@
-﻿spring:
+spring:
   application:
     name: risk-engine
   lifecycle:
@@ -59,6 +59,7 @@
 server:
   port: ${SERVER_PORT:8085}
   shutdown: graceful
+  max-http-request-header-size: 32KB
 
 management:
   endpoints:

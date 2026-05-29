@@ -79,13 +79,40 @@ public class TransactionStatusConsumer {
                         "currency",          e.getCurrency(),
                         "externalReference", e.getExternalReference() != null ? e.getExternalReference() : "");
 
+                    // ── Payer notifications ───────────────────────────────────
                     // WebSocket — real-time in-app
                     dispatcher.dispatch(userId, NotificationType.TRANSACTION_COMPLETED, "WEBSOCKET", null, vars);
 
-                    // Email — confirmation receipt
+                    // Email — "Your payment was successful" receipt
                     String email = resolveEmail(userId);
                     if (email != null) {
                         dispatcher.dispatch(userId, NotificationType.TRANSACTION_COMPLETED, "EMAIL", email, vars);
+                    }
+
+                    // ── Payee notifications ───────────────────────────────────
+                    // Only fired when the saga actually completes (money arrived).
+                    // Failed/in-flight transactions never reach this branch, so the
+                    // payee is never notified about money that didn't land.
+                    if (e.getPayeeId() != null) {
+                        String payeeUserId = e.getPayeeId().toString();
+                        Map<String, String> receivedVars = Map.of(
+                            "amount",   e.getAmount().toPlainString(),
+                            "currency", e.getCurrency());
+
+                        // WebSocket — real-time balance nudge
+                        dispatcher.dispatch(payeeUserId, NotificationType.MONEY_RECEIVED, "WEBSOCKET", null, receivedVars);
+
+                        // Email — "You received X" confirmation
+                        String payeeEmail = resolveEmail(payeeUserId);
+                        if (payeeEmail != null) {
+                            dispatcher.dispatch(payeeUserId, NotificationType.MONEY_RECEIVED, "EMAIL", payeeEmail, receivedVars);
+                        }
+
+                        // SMS — immediate alert (only if phone on file)
+                        String payeePhone = resolvePhone(payeeUserId);
+                        if (payeePhone != null) {
+                            dispatcher.dispatch(payeeUserId, NotificationType.MONEY_RECEIVED, "SMS", payeePhone, receivedVars);
+                        }
                     }
                 }
 

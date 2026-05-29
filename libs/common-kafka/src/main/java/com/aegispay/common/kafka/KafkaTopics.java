@@ -31,6 +31,7 @@ public final class KafkaTopics {
 
     // User / KYC
     public static final String USER_REGISTERED           = "user.registered";
+    public static final String USER_CONTACT_UPDATED      = "user.contact.updated";
     public static final String KYC_STATUS_CHANGED        = "kyc.status.changed";
 
     // Notifications

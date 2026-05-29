@@ -196,7 +196,6 @@ export function DashboardClient({ userId }: DashboardClientProps) {
                 <AegisTransactionRow
                   key={tx.transactionId}
                   transaction={tx}
-                  currentUserId={userId}
                   onClick={() => router.push(`/transactions/${tx.transactionId}`)}
                 />
               ))}

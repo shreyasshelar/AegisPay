@@ -85,7 +85,7 @@ struct OnboardingView: View {
                     Button {
                         Task {
                             if let userId = await vm.register() {
-                                authStore.completeRegistration(userId: userId)
+                                await authStore.completeRegistration(userId: userId)
                             }
                         }
                     } label: {

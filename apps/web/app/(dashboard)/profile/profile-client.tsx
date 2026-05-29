@@ -17,12 +17,15 @@ import {
   Fingerprint,
   Copy,
   Check,
+  Phone,
 } from 'lucide-react'
-import { useMe, useProcessKyc, useBiometric, ApiError } from '@aegispay/api-client'
+import { useMe, useProcessKyc, useBiometric, useUpdatePhone, ApiError } from '@aegispay/api-client'
 import { Header } from '@/components/header'
 import { Button as AegisButton } from '@aegispay/design-system'
 import { cn } from '@/lib/utils'
+import { firebaseAuth } from '@/lib/firebase'
 import type { KycStatus } from '@aegispay/shared-types'
+import type { ConfirmationResult, RecaptchaVerifier } from 'firebase/auth'
 
 // ── KYC status config ─────────────────────────────────────────────────────────
 
@@ -434,10 +437,242 @@ export function ProfileClient({ userId }: { userId: string }) {
           </div>
         )}
 
+        {/* ── Phone number (OTP verification) ──────────────────────────────── */}
+        <PhoneVerificationCard userId={userId} />
+
         {/* ── Security (WebAuthn biometric) ────────────────────────────────── */}
         <BiometricSetupCard />
       </div>
     </>
+  )
+}
+
+// ── Phone verification card ───────────────────────────────────────────────────
+
+type PhoneFlowStep = 'idle' | 'enter-phone' | 'sending' | 'enter-otp' | 'saving' | 'saved'
+
+/**
+ * Guides the user through Firebase Phone Auth OTP verification to add or update
+ * their phone number.  Flow:
+ *   idle → enter-phone → sending (Firebase sends SMS) → enter-otp → saving
+ *   (Firebase credential verified + backend PATCH called) → saved
+ *
+ * Firebase session is signed out immediately after verification — Keycloak handles
+ * primary auth and must never be affected.
+ */
+function PhoneVerificationCard({ userId }: { userId: string }) {
+  const [step,         setStep]         = useState<PhoneFlowStep>('idle')
+  const [phone,        setPhone]        = useState('')
+  const [otp,          setOtp]          = useState('')
+  const [error,        setError]        = useState<string | null>(null)
+  // Incrementing this key forces React to unmount + remount the reCAPTCHA
+  // container div, giving grecaptcha a brand-new DOM element it has never
+  // seen — the only reliable way to avoid "already been rendered" on retry.
+  const [recaptchaKey, setRecaptchaKey] = useState(0)
+
+  const confirmResultRef      = useRef<ConfirmationResult | null>(null)
+  const recaptchaContainerRef = useRef<HTMLDivElement>(null)
+  const recaptchaVerifierRef  = useRef<RecaptchaVerifier | null>(null)
+
+  const { data: user } = useMe()
+  const updatePhone    = useUpdatePhone()
+
+  // Tear down reCAPTCHA when the user cancels or after success.
+  // Two-step cleanup:
+  //  1. verifier.clear() — destroys the JS object and resets the grecaptcha widget.
+  //  2. recaptchaKey bump — forces React to replace the container <div> with a new
+  //     DOM node so grecaptcha's internal element-reference map is fully invalidated.
+  //     innerHTML = '' alone is not enough because grecaptcha keys off the element
+  //     reference itself, not just its children.
+  function clearRecaptcha() {
+    try { recaptchaVerifierRef.current?.clear() } catch { /* ignore */ }
+    recaptchaVerifierRef.current = null
+    setRecaptchaKey(k => k + 1)
+  }
+
+  async function handleSendOtp() {
+    const trimmed = phone.trim()
+    if (!trimmed) { setError('Enter a phone number (e.g. +919876543210)'); return }
+    if (!firebaseAuth) { setError('Phone verification is not available in this environment.'); return }
+    setStep('sending')
+    setError(null)
+    try {
+      const { RecaptchaVerifier, signInWithPhoneNumber } = await import('firebase/auth')
+      // Lazily create reCAPTCHA verifier (must be created after the container div mounts)
+      if (!recaptchaVerifierRef.current && recaptchaContainerRef.current) {
+        recaptchaVerifierRef.current = new RecaptchaVerifier(
+          firebaseAuth,
+          recaptchaContainerRef.current,
+          { size: 'invisible' },
+        )
+      }
+      if (!recaptchaVerifierRef.current) throw new Error('reCAPTCHA not ready')
+      const result = await signInWithPhoneNumber(firebaseAuth, trimmed, recaptchaVerifierRef.current)
+      confirmResultRef.current = result
+      setStep('enter-otp')
+    } catch (e) {
+      setStep('enter-phone')
+      setError(e instanceof Error ? e.message : 'Failed to send OTP')
+      clearRecaptcha()
+    }
+  }
+
+  async function handleVerifyOtp() {
+    const result = confirmResultRef.current
+    if (!result) return
+    const trimmedOtp = otp.trim()
+    if (trimmedOtp.length !== 6) { setError('Enter the 6-digit code'); return }
+    setStep('saving')
+    setError(null)
+    try {
+      await result.confirm(trimmedOtp)
+      // Sign out immediately — Firebase was used for verification only
+      await firebaseAuth?.signOut()
+      clearRecaptcha()
+
+      await updatePhone.mutateAsync({ userId, phone: phone.trim() })
+      setStep('saved')
+      toast.success('Phone number saved')
+    } catch (e) {
+      setStep('enter-otp')
+      setError(e instanceof Error ? e.message : 'Verification failed')
+    }
+  }
+
+  function handleCancel() {
+    setStep('idle')
+    setOtp('')
+    setError(null)
+    clearRecaptcha()
+    confirmResultRef.current = null
+  }
+
+  return (
+    <div className="rounded-xl bg-white p-6 shadow-sm ring-1 ring-slate-200 space-y-4">
+
+      {/* Header */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-50">
+            <Phone className="h-5 w-5 text-primary-600" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900">Phone Number</h3>
+            <p className="text-xs text-slate-400">Required for SMS notifications</p>
+          </div>
+        </div>
+        {step === 'idle' && (
+          <button
+            onClick={() => { setStep('enter-phone'); setPhone('') }}
+            className="text-sm font-semibold text-primary-600 hover:text-primary-700 transition-colors"
+          >
+            {user?.phone ? 'Update' : 'Add'}
+          </button>
+        )}
+      </div>
+
+      {/* Current (masked) phone */}
+      {step === 'idle' && user?.phone && (
+        <p className="text-sm font-medium text-slate-700">{user.phone}</p>
+      )}
+
+      {/* Success banner */}
+      {step === 'saved' && (
+        <div className="flex items-center gap-2 rounded-lg bg-success-50 px-3 py-2 ring-1 ring-success-200">
+          <CheckCircle2 className="h-4 w-4 shrink-0 text-success-500" />
+          <p className="text-sm text-success-700 flex-1">Phone number saved</p>
+          <button
+            onClick={() => { setStep('enter-phone'); setPhone('') }}
+            className="text-xs font-medium text-primary-600 hover:text-primary-700"
+          >
+            Update again
+          </button>
+        </div>
+      )}
+
+      {/* Invisible reCAPTCHA container — key forces full remount on each clearRecaptcha() */}
+      <div key={recaptchaKey} ref={recaptchaContainerRef} id="phone-recaptcha-container" />
+
+      {/* Phone entry */}
+      {(step === 'enter-phone' || step === 'sending') && (
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs font-medium text-slate-700 mb-1">
+              Phone number (international format)
+            </label>
+            <input
+              type="tel"
+              value={phone}
+              onChange={e => { setPhone(e.target.value); setError(null) }}
+              onKeyDown={e => e.key === 'Enter' && void handleSendOtp()}
+              placeholder="+919876543210"
+              autoComplete="tel"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-200 transition-colors"
+            />
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <button
+              onClick={handleCancel}
+              className="text-sm text-slate-400 hover:text-slate-600 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSendOtp}
+              disabled={step === 'sending' || !phone.trim()}
+              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {step === 'sending' && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              Send OTP
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* OTP entry */}
+      {(step === 'enter-otp' || step === 'saving') && (
+        <div className="space-y-3">
+          <p className="text-xs text-slate-500">
+            Enter the 6-digit code sent to <span className="font-medium text-slate-700">{phone}</span>
+          </p>
+          <div>
+            <label className="block text-xs font-medium text-slate-700 mb-1">OTP code</label>
+            <input
+              type="text"
+              inputMode="numeric"
+              maxLength={6}
+              value={otp}
+              onChange={e => { setOtp(e.target.value.replace(/\D/g, '')); setError(null) }}
+              onKeyDown={e => e.key === 'Enter' && void handleVerifyOtp()}
+              placeholder="123456"
+              autoComplete="one-time-code"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm tracking-[0.3em] text-center font-mono focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-200 transition-colors"
+            />
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <button
+              onClick={handleCancel}
+              className="text-sm text-slate-400 hover:text-slate-600 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleVerifyOtp}
+              disabled={step === 'saving' || otp.length !== 6}
+              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {step === 'saving' && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              Verify &amp; Save
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Error */}
+      {error && (
+        <p className="text-xs text-danger-600">{error}</p>
+      )}
+    </div>
   )
 }
 

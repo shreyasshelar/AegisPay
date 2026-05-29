@@ -332,6 +332,41 @@ public class UserService {
     }
 
     /**
+     * Adds or replaces the phone number on file for the given user.
+     *
+     * <p>This is the primary path for SSO users (Google, GitHub, Apple, Microsoft) who
+     * registered without a phone number because OAuth providers don't supply one.
+     * Without a phone on file, SMS notifications are silently skipped.
+     *
+     * <p>Publishes a {@code UserContactUpdatedEvent} via the transactional outbox so the
+     * notification-service can update its {@code UserContactDocument} read-model and start
+     * delivering SMS for future transaction events.
+     *
+     * @param userId            the AegisPay domain UUID of the user to update
+     * @param phone             new phone in international format (e.g. {@code +919876543210});
+     *                          null / blank clears the number
+     * @param callerExternalId  Keycloak {@code sub} of the authenticated caller — must match
+     *                          the user's own {@code externalId} (self-service only)
+     */
+    @Transactional
+    public UserResponse updatePhone(UUID userId, String phone, String callerExternalId) {
+        User user = requireUser(userId);
+        if (!user.getExternalId().equals(callerExternalId)) {
+            throw new AegisPayException("FORBIDDEN",
+                    "You can only update your own phone number.", HttpStatus.FORBIDDEN);
+        }
+
+        user.setPhone(phone == null || phone.isBlank() ? null : phone);
+        userRepository.save(user);
+
+        OutboxEntry outboxEntry = eventProducer.buildUserContactUpdatedEntry(user);
+        outboxEntryRepository.save(outboxEntry);
+
+        log.info("Phone updated: userId={} hasPhone={}", userId, user.getPhone() != null);
+        return userMapper.toResponse(user);
+    }
+
+    /**
      * Stores (or replaces) the user's push notification device token.
      * Idempotent — safe to call on every app launch.
      */

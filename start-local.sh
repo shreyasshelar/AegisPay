@@ -201,7 +201,7 @@ else
   fi
 
   # Microsoft IDP
-  MICROSOFT_BODY="{\"alias\":\"microsoft\",\"providerId\":\"microsoft\",\"displayName\":\"Microsoft\",\"enabled\":true,\"config\":{\"clientId\":\"${MICROSOFT_CLIENT_ID}\",\"clientSecret\":\"${MICROSOFT_CLIENT_SECRET}\",\"tenantId\":\"${MICROSOFT_TENANT_ID}\",\"defaultScope\":\"openid email profile\"}}"
+  MICROSOFT_BODY="{\"alias\":\"microsoft\",\"providerId\":\"microsoft\",\"displayName\":\"Microsoft\",\"enabled\":true,\"config\":{\"clientId\":\"${MICROSOFT_CLIENT_ID}\",\"clientSecret\":\"${MICROSOFT_CLIENT_SECRET}\",\"tenantId\":\"${MICROSOFT_TENANT_ID}\",\"defaultScope\":\"openid email profile User.Read\"}}"
   HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
     "${KC_ADMIN_URL}/admin/realms/${KC_REALM}/identity-provider/instances" \
     -H "Authorization: Bearer ${KC_TOKEN}" \
@@ -224,6 +224,55 @@ else
   else
     warn "Microsoft IDP: HTTP ${HTTP_STATUS}"
   fi
+fi
+
+# ── Seed admin and back-office users in Keycloak ─────────────────────────────
+if [[ -n "$KC_TOKEN" ]]; then
+  step "Seeding admin and back-office users in Keycloak..."
+  seed_kc_user() {
+    local username="$1" firstname="$2" lastname="$3" email="$4" password="$5" role="$6"
+    local body="{\"username\":\"${username}\",\"firstName\":\"${firstname}\",\"lastName\":\"${lastname}\",\"email\":\"${email}\",\"emailVerified\":true,\"enabled\":true,\"credentials\":[{\"type\":\"password\",\"value\":\"${password}\",\"temporary\":false}],\"attributes\":{\"aegispay_role\":[\"${role}\"],\"aegispay_tenant_id\":[\"default\"]}}"
+    local status
+    status=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+      "${KC_ADMIN_URL}/admin/realms/${KC_REALM}/users" \
+      -H "Authorization: Bearer ${KC_TOKEN}" \
+      -H "Content-Type: application/json" \
+      -d "$body" 2>/dev/null)
+    if [[ "$status" == "201" ]]; then
+      ok "  ${username} created"
+    elif [[ "$status" == "409" ]]; then
+      ok "  ${username} already exists"
+    else
+      warn "  ${username} create: HTTP ${status}"
+    fi
+    # Fetch user ID
+    local uid
+    uid=$(curl -s "${KC_ADMIN_URL}/admin/realms/${KC_REALM}/users?username=${username}&exact=true" \
+      -H "Authorization: Bearer ${KC_TOKEN}" 2>/dev/null \
+      | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0]['id'] if d else '')" 2>/dev/null)
+    [[ -z "$uid" ]] && { warn "  ${username} -> user ID not found, skipping role assign"; return; }
+    # Fetch role representation (id + name) required by Keycloak role-mappings API
+    local role_json role_id role_name
+    role_json=$(curl -s "${KC_ADMIN_URL}/admin/realms/${KC_REALM}/roles/${role}" \
+      -H "Authorization: Bearer ${KC_TOKEN}" 2>/dev/null)
+    role_id=$(echo   "$role_json" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('id',''))"   2>/dev/null)
+    role_name=$(echo "$role_json" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('name',''))" 2>/dev/null)
+    [[ -z "$role_id" ]] && { warn "  ${username} -> role ${role} not found in realm"; return; }
+    # Assign realm role (idempotent — 204 on success or already assigned)
+    local rs
+    rs=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+      "${KC_ADMIN_URL}/admin/realms/${KC_REALM}/users/${uid}/role-mappings/realm" \
+      -H "Authorization: Bearer ${KC_TOKEN}" \
+      -H "Content-Type: application/json" \
+      -d "[{\"id\":\"${role_id}\",\"name\":\"${role_name}\"}]" 2>/dev/null)
+    if [[ "$rs" == "204" ]]; then
+      ok "  ${username} -> role ${role} assigned"
+    else
+      warn "  ${username} -> role assign: HTTP ${rs}"
+    fi
+  }
+  seed_kc_user "admin"      "AegisPay" "Admin"  "admin@aegispay.local"      "Admin@1234" "ADMIN"
+  seed_kc_user "backoffice" "Back"     "Office" "backoffice@aegispay.local" "BO@1234"    "BACK_OFFICE"
 fi
 
 step "Waiting for ClickHouse to be ready..."
@@ -536,9 +585,11 @@ echo "  🗄️  ClickHouse     → http://localhost:8123"
 echo "  🐘  PostgreSQL     → localhost:5433  (aegispay / aegispay_dev)"
 echo ""
 echo "  Test accounts:"
-echo "    Sender : customer@aegispay.local / Test@1234  (₹50,000)"
-echo "    Payee  : payee@aegispay.local    / Test@1234  (₹25,000)"
-echo "    Payee UUID: ${PAYEE_KC_UUID}"
+echo "    Sender     : customer@aegispay.local    / Test@1234    (₹50,000)"
+echo "    Payee      : payee@aegispay.local       / Test@1234    (₹25,000)"
+echo "    Admin      : admin@aegispay.local        / Admin@1234   (role: ADMIN)"
+echo "    Back-office: backoffice@aegispay.local   / BO@1234      (role: BACK_OFFICE)"
+echo "    Payee UUID : ${PAYEE_KC_UUID}"
 echo ""
 
 # ── Android testing instructions ──────────────────────────────────────────────

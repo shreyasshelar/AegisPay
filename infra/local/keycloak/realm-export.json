@@ -598,6 +598,73 @@
       "realmRoles": [
         "default-roles-aegispay"
       ],
+      "clientRoles": {
+        "realm-management": [
+          "manage-users"
+        ]
+      },
+      "notBefore": 0,
+      "groups": []
+    },
+    {
+      "id": "a1b2c3d4-e5f6-4890-ab01-ef1234567890",
+      "username": "admin",
+      "firstName": "AegisPay",
+      "lastName": "Admin",
+      "email": "admin@aegispay.local",
+      "emailVerified": true,
+      "attributes": {
+        "aegispay_user_id":   ["97de22d4-9b21-411d-a52c-014e9710a103"],
+        "aegispay_tenant_id": ["default"],
+        "aegispay_role":      ["ADMIN"]
+      },
+      "createdTimestamp": 1779035640000,
+      "enabled": true,
+      "totp": false,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Admin@1234",
+          "temporary": false
+        }
+      ],
+      "disableableCredentialTypes": [],
+      "requiredActions": [],
+      "realmRoles": [
+        "default-roles-aegispay",
+        "ADMIN"
+      ],
+      "notBefore": 0,
+      "groups": []
+    },
+    {
+      "id": "b2c3d4e5-f6a7-4901-bc02-f12345678901",
+      "username": "backoffice",
+      "firstName": "Back",
+      "lastName": "Office",
+      "email": "backoffice@aegispay.local",
+      "emailVerified": true,
+      "attributes": {
+        "aegispay_user_id":   ["c3d4e5f6-a7b8-4012-cd03-123456789012"],
+        "aegispay_tenant_id": ["default"],
+        "aegispay_role":      ["BACK_OFFICE"]
+      },
+      "createdTimestamp": 1779035640100,
+      "enabled": true,
+      "totp": false,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "BO@1234",
+          "temporary": false
+        }
+      ],
+      "disableableCredentialTypes": [],
+      "requiredActions": [],
+      "realmRoles": [
+        "default-roles-aegispay",
+        "BACK_OFFICE"
+      ],
       "notBefore": 0,
       "groups": []
     }
@@ -1249,7 +1316,9 @@
           "consentRequired": false,
           "config": {
             "user.attribute": "foo",
+            "id.token.claim": "true",
             "access.token.claim": "true",
+            "userinfo.token.claim": "true",
             "claim.name": "realm_access.roles",
             "jsonType.label": "String",
             "multivalued": "true"
@@ -1401,7 +1470,8 @@
         "syncMode": "IMPORT",
         "clientSecret": "**********",
         "clientId": "",
-        "tenant": "common"
+        "tenant": "common",
+        "defaultScope": "openid email profile User.Read"
       }
     }
   ],

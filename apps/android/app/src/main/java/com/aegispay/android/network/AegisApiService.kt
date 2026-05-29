@@ -1,5 +1,7 @@
 package com.aegispay.android.network
 
+import okhttp3.MultipartBody
+import okhttp3.RequestBody
 import retrofit2.http.*
 
 /**
@@ -76,8 +78,24 @@ interface AegisApiService {
      * Returns 202 Accepted immediately; the result is delivered via push notification
      * / WebSocket when the background pipeline finishes (up to ~6 min).
      */
+    @Multipart
     @POST("api/v1/ai/kyc/process")
-    suspend fun processKycDocument(@Body request: KycDocumentRequest): Unit
+    suspend fun processKycDocument(
+        @Part                   file:          MultipartBody.Part,
+        @Part("documentType")   documentType:  RequestBody,
+        @Part("registeredName") registeredName: RequestBody?,
+    ): Unit
+
+    /**
+     * Add or replace the authenticated user's phone number (E.164 format).
+     * Called after Firebase Phone Auth OTP verification to persist the verified number.
+     * Pass null value to remove an existing number.
+     */
+    @PATCH("api/v1/users/{userId}/phone")
+    suspend fun updatePhone(
+        @Path("userId") userId: String,
+        @Body body: Map<String, String?>,
+    ): UserProfile
 
     @POST("api/v1/users/{id}/push-token")
     suspend fun registerPushToken(

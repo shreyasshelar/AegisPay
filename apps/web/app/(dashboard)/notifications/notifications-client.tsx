@@ -3,7 +3,7 @@
 import { useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useAuthGuard } from '@/lib/useAuthGuard'
-import { Bell, Loader2, CheckCircle2, XCircle, Info } from 'lucide-react'
+import { Bell, Loader2, CheckCircle2, XCircle, Info, ArrowDownLeft, AlertCircle } from 'lucide-react'
 import { useApiClient } from '@aegispay/api-client'
 import { Header } from '@/components/header'
 import { timeAgo } from '@/lib/utils'
@@ -15,6 +15,8 @@ import type { Notification } from '@aegispay/shared-types'
 function NotifIcon({ type }: { type: string }) {
   if (type === 'TRANSACTION_COMPLETED')
     return <CheckCircle2 className="h-5 w-5 text-success-500" />
+  if (type === 'MONEY_RECEIVED')
+    return <ArrowDownLeft className="h-5 w-5 text-[#0E9F6E]" />
   if (type === 'TRANSACTION_FAILED' || type === 'TRANSACTION_ROLLED_BACK')
     return <XCircle className="h-5 w-5 text-danger-500" />
   if (type === 'KYC_STATUS_CHANGED')
@@ -32,7 +34,7 @@ export function NotificationsClient() {
   // Clear badge when this page is mounted (sidebar's WS handler skips increment here)
   useEffect(() => { resetUnread() }, [resetUnread])
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ['notifications', 'list'],
     queryFn:  () => nc.list(0, 50),
     staleTime: 30_000,
@@ -51,6 +53,12 @@ export function NotificationsClient() {
           {isLoading ? (
             <div className="flex items-center justify-center py-20">
               <Loader2 className="h-7 w-7 animate-spin text-slate-300" />
+            </div>
+          ) : isError ? (
+            <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+              <AlertCircle className="mb-3 h-10 w-10 opacity-40 text-danger-400" />
+              <p className="text-sm font-medium text-danger-500">Could not load notifications</p>
+              <p className="mt-1 text-xs">Try refreshing the page</p>
             </div>
           ) : items.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-slate-400">

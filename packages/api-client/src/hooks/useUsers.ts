@@ -56,3 +56,19 @@ export function useConfirmKyc() {
     },
   })
 }
+
+/**
+ * Persist a Firebase-OTP-verified phone number.
+ * Invalidates the /me query so the profile card updates immediately.
+ */
+export function useUpdatePhone() {
+  const { users } = useApiClient()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ userId, phone }: { userId: string; phone: string | null }) =>
+      users.updatePhone(userId, phone),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: userKeys.me() })
+    },
+  })
+}
