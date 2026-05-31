@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>com.aegispay</groupId>
+    <artifactId>aegispay-parent</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <relativePath>../../pom.xml</relativePath>
+  </parent>
+
+  <artifactId>data-pipeline</artifactId>
+  <name>AegisPay :: Services :: Data Pipeline</name>
+  <description>Kafka Streams real-time analytics pipeline writing to ClickHouse</description>
+
+  <dependencies>
+    <!-- Internal shared libs -->
+    <dependency>
+      <groupId>com.aegispay</groupId>
+      <artifactId>common-domain</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.aegispay</groupId>
+      <artifactId>common-observability</artifactId>
+    </dependency>
+
+    <!-- Spring Web (health + REST) -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+
+    <!-- Actuator -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
+
+    <!-- Spring Kafka (includes Kafka Streams support) -->
+    <dependency>
+      <groupId>org.springframework.kafka</groupId>
+      <artifactId>spring-kafka</artifactId>
+    </dependency>
+
+    <!-- Kafka Streams (version managed by Spring Kafka BOM) -->
+    <dependency>
+      <groupId>org.apache.kafka</groupId>
+      <artifactId>kafka-streams</artifactId>
+    </dependency>
+
+    <!-- Micrometer Prometheus registry -->
+    <dependency>
+      <groupId>io.micrometer</groupId>
+      <artifactId>micrometer-registry-prometheus</artifactId>
+    </dependency>
+
+    <!-- ClickHouse JDBC driver (all-in-one shaded jar) -->
+    <dependency>
+      <groupId>com.clickhouse</groupId>
+      <artifactId>clickhouse-jdbc</artifactId>
+      <version>0.6.3</version>
+      <classifier>all</classifier>
+      <exclusions>
+        <!-- shaded jar bundles everything; exclude transitive deps to avoid conflicts -->
+        <exclusion>
+          <groupId>*</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+
+    <!-- Spring JDBC (for JdbcTemplate → ClickHouse writes) -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-jdbc</artifactId>
+    </dependency>
+
+    <!-- Lombok (annotation processor wired in parent pom) -->
+    <dependency>
+      <groupId>org.projectlombok</groupId>
+      <artifactId>lombok</artifactId>
+      <optional>true</optional>
+    </dependency>
+
+    <!-- Jackson JSR-310 (Instant / Java 8 date-time serialization) -->
+    <dependency>
+      <groupId>com.fasterxml.jackson.datatype</groupId>
+      <artifactId>jackson-datatype-jsr310</artifactId>
+    </dependency>
+
+    <!-- ── Test dependencies ─────────────────────────────────────────────── -->
+
+    <!-- Spring Boot test slice -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+
+    <!-- Kafka Streams TopologyTestDriver (in-process, no broker needed) -->
+    <dependency>
+      <groupId>org.apache.kafka</groupId>
+      <artifactId>kafka-streams-test-utils</artifactId>
+      <scope>test</scope>
+    </dependency>
+
+    <!-- Spring Kafka test support (EmbeddedKafka) -->
+    <dependency>
+      <groupId>org.springframework.kafka</groupId>
+      <artifactId>spring-kafka-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+      </plugin>
+    </plugins>
+  </build>
+</project>

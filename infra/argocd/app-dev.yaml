@@ -1,0 +1,56 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: aegispay-dev
+  namespace: argocd
+  labels:
+    environment: dev
+    app.kubernetes.io/part-of: aegispay
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    # Notify on sync failure via ArgoCD notifications (configure separately)
+    notifications.argoproj.io/subscribe.on-sync-failed.slack: aegispay-alerts
+spec:
+  project: aegispay
+
+  source:
+    repoURL: https://github.com/shreyasshelar/AegisPay.git
+    # Watches dev branch — isolated from prod main
+    targetRevision: dev
+    path: infra/helm/aegispay
+    helm:
+      valueFiles:
+        - values.yaml
+        - values-dev.yaml
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: aegispay
+
+  syncPolicy:
+    # Auto-sync: every push to dev branch triggers a deploy via ArgoCD
+    automated:
+      prune: true        # remove resources deleted from Helm chart
+      selfHeal: true     # revert manual kubectl changes back to git state
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+      - ServerSideApply=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m
+
+  revisionHistoryLimit: 5
+
+  # Allow HPA to control replica count without ArgoCD reverting it
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas

@@ -1,0 +1,2 @@
+com.aegispay.common.security.AegisPaySecurityAutoConfig
+com.aegispay.common.security.TenantAutoConfig

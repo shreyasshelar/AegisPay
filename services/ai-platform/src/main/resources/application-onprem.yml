@@ -1,0 +1,9 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# DEPRECATED — use application-dev.yml instead
+#
+# The "onprem" Spring profile has been renamed to "dev" to match the canonical
+# three-environment model: Local → Dev (k3s, cost-optimised) → Prod (AWS EKS)
+#
+# AiModelConfig.java has been updated: @Profile("onprem") → @Profile("dev")
+# values-dev.yaml sets springProfile: dev for ai-platform
+# ─────────────────────────────────────────────────────────────────────────────

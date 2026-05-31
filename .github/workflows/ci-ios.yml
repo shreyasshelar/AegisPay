@@ -1,0 +1,153 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# AegisPay — iOS CI
+#
+# Triggered ONLY when iOS source files change (paths filter).
+# Runs on both main (prod) and dev (dev).
+# Requires macOS runner (Xcode 15, Apple Silicon).
+# ─────────────────────────────────────────────────────────────────────────────
+name: CI — iOS App
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+    paths:
+      - 'apps/ios/**'
+      - '.github/workflows/ci-ios.yml'
+
+jobs:
+  # ── Build & Test ────────────────────────────────────────────────────────────
+  build-and-test:
+    name: Build & Test (iOS Simulator)
+    runs-on: macos-14   # Xcode 15 + Apple Silicon
+
+    defaults:
+      run:
+        working-directory: apps/ios
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode 15.4
+        run: sudo xcode-select -s /Applications/Xcode_15.4.app
+
+      - name: Cache SPM packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.swiftpm
+            apps/ios/.build
+          key: ${{ runner.os }}-spm-${{ hashFiles('apps/ios/Package.swift', 'apps/ios/**/Package.resolved') }}
+          restore-keys: ${{ runner.os }}-spm-
+
+      - name: Resolve SPM dependencies
+        run: swift package resolve
+
+      - name: Build (Release, Simulator)
+        run: |
+          xcodebuild \
+            -scheme AegisPay \
+            -destination 'platform=iOS Simulator,name=iPhone 15 Pro,OS=latest' \
+            -configuration Release \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            build | xcpretty
+
+      - name: Run unit tests
+        run: |
+          xcodebuild test \
+            -scheme AegisPay \
+            -destination 'platform=iOS Simulator,name=iPhone 15 Pro,OS=latest' \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            | xcpretty --report junit --output test-results/ios-tests.xml
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-test-results
+          path: apps/ios/test-results/
+          retention-days: 7
+
+  # ── SwiftLint ───────────────────────────────────────────────────────────────
+  swiftlint:
+    name: SwiftLint
+    runs-on: macos-14
+    defaults:
+      run:
+        working-directory: apps/ios
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Homebrew packages
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/Homebrew
+          key: ${{ runner.os }}-brew-swiftlint
+
+      - name: Install SwiftLint
+        run: brew install swiftlint
+
+      - name: Run SwiftLint
+        run: swiftlint lint --reporter github-actions-logging
+
+  # ── Archive & Export IPA (only on version tags) ─────────────────────────────
+  archive:
+    name: Archive & Export IPA
+    runs-on: macos-14
+    if: startsWith(github.ref, 'refs/tags/ios-v')
+    needs: [build-and-test, swiftlint]
+    defaults:
+      run:
+        working-directory: apps/ios
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode 15.4
+        run: sudo xcode-select -s /Applications/Xcode_15.4.app
+
+      - name: Import signing certificate
+        env:
+          CERTIFICATE_BASE64: ${{ secrets.IOS_DISTRIBUTION_CERT_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ci-keychain-pass
+        run: |
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          echo "$CERTIFICATE_BASE64" | base64 --decode -o $RUNNER_TEMP/certificate.p12
+          security import $RUNNER_TEMP/certificate.p12 -P "$CERTIFICATE_PASSWORD" \
+            -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+
+      - name: Import provisioning profile
+        run: |
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          echo "${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}" | base64 --decode \
+            -o ~/Library/MobileDevice/Provisioning\ Profiles/profile.mobileprovision
+
+      - name: Archive
+        run: |
+          xcodebuild archive \
+            -scheme AegisPay \
+            -configuration Release \
+            -archivePath $RUNNER_TEMP/AegisPay.xcarchive \
+            | xcpretty
+
+      - name: Export IPA
+        run: |
+          xcodebuild -exportArchive \
+            -archivePath $RUNNER_TEMP/AegisPay.xcarchive \
+            -exportOptionsPlist ExportOptions.plist \
+            -exportPath $RUNNER_TEMP/IPA \
+            | xcpretty
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-ipa-${{ github.ref_name }}
+          path: ${{ runner.temp }}/IPA/AegisPay.ipa
+          retention-days: 30

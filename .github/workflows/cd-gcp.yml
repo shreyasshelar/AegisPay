@@ -1,0 +1,115 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# AegisPay — CD: GCP Free-Tier K3s (main branch)
+#
+# Flow:
+#   1. Java CI green on main → this workflow triggers
+#   2. Resolves the git SHA that was just built + pushed to GHCR
+#   3. Updates image tags in values-gcp.yaml for each changed service
+#   4. Commits [skip ci] back to main → ArgoCD detects OutOfSync → auto-sync
+#
+# ArgoCD polls every 3 minutes (default) or you can add a webhook for instant sync.
+# ─────────────────────────────────────────────────────────────────────────────
+name: CD — GCP K3s (main)
+
+on:
+  workflow_run:
+    workflows: ["CI — Java (Smart)"]
+    types: [completed]
+    branches: [main]
+
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Git SHA or tag to deploy (e.g. abc1234)"
+        required: true
+        type: string
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/aegispay
+  GCP_VALUES_FILE: infra/helm/aegispay/values-gcp.yaml
+  JAVA_SERVICES: >-
+    api-gateway
+    user-service
+    transaction-service
+    ledger-service
+    payment-orchestrator
+    risk-engine
+    notification-service
+    ai-platform
+    data-pipeline
+    reconciliation-service
+
+jobs:
+  guard:
+    name: Guard — check CI result
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    outputs:
+      deploy_sha: ${{ steps.resolve.outputs.sha }}
+    steps:
+      - name: Resolve deploy SHA
+        id: resolve
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "sha=${{ inputs.image_tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "sha=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
+          fi
+
+  update-image-tags:
+    name: Update image tags in values-gcp.yaml
+    needs: guard
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Update image tags
+        env:
+          SHA: ${{ needs.guard.outputs.deploy_sha }}
+        run: |
+          SHORT_SHA="${SHA:0:7}"
+          FILE="${{ env.GCP_VALUES_FILE }}"
+
+          # values-gcp.yaml inherits service definitions from values-dev.yaml.
+          # We patch image tags there using yq for each Java service.
+          # Install yq
+          sudo wget -qO /usr/local/bin/yq \
+            "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64"
+          sudo chmod +x /usr/local/bin/yq
+
+          # Patch the image tag for each service in values-dev.yaml
+          # (values-gcp.yaml only overrides secrets, so tags live in values-dev.yaml)
+          DEV_VALUES="infra/helm/aegispay/values-dev.yaml"
+          for svc in ${{ env.JAVA_SERVICES }}; do
+            # Convert kebab-case service name to snake_case for yaml key
+            key=$(echo "$svc" | tr '-' '_')
+            yq e ".services.${key}.image.tag = \"${SHORT_SHA}\"" -i "$DEV_VALUES"
+          done
+          yq e ".services.web.image.tag = \"${SHORT_SHA}\"" -i "$DEV_VALUES"
+
+          git add "$DEV_VALUES"
+          git diff --cached --quiet && echo "No changes to commit" && exit 0
+
+          git commit -m "chore(gcp): deploy ${SHORT_SHA} to GCP K3s [skip ci]"
+          git push
+
+      - name: Summary
+        run: |
+          echo "### GCP Deploy" >> "$GITHUB_STEP_SUMMARY"
+          echo "Image tag: \`${{ needs.guard.outputs.deploy_sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "ArgoCD will sync automatically within 3 minutes." >> "$GITHUB_STEP_SUMMARY"
+          echo "Monitor: https://argocd.aegispay.shreyasshelar.uk" >> "$GITHUB_STEP_SUMMARY"

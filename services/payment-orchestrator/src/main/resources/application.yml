@@ -1,0 +1,102 @@
+spring:
+  application:
+    name: payment-orchestrator
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5433}/${DB_NAME:aegispay_sagas}
+    username: ${DB_USERNAME:aegispay}
+    password: ${DB_PASSWORD:aegispay_dev}
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:5}
+      minimum-idle: ${DB_POOL_MIN:2}
+      connection-timeout: 30000
+      keepalive-time: 30000
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BROKERS:localhost:9094}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      retries: 3
+      properties:
+        enable.idempotence: true
+    consumer:
+      group-id: payment-orchestrator
+      auto-offset-reset: earliest
+      enable-auto-commit: "false"
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: ${OAUTH2_JWK_SET_URI:http://localhost:8180/realms/aegispay/protocol/openid-connect/certs}
+
+server:
+  port: ${SERVER_PORT:8084}
+  shutdown: graceful
+  max-http-request-header-size: 32KB
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  metrics:
+    tags:
+      service: ${spring.application.name}
+
+stripe:
+  # Injected from K8s Secret aegispay-stripe-secret (via ESO â†’ Vault)
+  secret-key: ${STRIPE_SECRET_KEY:sk_test_placeholder_local_dev}
+  webhook-secret: ${STRIPE_WEBHOOK_SECRET:whsec_placeholder_local_dev}
+  # Default payment method used for server-side confirmation.
+  # Dev/test: pm_card_visa (Stripe built-in test card).
+  # Production: override with a real stored PaymentMethod ID or use per-user PMs.
+  default-payment-method: ${STRIPE_DEFAULT_PM:pm_card_visa}
+
+aegispay:
+  saga:
+    timeout-minutes: 10
+    timeout-check-interval-ms: 60000
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      payment-gateway:
+        sliding-window-size: 10
+        # Must be <= sliding-window-size; if omitted it defaults to 100 and the
+        # circuit never opens on low traffic.
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 3
+        slow-call-duration-threshold: 20s
+        slow-call-rate-threshold: 80
+
+logging:
+  file:
+    name: logs/payment-orchestrator.log
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} [traceId=%X{traceId}] [corrId=%X{correlationId}] - %msg%n"
+  level:
+    root: INFO
+    com.aegispay: DEBUG

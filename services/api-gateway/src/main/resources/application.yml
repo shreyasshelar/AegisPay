@@ -1,0 +1,142 @@
+spring:
+  application:
+    name: api-gateway
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+
+  # KYC document uploads arrive as multipart/form-data (up to 5 MB raw binary).
+  # Spring Cloud Gateway (WebFlux / Netty) defaults to 256 KB in-memory codec buffer,
+  # which causes Netty to abort the connection (ECONNRESET at the Next.js proxy) for any
+  # body exceeding this limit.  Raise to 10 MB — consistent with the AI Platform's
+  # multipart max-request-size so the same ceiling applies end-to-end.
+  codec:
+    max-in-memory-size: 10MB
+
+  cloud:
+    gateway:
+      # Routes are configured programmatically in GatewayRoutingConfig
+      routes: []
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
+      httpclient:
+        connect-timeout: ${GATEWAY_CONNECT_TIMEOUT_MS:3000}
+        # 120s covers LLM latency on AI routes (OpenRouter free tier: 30-90s).
+        # Healthy microservice routes respond in <1s so this only affects truly hung requests.
+        # Use explicit 's' suffix — bare integers are parsed as nanoseconds by Spring Duration.
+        response-timeout: 120s
+        pool:
+          type: disabled
+
+    # ── Spring Cloud CircuitBreaker (Resilience4j) ──────────────────────────────
+    # !! IMPORTANT: CB instance configuration is managed programmatically in     !!
+    # !! CircuitBreakerCustomizerConfig.java — NOT here.                         !!
+    #                                                                             #
+    # Reason: the spring.cloud.circuitbreaker.resilience4j YAML namespace does   #
+    # NOT expose recordException/ignoreExceptions. The Customizer bean is the    #
+    # only way to set those predicates; and because a Customizer replaces YAML   #
+    # instance settings wholesale, keeping per-instance values in both places    #
+    # would make YAML values silently dead.  See CircuitBreakerCustomizerConfig  #
+    # for per-service parameters and the rationale behind each tuning decision.  #
+    circuitbreaker:
+      resilience4j:
+        instances: {}
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Multi-IdP: configured programmatically via JwtIssuerReactiveAuthenticationManagerResolver
+          # This single issuer-uri is kept as a reference; actual resolution is done in SecurityConfig
+          issuer-uri: ${OAUTH2_PRIMARY_ISSUER_URI:http://localhost:8180/realms/aegispay}
+
+  data:
+    redis:
+      url: ${REDIS_URL:redis://default:aegispay_dev@localhost:6379}
+      ssl:
+        enabled: ${REDIS_SSL_ENABLED:false}
+      lettuce:
+        shutdown-timeout: 200ms
+
+server:
+  port: ${SERVER_PORT:8080}
+  shutdown: graceful
+  # Netty / WebFlux — no servlet config needed
+
+management:
+  server:
+    port: ${MANAGEMENT_PORT:8190}   # ③ actuator binds to a separate port not exposed by Ingress/LB
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics,gateway
+  endpoint:
+    health:
+      show-details: when_authorized
+    gateway:
+      enabled: true
+  metrics:
+    tags:
+      service: ${spring.application.name}
+      env: ${APP_ENV:local}
+
+logging:
+  file:
+    name: logs/api-gateway.log
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} [traceId=%X{traceId}] [corrId=%X{correlationId}] - %msg%n"
+  level:
+    root: INFO
+    com.aegispay: DEBUG
+    org.springframework.cloud.gateway: INFO
+    reactor.netty: WARN
+
+# ─── AegisPay Gateway Configuration ──────────────────────────────────────────
+aegispay:
+  gateway:
+    # Multi-IdP JWT issuers.  Add new IdPs here without code changes.
+    oauth2-trusted-issuers:
+      - ${OAUTH2_ISSUER_KEYCLOAK:http://localhost:8180/realms/aegispay}
+      - ${OAUTH2_ISSUER_KEYCLOAK_LOCAL:http://localhost:8180/realms/aegispay}
+      - ${OAUTH2_ISSUER_ENTRA:https://login.microsoftonline.com/common/v2.0}
+      - ${OAUTH2_ISSUER_OKTA:https://dev-000000.okta.com/oauth2/default}
+
+    # Downstream service URIs (override via ConfigMap in Kubernetes)
+    services:
+      user-service: ${USER_SERVICE_URI:http://user-service:8081}
+      transaction-service: ${TRANSACTION_SERVICE_URI:http://transaction-service:8082}
+      ledger-service: ${LEDGER_SERVICE_URI:http://ledger-service:8083}
+      orchestrator-service: ${ORCHESTRATOR_SERVICE_URI:http://payment-orchestrator:8084}
+      risk-engine: ${RISK_ENGINE_URI:http://risk-engine:8085}
+      notification-service: ${NOTIFICATION_SERVICE_URI:http://notification-service:8086}
+      ai-platform: ${AI_PLATFORM_URI:http://ai-platform:8088}
+
+    # Fixed-window rate limiter
+    rate-limiter:
+      max-requests: ${RATE_LIMIT_MAX_REQUESTS:100}
+      window-seconds: ${RATE_LIMIT_WINDOW_SECONDS:60}
+      key-ttl-seconds: ${RATE_LIMIT_KEY_TTL_SECONDS:65}
+      limit-header: X-RateLimit-Limit
+      remaining-header: X-RateLimit-Remaining
+      reset-header: X-RateLimit-Reset
+
+    # CORS
+    cors:
+      allowed-origins:
+        - ${CORS_ALLOWED_ORIGIN_1:http://localhost:3000}
+        - ${CORS_ALLOWED_ORIGIN_2:https://aegispay.shreyasshelar.uk}
+      allowed-methods:
+        - GET
+        - POST
+        - PUT
+        - PATCH
+        - DELETE
+        - OPTIONS
+      allowed-headers:
+        - Authorization
+        - Content-Type
+        - X-Correlation-ID
+        - X-Idempotency-Key
+        - traceparent
+        - tracestate
+      allow-credentials: true
+      max-age: 3600

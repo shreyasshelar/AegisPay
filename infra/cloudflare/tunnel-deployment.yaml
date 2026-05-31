@@ -1,0 +1,80 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Cloudflare Tunnel — Kubernetes Deployment
+#
+# Cloudflare Tunnel replaces a static IP + open firewall ports.
+# Your server makes an outbound connection to Cloudflare's edge.
+# All inbound traffic (HTTP/HTTPS/WebSocket) is routed through Cloudflare.
+#
+# Prerequisites (done once in Cloudflare dashboard):
+#   1. Log in to dash.cloudflare.com → Zero Trust → Networks → Tunnels
+#   2. Create a tunnel → name it "aegispay-dev"
+#   3. Copy the tunnel token shown in the dashboard
+#   4. Store it in Vault:
+#      vault kv put secret/aegispay/cloudflare tunnel_token="<paste token here>"
+#   5. Add DNS routes in the tunnel config (Cloudflare UI):
+#        aegispay.yourdomain.com     → http://traefik.kube-system.svc:80
+#        api.aegispay.yourdomain.com → http://traefik.kube-system.svc:80
+#        ws.aegispay.yourdomain.com  → http://traefik.kube-system.svc:80
+#        grafana.aegispay.yourdomain.com → http://traefik.kube-system.svc:80
+#        argocd.aegispay.yourdomain.com  → http://traefik.kube-system.svc:80
+#        vault.aegispay.yourdomain.com   → http://traefik.kube-system.svc:80
+#
+# Then apply this file:
+#   kubectl apply -f infra/cloudflare/tunnel-deployment.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudflared
+  namespace: kube-system
+  labels:
+    app: cloudflared
+spec:
+  replicas: 2   # Two tunnel replicas for basic HA (both connect to Cloudflare)
+  selector:
+    matchLabels:
+      app: cloudflared
+  template:
+    metadata:
+      labels:
+        app: cloudflared
+    spec:
+      containers:
+        - name: cloudflared
+          image: cloudflare/cloudflared:latest
+          args:
+            - tunnel
+            - --no-autoupdate
+            - run
+            - --token
+            - $(TUNNEL_TOKEN)
+          env:
+            - name: TUNNEL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  # This K8s secret is created by ESO from Vault
+                  name: cloudflare-tunnel-secret
+                  key: tunnel-token
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+          livenessProbe:
+            httpGet:
+              path: /ready
+              port: 2000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 2000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      # Tolerations so cloudflared runs even on tainted nodes
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          effect: NoSchedule

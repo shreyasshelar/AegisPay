@@ -1,0 +1,32 @@
+apiVersion: v2
+name: aegispay
+description: AegisPay — Production-grade event-driven fintech platform
+type: application
+version: 1.1.0
+appVersion: "1.1.0-SNAPSHOT"
+
+maintainers:
+  - name: AegisPay Engineering
+    email: platform@aegispay.io
+
+keywords:
+  - fintech
+  - payments
+  - microservices
+  - kafka
+  - saga
+
+annotations:
+  artifacthub.io/changes: |
+    - kind: added
+      description: "Grafana analytics deployment with ClickHouse datasource and 3 pre-provisioned dashboards (Payment Ops, Fraud Intelligence, SLA & Latency)"
+    - kind: added
+      description: "Notification service: SMTP, Slack webhook, Fast2SMS env wiring and ExternalSecrets"
+    - kind: added
+      description: "failureCode field propagated through transaction-service and API types"
+    - kind: added
+      description: "PrometheusRules: notification delivery, data pipeline sink, and reconciliation break alerts"
+    - kind: fixed
+      description: "values-dev.yaml duplicate global key removed; missing secret paths added across all envs"
+    - kind: fixed
+      description: "saga_latencies ClickHouse schema aligned with data-pipeline ClickHouseSink insert"

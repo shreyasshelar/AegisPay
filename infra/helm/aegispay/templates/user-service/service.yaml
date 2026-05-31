@@ -1,0 +1,3 @@
+{{- if .Values.services.user_service.enabled }}
+{{ include "aegispay.serviceService" (dict "name" "user-service" "svc" .Values.services.user_service "context" .) }}
+{{- end }}

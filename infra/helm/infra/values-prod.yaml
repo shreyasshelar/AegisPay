@@ -1,0 +1,255 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# AegisPay Infra — Production (GKE / multi-node) values
+#
+# Differences from dev (k3s):
+#   - ClickHouse HA enabled (2 shards × 2 replicas + 3 Keeper nodes)
+#   - Storage class: gke-ssd (GKE SSDs) instead of local-path
+#   - Higher resource requests / limits across the board
+#   - PostgreSQL primary + 1 read replica
+#   - Redis Sentinel (HA mode)
+#   - Kafka with 3 brokers
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── PostgreSQL ────────────────────────────────────────────────────────────────
+postgresql:
+  enabled: true
+
+  auth:
+    username: aegispay
+    existingSecret: aegispay-db-secret
+    secretKeys:
+      adminPasswordKey: password
+      userPasswordKey:  password
+    database: aegispay
+
+  primary:
+    persistence:
+      enabled: true
+      storageClass: premium-rwo   # GKE SSD PD
+      size: 100Gi
+
+    initdb:
+      scriptsConfigMap: postgres-init-scripts
+
+    resources:
+      requests:
+        cpu:    500m
+        memory: 1Gi
+      limits:
+        cpu:    2000m
+        memory: 4Gi
+
+    extendedConfiguration: |
+      shared_buffers = 1GB
+      work_mem = 16MB
+      maintenance_work_mem = 256MB
+      max_connections = 300
+      effective_cache_size = 3GB
+      wal_level = replica
+      max_wal_senders = 5
+
+  readReplicas:
+    replicaCount: 1
+    persistence:
+      storageClass: premium-rwo
+      size: 100Gi
+    resources:
+      requests:
+        cpu:    200m
+        memory: 512Mi
+      limits:
+        cpu:    1000m
+        memory: 2Gi
+
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+
+# ── MongoDB ───────────────────────────────────────────────────────────────────
+mongodb:
+  enabled: true
+
+  auth:
+    enabled: true
+    username: aegispay
+    existingSecret: aegispay-db-secret
+    existingSecretPasswordKey: password
+    database: aegispay
+
+  architecture: replicaset
+  replicaCount: 3
+
+  persistence:
+    enabled: true
+    storageClass: premium-rwo
+    size: 50Gi
+
+  resources:
+    requests:
+      cpu:    500m
+      memory: 1Gi
+    limits:
+      cpu:    2000m
+      memory: 4Gi
+
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+
+# ── Redis ─────────────────────────────────────────────────────────────────────
+redis:
+  enabled: true
+  architecture: sentinel
+
+  auth:
+    enabled: true
+    existingSecret: aegispay-redis-secret
+    existingSecretPasswordKey: password
+
+  master:
+    persistence:
+      storageClass: premium-rwo
+      size: 10Gi
+    resources:
+      requests:
+        cpu:    200m
+        memory: 512Mi
+      limits:
+        cpu:    1000m
+        memory: 2Gi
+
+  replica:
+    replicaCount: 2
+    persistence:
+      storageClass: premium-rwo
+      size: 10Gi
+
+  sentinel:
+    enabled: true
+    quorum: 2
+
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+
+# ── Kafka ─────────────────────────────────────────────────────────────────────
+kafka:
+  enabled: true
+  image:
+    tag: "3.7.0"
+
+  clusterId: "MkU3OEVBNTcwNTJENDM2Qk"
+  numPartitions: 12
+  logRetentionHours: 168
+
+  brokers: 3
+
+  persistence:
+    storageClass: premium-rwo
+    size: 100Gi
+
+  heapOpts: "-Xmx2g -Xms1g"
+
+  resources:
+    requests:
+      cpu:    500m
+      memory: 2Gi
+    limits:
+      cpu:    2000m
+      memory: 4Gi
+
+# ── Keycloak ──────────────────────────────────────────────────────────────────
+keycloak:
+  enabled: true
+
+  auth:
+    adminUser: admin
+    existingSecret: aegispay-keycloak-secret
+    existingSecretPasswordKey: admin-password
+
+  extraStartupArgs: "--import-realm"
+  extraVolumes:
+    - name: realm-config
+      configMap:
+        name: keycloak-realm-config
+  extraVolumeMounts:
+    - name: realm-config
+      mountPath: /opt/bitnami/keycloak/data/import
+      readOnly: true
+
+  postgresql:
+    enabled: false
+  externalDatabase:
+    host: postgresql
+    port: 5432
+    user: aegispay
+    database: aegispay_keycloak
+    existingSecret: aegispay-db-secret
+    existingSecretPasswordKey: password
+
+  replicaCount: 2
+
+  resources:
+    requests:
+      cpu:    500m
+      memory: 1Gi
+    limits:
+      cpu:    2000m
+      memory: 2Gi
+
+  service:
+    type: ClusterIP
+    ports:
+      http: 8080
+
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+
+  secretRotation:
+    enabled: true
+  adminUrl: "http://keycloak:8080"
+  adminUsername: "admin"
+  clientId: "aegispay-backend"
+  realm: "aegispay"
+
+# ── ClickHouse HA ─────────────────────────────────────────────────────────────
+# 2 shards × 2 replicas = 4 server pods + 3 Keeper pods
+clickhouse:
+  enabled: true
+
+  serverVersion: "24.3"
+  keeperVersion: "24.3"
+  storageClass:  premium-rwo
+  existingSecret: clickhouse-secret   # key: password
+
+  keeper:
+    storage: 20Gi
+    resources:
+      requests:
+        cpu:    100m
+        memory: 256Mi
+      limits:
+        cpu:    500m
+        memory: 512Mi
+
+  server:
+    storage: 200Gi
+    resources:
+      requests:
+        cpu:    500m
+        memory: 2Gi
+      limits:
+        cpu:    4000m
+        memory: 16Gi
+
+# ── Vault ─────────────────────────────────────────────────────────────────────
+vault:
+  addr: "http://vault:8200"
+
+# ── Namespace ────────────────────────────────────────────────────────────────
+namespace: "aegispay-prod"

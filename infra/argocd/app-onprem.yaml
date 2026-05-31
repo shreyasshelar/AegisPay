@@ -1,0 +1,9 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# DEPRECATED — use app-dev.yaml instead
+#
+# The "on-prem" environment has been renamed to "dev" to match the canonical
+# three-environment model: Local → Dev (k3s, cost-optimised) → Prod (AWS EKS)
+#
+# Migrate:
+#   kubectl apply -f infra/argocd/app-dev.yaml
+# ─────────────────────────────────────────────────────────────────────────────

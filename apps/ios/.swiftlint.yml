@@ -1,0 +1,70 @@
+included:
+  - AegisPay
+
+excluded:
+  - .build
+  - AegisPayTests
+
+disabled_rules:
+  - trailing_whitespace    # handled by Xcode formatter
+
+opt_in_rules:
+  - array_init
+  - closure_spacing
+  - collection_alignment
+  - contains_over_filter_count
+  - discouraged_optional_collection
+  - empty_collection_literal
+  - explicit_init
+  - fallthrough
+  - fatal_error_message
+  - first_where
+  - force_unwrapping
+  - implicitly_unwrapped_optional
+  - last_where
+  - legacy_multiple
+  - literal_expression_end_indentation
+  - operator_usage_whitespace
+  - overridden_super_call
+  - prefer_self_type_over_type_of_self
+  - redundant_nil_coalescing
+  - strict_fileprivate
+  - toggle_bool
+  - unneeded_parentheses_in_closure_argument
+  - untyped_error_in_catch
+  - vertical_parameter_alignment_on_call
+
+line_length:
+  warning: 130
+  error:   250        # raised from 160 — many generated/async closures exceed 160
+  ignores_comments: true
+  ignores_urls: true
+
+type_body_length:
+  warning: 300
+  error:   500        # raised from 400 — complex ViewModels/services exceed 400
+
+file_length:
+  warning: 500
+  error:   700
+
+function_body_length:
+  warning: 60
+  error:   120        # raised from 80 — async state machines legitimately exceed 80
+
+large_tuple:
+  warning: 3
+  error:   5          # default is error at 3; relax to warning for 3-4 member tuples
+
+identifier_name:
+  min_length:
+    warning: 2
+  excluded:
+    - id
+    - vm
+    - db
+    - tx
+    - nc
+
+force_unwrapping: warning
+implicitly_unwrapped_optional: warning

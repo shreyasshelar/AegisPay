@@ -1,0 +1,388 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# AegisPay App — Dev / k3s values
+#
+# Overrides values.yaml for a self-hosted single server running k3s.
+# Images pulled from GHCR (public repo → no registry auth needed).
+# Ingress via Traefik (k3s default) + Cloudflare Tunnel for external access.
+# Secrets pulled from local HashiCorp Vault via External Secrets Operator.
+# AI via OpenRouter (free tier) instead of Anthropic direct.
+# Stripe in test-mode sandbox (sk_test_...).
+# ─────────────────────────────────────────────────────────────────────────────
+
+global:
+  namespace: aegispay
+  imageRegistry: ghcr.io
+  # Repository name matches the GitHub repo owner/repo-name pattern.
+  # Update this to match your GitHub username.
+  imageRepositoryPrefix: ghcr.io/shreyasshelar/aegispay
+  imagePullPolicy: Always
+  imagePullSecrets: []   # GHCR public repo → no pull secret needed
+
+  # ── Infra endpoints (backing services in aegispay-infra namespace) ──────────
+  kafka:
+    brokers: "kafka.aegispay-infra.svc.cluster.local:9092"
+  postgresql:
+    host: "postgresql.aegispay-infra.svc.cluster.local"
+    port: "5432"
+    username: "aegispay"
+  redis:
+    host: "redis-master.aegispay-infra.svc.cluster.local"
+    port: "6379"
+  mongodb:
+    uri: "mongodb://aegispay:$(MONGO_PASSWORD)@mongodb.aegispay-infra.svc.cluster.local:27017/aegispay?authSource=admin"
+  oauth2:
+    issuerUri: "http://keycloak.aegispay-infra.svc.cluster.local:8080/realms/aegispay"
+
+# ─── Secrets backend ──────────────────────────────────────────────────────────
+secrets:
+  # Vault running in the same cluster (aegispay-vault namespace)
+  useVault: true
+  vault:
+    address: "http://vault.aegispay-vault.svc.cluster.local:8200"
+    path: "secret"
+    role: "aegispay-role"
+  db:
+    secretPath: "secret/data/aegispay/database"
+  redis:
+    secretPath: "secret/data/aegispay/redis"
+  kafka:
+    secretPath: "secret/data/aegispay/kafka"
+  ai:
+    secretPath: "secret/data/aegispay/ai-keys"
+  stripe:
+    secretPath: "secret/data/aegispay/stripe"
+  smtp:
+    secretPath: "secret/data/aegispay/smtp"
+  slack:
+    secretPath: "secret/data/aegispay/slack"
+  fast2sms:
+    secretPath: "secret/data/aegispay/fast2sms"
+  clickhouse:
+    secretPath: "secret/data/aegispay/clickhouse"
+  keycloak:
+    secretPath: "secret/data/aegispay/keycloak"
+
+# ─── Services — single replica, reduced resources for dev ────────────────────
+# JVM tuned with -XX:MaxRAMPercentage=50 so each container uses at most
+# half its memory limit (prevents OOMKills when all services start at once).
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  api_gateway:
+    enabled: true
+    image:
+      repository: api-gateway
+      tag: latest
+    replicas: 1
+    port: 8080
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    autoscaling:
+      enabled: false   # single node — no point in HPA
+    ingress:
+      enabled: true
+      className: traefik
+      annotations:
+        traefik.ingress.kubernetes.io/router.entrypoints: websecure
+        traefik.ingress.kubernetes.io/router.tls: "true"
+        cert-manager.io/cluster-issuer: letsencrypt-prod
+      hosts:
+        - host: aegispay-api.shreyasshelar.uk
+          paths:
+            - path: /
+              pathType: Prefix
+      tls:
+        - secretName: aegispay-api-tls
+          hosts:
+            - aegispay-api.shreyasshelar.uk
+    jvmOpts: "-XX:MaxRAMPercentage=50.0 -XX:+UseG1GC -XX:+UseContainerSupport"
+
+  user_service:
+    enabled: true
+    image:
+      repository: user-service
+      tag: latest
+    replicas: 1
+    port: 8081
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    autoscaling:
+      enabled: false
+    jvmOpts: "-XX:MaxRAMPercentage=50.0 -XX:+UseG1GC -XX:+UseContainerSupport"
+    db:
+      name: aegispay_users
+
+  transaction_service:
+    enabled: true
+    image:
+      repository: transaction-service
+      tag: latest
+    replicas: 1
+    port: 8082
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    autoscaling:
+      enabled: false
+    jvmOpts: "-XX:MaxRAMPercentage=50.0 -XX:+UseG1GC -XX:+UseContainerSupport"
+    db:
+      name: aegispay_transactions
+
+  ledger_service:
+    enabled: true
+    image:
+      repository: ledger-service
+      tag: latest
+    replicas: 1
+    port: 8083
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    autoscaling:
+      enabled: false
+    jvmOpts: "-XX:MaxRAMPercentage=50.0 -XX:+UseG1GC -XX:+UseContainerSupport"
+    db:
+      name: aegispay_ledger
+
+  payment_orchestrator:
+    enabled: true
+    image:
+      repository: payment-orchestrator
+      tag: latest
+    replicas: 1
+    port: 8084
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    autoscaling:
+      enabled: false
+    jvmOpts: "-XX:MaxRAMPercentage=50.0 -XX:+UseG1GC -XX:+UseContainerSupport"
+    db:
+      name: aegispay_sagas
+
+  risk_engine:
+    enabled: true
+    image:
+      repository: risk-engine
+      tag: latest
+    replicas: 1
+    port: 8085
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    autoscaling:
+      enabled: false
+    jvmOpts: "-XX:MaxRAMPercentage=50.0 -XX:+UseG1GC -XX:+UseContainerSupport"
+    db:
+      name: aegispay_risk
+
+  notification_service:
+    enabled: true
+    image:
+      repository: notification-service
+      tag: latest
+    replicas: 1
+    port: 8086
+    resources:
+      requests:
+        cpu: 50m
+        memory: 192Mi
+      limits:
+        cpu: 300m
+        memory: 384Mi
+    autoscaling:
+      enabled: false
+    ingress:
+      enabled: true
+      className: traefik
+      annotations:
+        traefik.ingress.kubernetes.io/router.entrypoints: websecure
+        traefik.ingress.kubernetes.io/router.tls: "true"
+        # WebSocket upgrade support
+        traefik.ingress.kubernetes.io/service.serversscheme: http
+      hosts:
+        - host: aegispay-ws.shreyasshelar.uk
+          paths:
+            - path: /ws
+              pathType: Prefix
+      tls:
+        - secretName: aegispay-ws-tls
+          hosts:
+            - aegispay-ws.shreyasshelar.uk
+    jvmOpts: "-XX:MaxRAMPercentage=50.0 -XX:+UseG1GC -XX:+UseContainerSupport"
+
+  data_pipeline:
+    enabled: true
+    image:
+      repository: data-pipeline
+      tag: latest
+    replicas: 1
+    port: 8089
+    resources:
+      requests:
+        cpu: 100m
+        memory: 192Mi
+      limits:
+        cpu: 400m
+        memory: 384Mi
+    autoscaling:
+      enabled: false
+    jvmOpts: "-XX:MaxRAMPercentage=50.0 -XX:+UseG1GC -XX:+UseContainerSupport"
+
+  reconciliation_service:
+    enabled: true
+    image:
+      repository: reconciliation-service
+      tag: latest
+    replicas: 1
+    port: 8087
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: 250m
+        memory: 256Mi
+    autoscaling:
+      enabled: false
+    jvmOpts: "-XX:MaxRAMPercentage=50.0 -XX:+UseG1GC -XX:+UseContainerSupport"
+
+  ai_platform:
+    enabled: true
+    image:
+      repository: ai-platform
+      tag: latest
+    replicas: 1
+    port: 8088
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+    autoscaling:
+      enabled: false
+    # OpenRouter replaces Anthropic on dev.
+    # OPENROUTER_API_KEY injected via ESO from Vault secret/data/aegispay/ai
+    springProfile: dev
+    jvmOpts: "-XX:MaxRAMPercentage=50.0 -XX:+UseG1GC -XX:+UseContainerSupport"
+    db:
+      name: aegispay_ai
+
+  # ── Web (Next.js) ─────────────────────────────────────────────────────────
+  web:
+    enabled: true
+    image:
+      repository: web
+      tag: latest
+    replicas: 1
+    port: 3000
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    ingress:
+      enabled: true
+      className: traefik
+      annotations:
+        traefik.ingress.kubernetes.io/router.entrypoints: websecure
+        traefik.ingress.kubernetes.io/router.tls: "true"
+        cert-manager.io/cluster-issuer: letsencrypt-prod
+      hosts:
+        - host: aegispay.shreyasshelar.uk
+          paths:
+            - path: /
+              pathType: Prefix
+      tls:
+        - secretName: aegispay-web-tls
+          hosts:
+            - aegispay.shreyasshelar.uk
+
+global:
+  smtp:
+    host: "smtp.gmail.com"
+    port: "587"
+    username: ""      # set from Vault secret/data/aegispay/smtp
+    fromAddress: ""
+
+# ─── Grafana (ClickHouse analytics) ──────────────────────────────────────────
+grafana:
+  enabled: true
+  persistence:
+    enabled: true
+    storageClassName: local-path
+    size: 2Gi
+  ingress:
+    enabled: true
+    className: traefik
+    host: aegispay-grafana.shreyasshelar.uk
+    tls:
+      enabled: true
+      secretName: grafana-tls
+    annotations:
+      traefik.ingress.kubernetes.io/router.entrypoints: websecure
+      traefik.ingress.kubernetes.io/router.tls: "true"
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+  alerting:
+    opsEmail: "sshelar110.ss3@gmail.com"
+    # slackWebhookSecretRef: not configured on dev; email-only alerting
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+  clickhouseDatasource:
+    host: "clickhouse.aegispay-infra.svc.cluster.local"
+    port: 9000
+    username: "default"
+    database: "aegispay_analytics"
+    passwordSecretRef:
+      name: aegispay-clickhouse-secret
+      key: password
+
+# ─── Monitoring ───────────────────────────────────────────────────────────────
+monitoring:
+  prometheusRules:
+    enabled: true
+  thresholds:
+    sagaTimeoutRatePerMin: 0.1
+    kafkaConsumerLagMax: 5000
+    notificationErrorRatePerMin: 0.5
+    dataPipelineSinkErrorsPerMin: 0.2
+    reconciliationBreakCount: 5
+
+# ─── Storage class ────────────────────────────────────────────────────────────
+# local-path is the default k3s StorageClass — backed by a hostPath on your server.
+defaultStorageClass: local-path

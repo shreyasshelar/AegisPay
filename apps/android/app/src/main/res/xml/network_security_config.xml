@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Network Security Config
+  - DEBUG: allow cleartext to localhost / 10.0.2.2 (emulator host)
+  - RELEASE: system CA only + certificate pinning (add pins in Phase F7)
+-->
+<network-security-config>
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </debug-overrides>
+
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">localhost</domain>
+        <domain includeSubdomains="true">10.0.2.2</domain>
+    </domain-config>
+
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

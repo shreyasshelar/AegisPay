@@ -1,0 +1,255 @@
+{
+  "__inputs": [],
+  "__requires": [
+    { "type": "grafana", "id": "grafana", "name": "Grafana", "version": "10.4.0" },
+    { "type": "datasource", "id": "grafana-clickhouse-datasource", "name": "ClickHouse", "version": "4.0.0" }
+  ],
+  "annotations": { "list": [] },
+  "description": "AegisPay — Fraud Intelligence: risk score distribution, decision breakdown, triggered rule flags, trends",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "aegispay-clickhouse" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 40 },
+              { "color": "red", "value": 70 }
+            ]
+          },
+          "unit": "short",
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 },
+      "id": 1,
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
+      "title": "Avg Risk Score (24 h)",
+      "type": "stat",
+      "targets": [
+        {
+          "datasource": { "type": "grafana-clickhouse-datasource", "uid": "aegispay-clickhouse" },
+          "rawSql": "SELECT round(avg(risk_score), 1) AS avg_score FROM aegispay_analytics.risk_assessments WHERE event_time >= now() - INTERVAL 24 HOUR",
+          "refId": "A",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "aegispay-clickhouse" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 0 },
+      "id": 2,
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
+      "title": "Rejected Transactions (24 h)",
+      "type": "stat",
+      "targets": [
+        {
+          "datasource": { "type": "grafana-clickhouse-datasource", "uid": "aegispay-clickhouse" },
+          "rawSql": "SELECT countIf(decision = 'REJECTED') AS blocked FROM aegispay_analytics.risk_assessments WHERE event_time >= now() - INTERVAL 24 HOUR",
+          "refId": "A",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "aegispay-clickhouse" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 1 }] },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 0 },
+      "id": 3,
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
+      "title": "Manual Review Required (24 h)",
+      "type": "stat",
+      "targets": [
+        {
+          "datasource": { "type": "grafana-clickhouse-datasource", "uid": "aegispay-clickhouse" },
+          "rawSql": "SELECT countIf(decision = 'REVIEW') AS review FROM aegispay_analytics.risk_assessments WHERE event_time >= now() - INTERVAL 24 HOUR",
+          "refId": "A",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "aegispay-clickhouse" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 0 },
+      "id": 4,
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
+      "title": "Assessments (24 h)",
+      "type": "stat",
+      "targets": [
+        {
+          "datasource": { "type": "grafana-clickhouse-datasource", "uid": "aegispay-clickhouse" },
+          "rawSql": "SELECT count() AS total FROM aegispay_analytics.risk_assessments WHERE event_time >= now() - INTERVAL 24 HOUR",
+          "refId": "A",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "aegispay-clickhouse" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "hideFrom": { "legend": false, "tooltip": false, "viz": false } },
+          "mappings": [],
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 4 },
+      "id": 5,
+      "options": { "displayLabels": ["percent", "name"], "legend": { "displayMode": "table", "placement": "right", "values": ["value", "percent"] }, "pieType": "donut", "tooltip": { "mode": "single", "sort": "none" } },
+      "title": "Decision Breakdown (24 h)",
+      "type": "piechart",
+      "targets": [
+        {
+          "datasource": { "type": "grafana-clickhouse-datasource", "uid": "aegispay-clickhouse" },
+          "rawSql": "SELECT decision, count() AS cnt FROM aegispay_analytics.risk_assessments WHERE event_time >= now() - INTERVAL 24 HOUR GROUP BY decision ORDER BY cnt DESC",
+          "refId": "A",
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "hideFrom": { "legend": false, "tooltip": false, "viz": false } },
+          "mappings": [],
+          "unit": "short"
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "APPROVED" }, "properties": [{ "id": "color", "value": { "fixedColor": "#73BF69", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "REJECTED" }, "properties": [{ "id": "color", "value": { "fixedColor": "#F2495C", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "REVIEW" },   "properties": [{ "id": "color", "value": { "fixedColor": "#FF9830", "mode": "fixed" } }] }
+        ]
+      }
+    },
+    {
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "aegispay-clickhouse" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "axisLabel": "Risk Score", "axisPlacement": "auto", "drawStyle": "bars", "fillOpacity": 80, "gradientMode": "none", "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "scaleDistribution": { "type": "linear" }, "showPoints": "never", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "line+area" } },
+          "mappings": [],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 50 }, { "color": "red", "value": 75 }] },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 16, "x": 8, "y": 4 },
+      "id": 6,
+      "options": { "legend": { "calcs": ["count"], "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi", "sort": "none" } },
+      "title": "Risk Score Distribution (buckets of 10)",
+      "type": "barchart",
+      "targets": [
+        {
+          "datasource": { "type": "grafana-clickhouse-datasource", "uid": "aegispay-clickhouse" },
+          "rawSql": "SELECT concat(toString(floor(risk_score / 10) * 10), '-', toString(floor(risk_score / 10) * 10 + 9)) AS bucket, count() AS cnt FROM aegispay_analytics.risk_assessments WHERE event_time >= now() - INTERVAL 24 HOUR GROUP BY bucket ORDER BY bucket",
+          "refId": "A",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "aegispay-clickhouse" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "axisLabel": "", "axisPlacement": "auto", "drawStyle": "line", "fillOpacity": 15, "gradientMode": "opacity", "lineInterpolation": "smooth", "lineWidth": 2, "pointSize": 4, "scaleDistribution": { "type": "linear" }, "showPoints": "never", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "off" } },
+          "mappings": [],
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 16, "x": 0, "y": 12 },
+      "id": 7,
+      "options": { "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "multi", "sort": "none" } },
+      "title": "Risk Decisions Over Time (hourly)",
+      "type": "timeseries",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "axisLabel": "", "axisPlacement": "auto", "drawStyle": "line", "fillOpacity": 20, "gradientMode": "opacity", "lineInterpolation": "smooth", "lineWidth": 2, "pointSize": 4, "scaleDistribution": { "type": "linear" }, "showPoints": "never", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "off" } },
+          "mappings": [],
+          "unit": "short"
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "APPROVED" }, "properties": [{ "id": "color", "value": { "fixedColor": "#73BF69", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "REJECTED" }, "properties": [{ "id": "color", "value": { "fixedColor": "#F2495C", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "REVIEW" },   "properties": [{ "id": "color", "value": { "fixedColor": "#FF9830", "mode": "fixed" } }] }
+        ]
+      },
+      "targets": [
+        {
+          "datasource": { "type": "grafana-clickhouse-datasource", "uid": "aegispay-clickhouse" },
+          "rawSql": "SELECT toStartOfHour(event_time) AS time, decision, count() AS cnt FROM aegispay_analytics.risk_assessments WHERE event_time >= now() - INTERVAL 7 DAY GROUP BY time, decision ORDER BY time",
+          "refId": "A",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "aegispay-clickhouse" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "thresholds" }, "custom": { "align": "auto", "displayMode": "auto" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 80 }] } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "count" }, "properties": [{ "id": "custom.width", "value": 100 }] }
+        ]
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 12 },
+      "id": 8,
+      "options": { "footer": { "fields": "", "reducer": ["sum"], "show": false }, "showHeader": true, "sortBy": [{ "displayName": "count", "desc": true }] },
+      "title": "Top Triggered Rule Flags (24 h)",
+      "type": "table",
+      "targets": [
+        {
+          "datasource": { "type": "grafana-clickhouse-datasource", "uid": "aegispay-clickhouse" },
+          "rawSql": "SELECT arrayJoin(rule_flags) AS rule_flag, count() AS count FROM aegispay_analytics.risk_assessments WHERE event_time >= now() - INTERVAL 24 HOUR AND length(rule_flags) > 0 GROUP BY rule_flag ORDER BY count DESC LIMIT 15",
+          "refId": "A",
+          "format": "table"
+        }
+      ]
+    }
+  ],
+  "refresh": "2m",
+  "schemaVersion": 39,
+  "tags": ["aegispay", "fraud", "risk"],
+  "templating": { "list": [] },
+  "time": { "from": "now-24h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "AegisPay — Fraud Intelligence",
+  "uid": "aegispay-fraud-intel",
+  "version": 1
+}

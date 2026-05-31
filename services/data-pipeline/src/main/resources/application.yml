@@ -1,0 +1,60 @@
+spring:
+  application:
+    name: data-pipeline
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+
+  # Disable auto-DataSource configuration â€” we wire ClickHouse manually
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration
+      - org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BROKERS:localhost:9094}
+    streams:
+      application-id: aegispay-data-pipeline
+      default-key-serde: org.apache.kafka.common.serialization.Serdes$StringSerde
+      default-value-serde: org.apache.kafka.common.serialization.Serdes$StringSerde
+      properties:
+        processing.guarantee: at_least_once
+        commit.interval.ms: 1000
+
+server:
+  port: ${SERVER_PORT:8089}
+  shutdown: graceful
+  max-http-request-header-size: 32KB
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      service: data-pipeline
+
+# ClickHouse connection properties (consumed by ClickHouseConfig)
+clickhouse:
+  url: ${CLICKHOUSE_URL:jdbc:clickhouse://localhost:8123/aegispay_analytics}
+  username: ${CLICKHOUSE_USER:default}
+  password: ${CLICKHOUSE_PASSWORD:}
+
+aegispay:
+  pipeline:
+    flush-interval-ms: 5000       # write to ClickHouse every 5 seconds
+    window-size-minutes: 1        # 1-minute tumbling windows
+
+logging:
+  file:
+    name: logs/data-pipeline.log
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} [traceId=%X{traceId}] [corrId=%X{correlationId}] - %msg%n"
+  level:
+    root: INFO
+    com.aegispay: DEBUG
+    org.apache.kafka: WARN

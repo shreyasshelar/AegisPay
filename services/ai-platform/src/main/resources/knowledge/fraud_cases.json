@@ -1,0 +1,332 @@
+[
+  {
+    "id": "FC-001",
+    "title": "Rapid account takeover via credential stuffing",
+    "description": "Attacker used leaked credential pairs from a third-party breach to log in and immediately initiate high-value transfers to mule accounts. Login came from a new device and country. Transfers were rapid succession within 5 minutes.",
+    "riskSignals": ["new_device", "new_country", "velocity_high", "large_amount", "new_payee"],
+    "outcome": "FRAUD",
+    "riskScore": 95,
+    "resolution": "Block transaction, force re-authentication, notify user via secondary channel, flag all pending transfers"
+  },
+  {
+    "id": "FC-002",
+    "title": "Social engineering - impersonation of bank support",
+    "description": "Customer called by fraudster posing as bank support. Customer was convinced to approve a 'security test' transaction. Normal device, normal location but payee was newly created account.",
+    "riskSignals": ["new_payee", "large_amount", "unusual_hour"],
+    "outcome": "FRAUD",
+    "riskScore": 72,
+    "resolution": "Delay transaction 24h for large amounts to newly registered payees, send OTP confirmation via registered phone"
+  },
+  {
+    "id": "FC-003",
+    "title": "Card testing attack - low value probing",
+    "description": "Multiple small transactions (< ₹10) made to different merchants in quick succession from the same card. Classic card testing before large purchase.",
+    "riskSignals": ["velocity_high", "micro_transactions", "multiple_merchants"],
+    "outcome": "FRAUD",
+    "riskScore": 88,
+    "resolution": "Block card, require OTP for next 5 transactions, alert user, flag merchant pattern"
+  },
+  {
+    "id": "FC-004",
+    "title": "Mule account pattern - multiple inbound transfers",
+    "description": "Account received 15 small transfers from 15 different accounts within 2 hours, then one large outbound transfer. Classic money mule aggregation pattern.",
+    "riskSignals": ["many_inbound_sources", "immediate_outbound", "aggregation_pattern"],
+    "outcome": "FRAUD",
+    "riskScore": 91,
+    "resolution": "Hold outbound transfer, SAR filing required, notify compliance team, freeze account pending review"
+  },
+  {
+    "id": "FC-005",
+    "title": "SIM swap fraud - mobile banking takeover",
+    "description": "Customer's phone number was ported to fraudster's SIM. OTPs were intercepted. Transactions approved from new device with valid OTP. Preceded by account detail change (address update).",
+    "riskSignals": ["new_device", "recent_account_change", "new_phone_session"],
+    "outcome": "FRAUD",
+    "riskScore": 85,
+    "resolution": "Add device binding verification, flag SIM change events, delay transactions for 24h after SIM swap"
+  },
+  {
+    "id": "FC-006",
+    "title": "Legitimate international wire transfer - false positive",
+    "description": "Customer who works remotely initiated a legitimate international transfer to pay overseas contractor. New payee, international destination, mid-range amount. Customer had history of domestic-only transactions.",
+    "riskSignals": ["new_payee", "international_destination", "no_international_history"],
+    "outcome": "LEGITIMATE",
+    "riskScore": 55,
+    "resolution": "Allow with additional OTP verification. Do not block - these false positives damage customer trust"
+  },
+  {
+    "id": "FC-007",
+    "title": "Salary advance - large unusual transfer",
+    "description": "HR department processed salary advance for employee due to emergency. Large transfer, unusual day (not salary date), new internal account. Company KYC verified.",
+    "riskSignals": ["large_amount", "unusual_date", "corporate_account"],
+    "outcome": "LEGITIMATE",
+    "riskScore": 42,
+    "resolution": "Allow - corporate accounts with verified KYC should have higher thresholds"
+  },
+  {
+    "id": "FC-008",
+    "title": "Device sharing - family account confusion",
+    "description": "Multiple family members using shared device. Different user accounts logged in from same device fingerprint. Appears as device anomaly but is benign.",
+    "riskSignals": ["multiple_accounts_per_device", "new_user_session"],
+    "outcome": "LEGITIMATE",
+    "riskScore": 28,
+    "resolution": "Allow - implement device fingerprint sharing awareness, use account-device binding differently"
+  },
+  {
+    "id": "FC-009",
+    "title": "Authorised push payment scam - romance fraud",
+    "description": "Elderly customer was convinced over 3 months to transfer savings to fraudster posing as online romantic partner. 12 transfers, each under ₹50,000, spread over weeks to avoid detection.",
+    "riskSignals": ["repeated_transfers_same_payee", "gradual_escalation", "elderly_customer", "overseas_destination"],
+    "outcome": "FRAUD",
+    "riskScore": 79,
+    "resolution": "Detect gradual escalation pattern, trigger enhanced due diligence for elderly customers with new payees, consider APP scam alerts"
+  },
+  {
+    "id": "FC-010",
+    "title": "Merchant fraud - fake invoice payment",
+    "description": "Business account received fraudulent invoice via email (BEC attack). Finance team paid ₹8,50,000 to fraudster's account. Domain name was similar to real vendor.",
+    "riskSignals": ["large_b2b_transfer", "new_payee", "slightly_different_account_name"],
+    "outcome": "FRAUD",
+    "riskScore": 68,
+    "resolution": "Implement account name verification (CoP), flag account name mismatches, require callback verification for amounts > ₹5L"
+  },
+  {
+    "id": "FC-011",
+    "title": "ATM jackpotting - coordinated cash-out",
+    "description": "Attacker with physical ATM access installed malware. Multiple mule accounts made maximum withdrawals at 3 AM across multiple ATMs simultaneously.",
+    "riskSignals": ["overnight_atm_max_withdrawals", "coordinated_timing", "multiple_accounts"],
+    "outcome": "FRAUD",
+    "riskScore": 99,
+    "resolution": "Block all withdrawals, notify security team immediately, disable affected ATMs, file incident report"
+  },
+  {
+    "id": "FC-012",
+    "title": "Employee collusion - insider threat",
+    "description": "Bank employee with privileged access created ghost accounts and diverted small amounts (₹100-500) from dormant accounts over 18 months. Total loss ₹12 lakhs.",
+    "riskSignals": ["privileged_user", "dormant_account_access", "small_regular_amounts"],
+    "outcome": "FRAUD",
+    "riskScore": 87,
+    "resolution": "Implement anomaly detection on privileged user actions, periodic dormant account audits, four-eyes principle for dormant account operations"
+  },
+  {
+    "id": "FC-013",
+    "title": "Phishing via SMS - UPI credential capture",
+    "description": "Customer received fake SMS claiming KYC expiry. Clicked link, entered UPI PIN on fake site. Multiple transactions initiated within 2 minutes from attacker's device.",
+    "riskSignals": ["new_device", "rapid_transactions", "velocity_high", "unusual_hour"],
+    "outcome": "FRAUD",
+    "riskScore": 93,
+    "resolution": "Add device binding, rate limit new device transactions, educate customers never to enter PIN on links"
+  },
+  {
+    "id": "FC-014",
+    "title": "Cryptocurrency exchange fraud",
+    "description": "Customer transferred funds to cryptocurrency exchange claiming to be a legitimate investment platform. Platform was a scam. Amount was life savings.",
+    "riskSignals": ["large_amount", "crypto_exchange_payee", "new_payee", "no_prior_crypto_history"],
+    "outcome": "FRAUD",
+    "riskScore": 76,
+    "resolution": "Alert customers when sending to known crypto exchanges, add scam warning page, suggest helpline"
+  },
+  {
+    "id": "FC-015",
+    "title": "Gift card scam - tax authority impersonation",
+    "description": "Victim convinced by fraudster posing as Income Tax officer to pay 'penalty' via gift cards. Multiple small transactions to gift card top-up merchants.",
+    "riskSignals": ["gift_card_merchant", "velocity_medium", "unusual_merchant_category"],
+    "outcome": "FRAUD",
+    "riskScore": 82,
+    "resolution": "Show scam warning popup for gift card merchants over ₹10,000, add helpline number to transaction screen"
+  },
+  {
+    "id": "FC-016",
+    "title": "Account dormancy exploitation",
+    "description": "Attacker obtained credentials for a long-dormant account via dark web. Account had not been used for 2 years. Large transfer made immediately after login.",
+    "riskSignals": ["dormant_account_reactivated", "immediate_large_transfer", "new_device"],
+    "outcome": "FRAUD",
+    "riskScore": 94,
+    "resolution": "Mandatory re-KYC for accounts dormant > 1 year before allowing transfers, alert on dormant account activity"
+  },
+  {
+    "id": "FC-017",
+    "title": "QR code payment fraud",
+    "description": "Merchant QR code was replaced with fraudster's QR code. Multiple customers paid but merchant didn't receive money. Unusual spike in payments to unknown account from diverse customers.",
+    "riskSignals": ["multiple_diverse_payers_to_single_account", "unusual_merchant_location"],
+    "outcome": "FRAUD",
+    "riskScore": 71,
+    "resolution": "Implement merchant name verification on QR scans, flag sudden spike in new payers to account"
+  },
+  {
+    "id": "FC-018",
+    "title": "Advance fee fraud - investment scheme",
+    "description": "Customer deceived by WhatsApp group claiming high returns on stock tips. Transferred ₹2.5L as 'investment'. Group then demanded more fees before 'releasing profits'.",
+    "riskSignals": ["large_amount", "new_payee", "overseas_destination", "escalating_transfers"],
+    "outcome": "FRAUD",
+    "riskScore": 73,
+    "resolution": "Add investment scam warning for large transfers to new overseas accounts, customer education"
+  },
+  {
+    "id": "FC-019",
+    "title": "Refund fraud - return merchandise abuse",
+    "description": "Customer claimed refund for transactions they actually completed. Pattern of initiating chargebacks on legitimate purchases.",
+    "riskSignals": ["high_chargeback_rate", "repeat_dispute_pattern", "customer_risk_flag"],
+    "outcome": "FRAUD",
+    "riskScore": 66,
+    "resolution": "Track chargeback history per customer, flag customers with > 3 chargebacks per quarter for enhanced review"
+  },
+  {
+    "id": "FC-020",
+    "title": "Travel - legitimate foreign transaction",
+    "description": "Customer traveling abroad made hotel and restaurant payments in foreign currency. Previous domestic-only history. Triggered velocity and foreign transaction alerts.",
+    "riskSignals": ["foreign_transaction", "new_country", "multiple_transactions"],
+    "outcome": "LEGITIMATE",
+    "riskScore": 38,
+    "resolution": "Allow - customer had set travel notification. Implement travel notification feature to suppress false positives"
+  },
+  {
+    "id": "FC-021",
+    "title": "Business payroll processing",
+    "description": "Company processed bulk payroll - 350 transactions of varying amounts to employee accounts. Triggered bulk transaction alert.",
+    "riskSignals": ["bulk_transactions", "multiple_beneficiaries", "large_total_amount"],
+    "outcome": "LEGITIMATE",
+    "riskScore": 18,
+    "resolution": "Allow - corporate accounts with payroll mandate should be excluded from velocity checks"
+  },
+  {
+    "id": "FC-022",
+    "title": "Triangulation fraud - marketplace scam",
+    "description": "Fraudster listed non-existent goods on legitimate marketplace. Used stolen card details to purchase real goods from another seller, shipping to victim. Victim paid fraudster.",
+    "riskSignals": ["card_not_present", "new_merchant_account", "shipping_address_mismatch"],
+    "outcome": "FRAUD",
+    "riskScore": 79,
+    "resolution": "Implement address verification service, flag merchants with first-time shipping to unusual addresses"
+  },
+  {
+    "id": "FC-023",
+    "title": "Account opening fraud - synthetic identity",
+    "description": "Fraudster created account using mix of real and fabricated PII (real PAN, fake address). Passed initial KYC. Used account for money laundering before detection at 90 days.",
+    "riskSignals": ["kyc_anomaly", "inconsistent_pii", "address_mismatch"],
+    "outcome": "FRAUD",
+    "riskScore": 88,
+    "resolution": "Implement holistic identity verification, cross-reference multiple data sources, flag inconsistent PII combinations"
+  },
+  {
+    "id": "FC-024",
+    "title": "BNPL abuse - buy now pay later default pattern",
+    "description": "Customer repeatedly maxed out BNPL credit, made minimum payments, then defaulted. Pattern of opening new BNPL accounts with slight identity variations.",
+    "riskSignals": ["bnpl_max_utilization", "minimum_payments_only", "multiple_credit_applications"],
+    "outcome": "FRAUD",
+    "riskScore": 61,
+    "resolution": "Monitor BNPL utilization patterns, require enhanced income verification for high-limit BNPL applications"
+  },
+  {
+    "id": "FC-025",
+    "title": "Emergency medical payment - legitimate urgent transfer",
+    "description": "Customer made urgent large transfer to private hospital for emergency surgery. Late night, large amount, new payee. Customer had clean history.",
+    "riskSignals": ["large_amount", "new_payee", "unusual_hour", "medical_merchant"],
+    "outcome": "LEGITIMATE",
+    "riskScore": 44,
+    "resolution": "Allow with OTP verification. Medical emergencies are time-sensitive - balance security with customer experience"
+  },
+  {
+    "id": "FC-026",
+    "title": "Pig butchering scam",
+    "description": "Long-running investment fraud. Fraudster built trust over months via dating app then introduced crypto investment platform. Customer transferred savings incrementally. Platform showed fake profits.",
+    "riskSignals": ["gradual_escalation", "crypto_platform", "new_payee", "large_cumulative_amount"],
+    "outcome": "FRAUD",
+    "riskScore": 77,
+    "resolution": "Alert on escalating transfers to same crypto payee, implement cooling-off period for amounts exceeding historical average by > 5x"
+  },
+  {
+    "id": "FC-027",
+    "title": "Deepfake voice CEO fraud",
+    "description": "AI-generated voice clone of CEO convinced CFO to transfer ₹45L to fraudster. Call appeared to come from CEO's number. CFO bypassed normal approval process.",
+    "riskSignals": ["policy_override", "unusual_approval_chain", "large_amount", "urgency_flag"],
+    "outcome": "FRAUD",
+    "riskScore": 85,
+    "resolution": "Mandate dual approval for transfers > ₹10L regardless of hierarchy, implement call-back verification policy"
+  },
+  {
+    "id": "FC-028",
+    "title": "Collateral loan fraud",
+    "description": "Customer pledged same asset as collateral to multiple lenders simultaneously. Coordinated across banks within narrow time window before credit bureau updated.",
+    "riskSignals": ["multiple_loan_applications", "similar_collateral_type", "time_compressed"],
+    "outcome": "FRAUD",
+    "riskScore": 83,
+    "resolution": "Real-time CERSAI check for collateral registration, cross-bank data sharing for concurrent loan detection"
+  },
+  {
+    "id": "FC-029",
+    "title": "Remittance fraud - wire interception",
+    "description": "Business email compromise led to change of beneficiary bank details in legitimate invoice. Company wired payment to fraudster's account instead of regular supplier.",
+    "riskSignals": ["beneficiary_detail_change", "same_amount_as_invoice", "new_account_number"],
+    "outcome": "FRAUD",
+    "riskScore": 80,
+    "resolution": "Confirmation of Payee for account number + name match, alert on beneficiary detail changes for recurring payees"
+  },
+  {
+    "id": "FC-030",
+    "title": "Student - first international tuition fee",
+    "description": "Student paying university tuition abroad for the first time. Large international transfer, new payee, no prior international history. Parents transferred from family account.",
+    "riskSignals": ["large_amount", "international", "new_payee", "education_purpose"],
+    "outcome": "LEGITIMATE",
+    "riskScore": 47,
+    "resolution": "Allow with OTP. Education payments to known universities should be in an approved list to reduce friction"
+  },
+  {
+    "id": "FC-031",
+    "title": "UPI collect request scam - fake refund",
+    "description": "Fraudster posed as a marketplace buyer and sent a UPI collect request to seller for ₹25,000, claiming it was a refund for a product return. Victim approved the collect request thinking they were receiving money but actually authorised a payment outward.",
+    "riskSignals": ["outward_collect_approval", "new_requester", "social_context_mismatch"],
+    "outcome": "FRAUD",
+    "riskScore": 78,
+    "resolution": "Display explicit 'YOU ARE PAYING' warning on UPI collect requests, add scam alert for collect requests from new requesters above ₹5,000. Educate users: receive money via QR, not collect requests",
+    "indianContextNote": "UPI collect scams increased 300% in India in 2023. NPCI issued advisory to PSPs to show clear payment direction indicators."
+  },
+  {
+    "id": "FC-032",
+    "title": "Fake government subsidy fraud",
+    "description": "Victim received WhatsApp message claiming to be from PM-KISAN/MGNREGA scheme with a ₹2,000 'subsidy payment pending'. Link to fake government portal. Victim entered bank details + UPI PIN. Fraudster used credentials to drain account.",
+    "riskSignals": ["credential_compromise", "new_device_after_link_click", "rapid_full_drain"],
+    "outcome": "FRAUD",
+    "riskScore": 89,
+    "resolution": "Block transactions from device after credential reset. Government schemes never ask for UPI PIN. Show warning popup when credential change detected and transaction follows within 10 minutes",
+    "indianContextNote": "Common seasonal fraud around subsidy disbursement periods (Kharif/Rabi seasons, festival time). NPCI Cyber Crime Cell actively tracks these patterns."
+  },
+  {
+    "id": "FC-033",
+    "title": "Real estate token fraud",
+    "description": "Homebuyer paid ₹5 lakh as 'token advance' to fraudulent builder for property that didn't exist. Fraudster had fake registration documents. Multiple victims paid for same non-existent flat.",
+    "riskSignals": ["large_amount_single_transfer", "new_corporate_payee", "real_estate_context", "no_prior_relationship"],
+    "outcome": "FRAUD",
+    "riskScore": 69,
+    "resolution": "Show high-value real estate warning for transfers above ₹1L to new corporate accounts. Verify payee GSTIN against GST portal. Suggest escrow or RERA-registered developer verification",
+    "indianContextNote": "Pre-launch property scams are common in Tier-2 cities. RERA registration check can verify legitimate developers."
+  },
+  {
+    "id": "FC-034",
+    "title": "Compromised merchant terminal - card skimming",
+    "description": "Physical card skimmer attached to a petrol pump PoS terminal. Card data of 150 customers captured over 2 weeks. Cards used for CNP transactions at international e-commerce sites.",
+    "riskSignals": ["card_not_present", "international_ecommerce", "unusual_merchant_category", "cards_used_in_batch"],
+    "outcome": "FRAUD",
+    "riskScore": 94,
+    "resolution": "Block all cards used at flagged terminal within the compromise window. Issue replacement cards. File FIR. Notify NPCI about compromised terminal location. Enhanced monitoring for international CNP transactions after terminal visit",
+    "indianContextNote": "Petrol pumps are common skimming targets in India. Physical tampering indicators: loose card slot, extra overlay on keypad."
+  },
+  {
+    "id": "FC-035",
+    "title": "OTP sharing via vishing - impersonation of bank KYC officer",
+    "description": "Fraudster called customer claiming to be from RBI/bank KYC team. Said account will be blocked unless customer shares OTP for 'KYC update'. Customer shared OTP. Multiple transactions authorised.",
+    "riskSignals": ["otp_shared_immediately_used", "multiple_transactions_post_otp", "new_beneficiaries"],
+    "outcome": "FRAUD",
+    "riskScore": 91,
+    "resolution": "RBI/banks never call to ask for OTP. Rate-limit OTP-based approvals after first use. Detect pattern: OTP used within 30 seconds of issuance for multiple transactions. Post-incident: block all pending transactions and re-issue OTP infrastructure",
+    "indianContextNote": "One of the most common fraud vectors in India. RBI's campaign 'RBI Kehta Hai' specifically addresses OTP sharing. Over 50,000 cases reported annually."
+  },
+  {
+    "id": "FC-036",
+    "title": "Reverse penny drop abuse for account enumeration",
+    "description": "Attacker used reverse penny drop (₹1 deposit) API to enumerate valid account numbers at scale. 10,000 account verification calls in 5 minutes exposed account holder names for phishing targeting.",
+    "riskSignals": ["api_rate_abuse", "penny_drop_velocity", "systematic_account_pattern"],
+    "outcome": "FRAUD",
+    "riskScore": 72,
+    "resolution": "Rate-limit penny drop API to 10 calls per hour per API key. Require explicit business justification for bulk verifications. Mask account holder name partially in API response (show only first 3 characters). Alert on velocity > 100 calls per hour from single source",
+    "indianContextNote": "Penny drop is a legitimate account validation service in India (offered by Razorpay, Cashfree, etc.). Misuse for enumeration is an API security concern specific to Indian payment infrastructure."
+  }
+]

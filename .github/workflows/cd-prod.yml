@@ -1,0 +1,207 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# AegisPay — CD: Production (main)
+#
+# Triggered automatically after the Java CI completes successfully on
+# main (images already pushed to GHCR by ci-java.yml).
+#
+# Also supports manual promotion via workflow_dispatch for a specific release tag.
+#
+# Flow:
+#   1. Pull the SHA that was just built (or the tag from manual input)
+#   2. Update image tags in values-prod.yaml for changed services
+#   3. Commit [skip ci] → ArgoCD detects OutOfSync → auto-sync (dev-style)
+#      OR manual sync gate (prod-style) depending on environment approval
+#   4. Post-deployment smoke test via ArgoCD health endpoint
+# ─────────────────────────────────────────────────────────────────────────────
+name: CD — Production (main)
+
+on:
+  # Auto-trigger: Java CI green on prod branch
+  workflow_run:
+    workflows: ["CI — Java (Smart)"]
+    types: [completed]
+    branches: [main]
+
+  # Manual: promote a specific git tag to production
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Git SHA or tag to deploy (e.g. abc1234 or v1.2.3)"
+        required: true
+        type: string
+      dry_run:
+        description: "Dry run — update files but do not push"
+        required: false
+        type: boolean
+        default: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/aegispay
+  HELM_VALUES_FILE: infra/helm/aegispay/values-prod.yaml
+  ARGOCD_APP_FILE: infra/argocd/app-prod.yaml
+  # All backend services managed by the Java CI
+  JAVA_SERVICES: >-
+    api-gateway
+    user-service
+    transaction-service
+    ledger-service
+    payment-orchestrator
+    risk-engine
+    notification-service
+    ai-platform
+    data-pipeline
+    reconciliation-service
+
+jobs:
+  # ── Guard: only proceed if workflow_run was successful ──────────────────────
+  guard:
+    name: Guard — check triggering workflow result
+    runs-on: ubuntu-latest
+    # For workflow_run trigger: bail if CI failed.
+    # For workflow_dispatch: always proceed.
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    outputs:
+      deploy_sha: ${{ steps.resolve-sha.outputs.sha }}
+    steps:
+      - name: Resolve deploy SHA / tag
+        id: resolve-sha
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "sha=${{ inputs.release_tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "sha=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ── Validate all images exist in GHCR ──────────────────────────────────────
+  validate-images:
+    name: Validate images in GHCR
+    needs: guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check all service images exist
+        env:
+          SHA: ${{ needs.guard.outputs.deploy_sha }}
+        run: |
+          FAILED=0
+          for svc in ${{ env.JAVA_SERVICES }}; do
+            IMAGE="${{ env.IMAGE_PREFIX }}/$svc:${SHA}"
+            echo "Checking $IMAGE ..."
+            if ! docker manifest inspect "$IMAGE" > /dev/null 2>&1; then
+              echo "::error::Image NOT found: $IMAGE"
+              FAILED=1
+            else
+              echo "✅ $IMAGE"
+            fi
+          done
+          if [ "$FAILED" = "1" ]; then
+            echo "::error::One or more images missing. Aborting deployment."
+            exit 1
+          fi
+
+  # ── Update Helm values + ArgoCD app file ───────────────────────────────────
+  deploy:
+    name: Update values-prod.yaml & trigger ArgoCD
+    needs: [guard, validate-images]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    environment:
+      name: production
+      url: https://argocd.aegispay.io/applications/aegispay-prod
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.GIT_DEPLOY_TOKEN }}
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name  "aegispay-ci[bot]"
+          git config user.email "aegispay-ci@users.noreply.github.com"
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Update image tags in values-prod.yaml
+        env:
+          SHA: ${{ needs.guard.outputs.deploy_sha }}
+        run: |
+          for svc in ${{ env.JAVA_SERVICES }}; do
+            # YAML key uses underscores: api-gateway → api_gateway
+            KEY=$(echo "$svc" | tr '-' '_')
+            yq e ".services.${KEY}.image.tag = \"${SHA}\"" -i ${{ env.HELM_VALUES_FILE }}
+          done
+          echo "Updated ${{ env.HELM_VALUES_FILE }} with SHA=${SHA}"
+
+      - name: Show diff
+        run: git diff
+
+      - name: Commit and push [skip ci]
+        if: ${{ github.event_name != 'workflow_dispatch' || !inputs.dry_run }}
+        env:
+          SHA: ${{ needs.guard.outputs.deploy_sha }}
+        run: |
+          git add ${{ env.HELM_VALUES_FILE }}
+          git diff --staged --quiet && echo "Nothing changed — already deployed" && exit 0
+          git commit -m "chore(cd/prod): deploy ${SHA:0:12} to production [skip ci]"
+          git push origin main
+
+      - name: Dry-run summary
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+        run: |
+          echo "::notice::Dry run complete — files updated locally but NOT pushed."
+          echo "::notice::Re-run with dry_run=false to deploy."
+
+  # ── Force ArgoCD sync (optional, requires ArgoCD CLI secret) ───────────────
+  argocd-sync:
+    name: Trigger ArgoCD sync
+    needs: deploy
+    runs-on: ubuntu-latest
+    # Only attempt ArgoCD CLI sync if the secret is configured
+    if: ${{ vars.ARGOCD_SERVER != '' }}
+    steps:
+      - name: Install ArgoCD CLI
+        run: |
+          curl -sSL -o /usr/local/bin/argocd \
+            https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+          chmod +x /usr/local/bin/argocd
+
+      - name: Sync aegispay-prod application
+        env:
+          ARGOCD_SERVER: ${{ vars.ARGOCD_SERVER }}
+          ARGOCD_TOKEN:  ${{ secrets.ARGOCD_TOKEN }}
+        run: |
+          argocd app sync aegispay-prod \
+            --auth-token "$ARGOCD_TOKEN" \
+            --server "$ARGOCD_SERVER" \
+            --grpc-web \
+            --timeout 300
+          argocd app wait aegispay-prod \
+            --auth-token "$ARGOCD_TOKEN" \
+            --server "$ARGOCD_SERVER" \
+            --grpc-web \
+            --health \
+            --timeout 300
+
+      - name: Post-deploy smoke test
+        env:
+          GATEWAY_URL: ${{ secrets.PROD_GATEWAY_URL }}
+        run: |
+          echo "Running production smoke test..."
+          curl --fail --retry 5 --retry-delay 15 --retry-max-time 120 \
+            "${GATEWAY_URL}/actuator/health"
+          echo "✅ Production health check passed"

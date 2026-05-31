@@ -1,0 +1,183 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# AegisPay — Web App CI
+#
+# Triggered ONLY when web app files change (paths filter).
+# Runs on both main (prod) and dev (dev).
+# ─────────────────────────────────────────────────────────────────────────────
+name: CI — Web App
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+    paths:
+      - 'apps/web/**'
+      - 'packages/**'
+      - 'package.json'
+      - 'turbo.json'
+      - '.github/workflows/ci-web.yml'
+
+jobs:
+  # ── Lint & Typecheck ────────────────────────────────────────────────────────
+  lint-typecheck:
+    name: Lint & Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+
+      - name: Install dependencies
+        run: npm install --prefer-offline
+
+      - name: Lint
+        run: npm run lint --workspace=apps/web
+
+      - name: Typecheck
+        run: npm run typecheck --workspace=apps/web
+
+  # ── Unit Tests ──────────────────────────────────────────────────────────────
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+
+      - name: Install dependencies
+        run: npm install --prefer-offline
+
+      - name: Run tests
+        run: npm run test --workspace=apps/web
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-coverage
+          path: apps/web/coverage/
+          retention-days: 7
+
+  # ── Next.js Build ───────────────────────────────────────────────────────────
+  build:
+    name: Next.js Build
+    runs-on: ubuntu-latest
+    needs: [lint-typecheck]
+    env:
+      # Dummy values — Next.js build succeeds without live IdP in CI
+      NEXTAUTH_URL: http://localhost:3000
+      NEXTAUTH_SECRET: ci-secret-not-real
+      KEYCLOAK_ID: aegispay-web
+      KEYCLOAK_SECRET: ci-secret
+      KEYCLOAK_ISSUER: http://localhost:8180/realms/aegispay
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8080
+      NEXT_PUBLIC_WS_BASE_URL: ws://localhost:8090
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+
+      - name: Install dependencies
+        run: npm install --prefer-offline
+
+      - name: Build shared packages
+        run: |
+          npx turbo run build \
+            --filter=@aegispay/shared-types \
+            --filter=@aegispay/design-system \
+            --filter=@aegispay/api-client
+
+      - name: Build web app
+        run: npx turbo run build --filter=@aegispay/web
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nextjs-build-${{ github.sha }}
+          path: apps/web/.next
+          retention-days: 3
+
+  # ── E2E Tests (Playwright) ──────────────────────────────────────────────────
+  e2e:
+    name: E2E Tests (Playwright)
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+
+      - name: Install dependencies
+        run: npm install --prefer-offline
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run E2E tests
+        run: npm run test:e2e --workspace=apps/web
+        env:
+          NEXTAUTH_URL: http://localhost:3000
+          NEXTAUTH_SECRET: ci-secret-not-real
+          KEYCLOAK_ID: aegispay-web
+          KEYCLOAK_SECRET: ci-secret
+          KEYCLOAK_ISSUER: http://localhost:8180/realms/aegispay
+          NEXT_PUBLIC_API_BASE_URL: http://localhost:3000/api/mock
+          NEXT_PUBLIC_WS_BASE_URL: ws://localhost:3000
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report
+          retention-days: 7
+
+  # ── Docker Build (main push only) ───────────────────────────────
+  docker:
+    name: Build & Push Web Docker Image
+    runs-on: ubuntu-latest
+    needs: [build, e2e]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push web image
+        uses: docker/build-push-action@v6
+        with:
+          context: apps/web
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/aegispay/web:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/aegispay/web:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            NEXT_PUBLIC_API_BASE_URL=${{ secrets.PROD_API_BASE_URL }}
+            NEXT_PUBLIC_WS_BASE_URL=${{ secrets.PROD_WS_BASE_URL }}

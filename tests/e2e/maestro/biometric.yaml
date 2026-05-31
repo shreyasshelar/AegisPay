@@ -1,0 +1,65 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# AegisPay Android — Biometric authentication Maestro flow
+#
+# Tests that the app requires biometric re-authentication after backgrounding
+# and that approved / rejected fingerprint flows work correctly.
+#
+# Run:
+#   maestro test tests/e2e/maestro/biometric.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+appId: com.aegispay.android
+---
+- launchApp:
+    clearState: true
+
+# ── Login first ────────────────────────────────────────────────────────────
+- assertVisible:
+    id: "login-screen"
+- tapOn:
+    id: "login-email-input"
+- inputText: "${E2E_PAYER_EMAIL:-loadtest_payer@aegispay.io}"
+- tapOn:
+    id: "login-password-input"
+- inputText: "${E2E_PAYER_PASSWORD:-LoadTest@123}"
+- tapOn:
+    id: "login-submit-button"
+- waitForAnimationToEnd
+- assertVisible:
+    id: "dashboard-screen"
+
+# ── Background and resume ──────────────────────────────────────────────────
+- pressKey: HOME    # send app to background
+- launchApp:
+    stopApp: false  # resume without clearing state
+
+# ── Biometric lock should appear ───────────────────────────────────────────
+- assertVisible:
+    id: "biometric-lock-screen"
+    timeout: 5000
+
+# ── Approve biometrics (Maestro emulator fingerprint) ─────────────────────
+# On Android Emulator: adb -e emu finger touch 1  (simulates enrolled fingerprint)
+- runScript:
+    file: ../scripts/android-fingerprint-accept.js
+
+- waitForAnimationToEnd
+- assertVisible:
+    id: "dashboard-screen"
+    timeout: 5000
+
+# ── Test rejection flow ────────────────────────────────────────────────────
+- pressKey: HOME
+- launchApp:
+    stopApp: false
+- assertVisible:
+    id: "biometric-lock-screen"
+    timeout: 5000
+
+- runScript:
+    file: ../scripts/android-fingerprint-reject.js
+
+- assertVisible:
+    id: "biometric-error-message"
+    timeout: 3000
+- assertVisible:
+    id: "biometric-try-again-button"

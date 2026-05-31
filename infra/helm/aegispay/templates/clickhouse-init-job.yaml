@@ -1,0 +1,171 @@
+{{- if .Values.clickhouse.initJob.enabled }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: clickhouse-init-sql
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "aegispay.labels" . | nindent 4 }}
+    app.kubernetes.io/name: clickhouse-init
+data:
+  init.sql: |
+    CREATE DATABASE IF NOT EXISTS aegispay_analytics;
+    USE aegispay_analytics;
+
+    CREATE TABLE IF NOT EXISTS transaction_facts
+    (
+        transaction_id        UUID,
+        user_id               UUID,
+        amount                Decimal(18, 4),
+        currency              LowCardinality(String),
+        status                LowCardinality(String),
+        failure_code          Nullable(String),
+        external_reference    Nullable(String),
+        event_time            DateTime64(3, 'UTC'),
+        processing_latency_ms Int64,
+        event_date            Date MATERIALIZED toDate(event_time),
+        event_hour            UInt8 MATERIALIZED toHour(event_time)
+    )
+    ENGINE = MergeTree()
+    PARTITION BY toYYYYMM(event_date)
+    ORDER BY (event_date, currency, status, transaction_id)
+    TTL event_date + INTERVAL 2 YEAR;
+
+    CREATE TABLE IF NOT EXISTS risk_assessments
+    (
+        transaction_id UUID,
+        user_id        UUID,
+        risk_score     UInt8,
+        decision       LowCardinality(String),
+        rule_flags     Array(String),
+        rule_count     UInt8 MATERIALIZED length(rule_flags),
+        event_time     DateTime64(3, 'UTC'),
+        event_date     Date MATERIALIZED toDate(event_time)
+    )
+    ENGINE = MergeTree()
+    PARTITION BY toYYYYMM(event_date)
+    ORDER BY (event_date, decision, risk_score, transaction_id)
+    TTL event_date + INTERVAL 1 YEAR;
+
+    CREATE TABLE IF NOT EXISTS saga_latencies
+    (
+        transaction_id UUID,
+        saga_id        UUID,
+        started_at     DateTime64(3, 'UTC'),
+        completed_at   DateTime64(3, 'UTC'),
+        latency_ms     Int64,
+        final_status   LowCardinality(String),
+        event_date     Date MATERIALIZED toDate(completed_at),
+        event_hour     UInt8 MATERIALIZED toHour(completed_at)
+    )
+    ENGINE = MergeTree()
+    PARTITION BY toYYYYMM(event_date)
+    ORDER BY (event_date, final_status, latency_ms)
+    TTL event_date + INTERVAL 1 YEAR;
+
+    CREATE TABLE IF NOT EXISTS reconciliation_breaks
+    (
+        break_id         UUID DEFAULT generateUUIDv4(),
+        report_date      Date,
+        transaction_id   Nullable(UUID),
+        stripe_pi_id     Nullable(String),
+        ledger_amount    Nullable(Decimal(18, 4)),
+        stripe_amount    Nullable(Decimal(18, 4)),
+        break_amount     Decimal(18, 4),
+        currency         LowCardinality(String),
+        break_type       LowCardinality(String),
+        break_status     LowCardinality(String),
+        ledger_status    Nullable(String),
+        stripe_status    Nullable(String),
+        resolved_at      Nullable(DateTime64(3, 'UTC')),
+        resolution_note  Nullable(String),
+        created_at       DateTime64(3, 'UTC') DEFAULT now64()
+    )
+    ENGINE = MergeTree()
+    PARTITION BY toYYYYMM(report_date)
+    ORDER BY (report_date, break_type, break_status, break_amount)
+    TTL report_date + INTERVAL 3 YEAR;
+
+    CREATE MATERIALIZED VIEW IF NOT EXISTS mv_hourly_transaction_summary
+    ENGINE = SummingMergeTree()
+    PARTITION BY toYYYYMM(event_date)
+    ORDER BY (event_date, event_hour, currency, status)
+    POPULATE AS
+    SELECT event_date, event_hour, currency, status,
+           count() AS tx_count, sum(amount) AS total_amount,
+           avg(processing_latency_ms) AS avg_latency_ms,
+           quantile(0.95)(processing_latency_ms) AS p95_latency_ms,
+           quantile(0.99)(processing_latency_ms) AS p99_latency_ms
+    FROM transaction_facts
+    GROUP BY event_date, event_hour, currency, status;
+
+    CREATE MATERIALIZED VIEW IF NOT EXISTS mv_hourly_risk_summary
+    ENGINE = SummingMergeTree()
+    PARTITION BY toYYYYMM(event_date)
+    ORDER BY (event_date, decision)
+    POPULATE AS
+    SELECT event_date, toHour(event_time) AS event_hour, decision,
+           count() AS assessment_count,
+           avg(risk_score) AS avg_risk_score,
+           quantile(0.95)(risk_score) AS p95_risk_score
+    FROM risk_assessments
+    GROUP BY event_date, event_hour, decision;
+
+    CREATE MATERIALIZED VIEW IF NOT EXISTS mv_daily_reconciliation_summary
+    ENGINE = SummingMergeTree()
+    PARTITION BY toYYYYMM(report_date)
+    ORDER BY (report_date, break_type, break_status)
+    POPULATE AS
+    SELECT report_date, break_type, break_status, currency,
+           count() AS break_count, sum(break_amount) AS total_break_amount
+    FROM reconciliation_breaks
+    GROUP BY report_date, break_type, break_status, currency;
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: clickhouse-init
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "aegispay.labels" . | nindent 4 }}
+    app.kubernetes.io/name: clickhouse-init
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "-5"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 5
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: clickhouse-init
+          image: clickhouse/clickhouse-client:{{ .Values.clickhouse.initJob.clientVersion | default "24.4" }}
+          command:
+            - sh
+            - -c
+            - |
+              clickhouse-client \
+                --host={{ .Values.clickhouse.host }} \
+                --port={{ .Values.clickhouse.port | default 9000 }} \
+                --user={{ .Values.clickhouse.user | default "default" }} \
+                --password="${CLICKHOUSE_PASSWORD}" \
+                --multiline \
+                --queries-file=/sql/init.sql
+          env:
+            - name: CLICKHOUSE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: aegispay-clickhouse-secret
+                  key: password
+                  optional: true
+          volumeMounts:
+            - name: sql
+              mountPath: /sql
+              readOnly: true
+      volumes:
+        - name: sql
+          configMap:
+            name: clickhouse-init-sql
+{{- end }}

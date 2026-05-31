@@ -1,0 +1,213 @@
+{{- if .Values.monitoring.prometheusRules.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: aegispay-alerts
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "aegispay.labels" . | nindent 4 }}
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    - name: aegispay.saga
+      interval: 30s
+      rules:
+        - alert: SagaTimeoutRateHigh
+          expr: |
+            sum(rate(saga_timeout_total[5m])) > {{ .Values.monitoring.thresholds.sagaTimeoutRatePerMin | default 0.1 }}
+          for: 5m
+          labels:
+            severity: warning
+            team: payments
+          annotations:
+            summary: "Saga timeout rate is elevated"
+            description: "More than {{ .Values.monitoring.thresholds.sagaTimeoutRatePerMin }} saga timeouts/min over the last 5 minutes."
+
+        - alert: SagaCompensatingRateHigh
+          expr: |
+            sum(rate(saga_compensating_total[5m])) > 0.5
+          for: 5m
+          labels:
+            severity: critical
+            team: payments
+          annotations:
+            summary: "Saga rollback rate is high — potential downstream service degradation"
+
+    - name: aegispay.kafka
+      interval: 30s
+      rules:
+        - alert: DlqDepthNonZero
+          expr: |
+            sum by (topic) (kafka_consumer_group_lag{topic=~".*\\.DLQ"}) > 0
+          for: 1m
+          labels:
+            severity: critical
+            team: platform
+          annotations:
+            summary: 'DLQ {{ "{{" }} $labels.topic {{ "}}" }} has {{ "{{" }} $value {{ "}}" }} messages'
+            description: "Poison-pill messages are accumulating — manual intervention required."
+
+        - alert: KafkaConsumerLagHigh
+          expr: |
+            sum by (topic, consumer_group) (kafka_consumer_group_lag) > {{ .Values.monitoring.thresholds.kafkaConsumerLagMax | default 5000 }}
+          for: 10m
+          labels:
+            severity: warning
+            team: platform
+          annotations:
+            summary: 'Kafka consumer lag is high on {{ "{{" }} $labels.topic {{ "}}" }}/{{ "{{" }} $labels.consumer_group {{ "}}" }}'
+
+    - name: aegispay.ledger
+      interval: 60s
+      rules:
+        - alert: BalanceNegative
+          expr: |
+            min by (account_id) (ledger_account_available_balance) < 0
+          for: 0m
+          labels:
+            severity: critical
+            team: finance
+          annotations:
+            summary: 'Account {{ "{{" }} $labels.account_id {{ "}}" }} has negative available balance — data integrity issue'
+
+        - alert: LedgerReservationFailureRateHigh
+          expr: |
+            rate(ledger_reservation_failed_total[5m]) / rate(ledger_reservation_total[5m]) > 0.1
+          for: 5m
+          labels:
+            severity: warning
+            team: finance
+          annotations:
+            summary: "More than 10% of balance reservations are failing"
+
+    - name: aegispay.risk
+      interval: 30s
+      rules:
+        - alert: HighRiskScoreVolumeHigh
+          expr: |
+            sum(rate(risk_decision_total{decision="REJECTED"}[5m])) /
+            sum(rate(risk_decision_total[5m])) > 0.2
+          for: 5m
+          labels:
+            severity: warning
+            team: fraud
+          annotations:
+            summary: "More than 20% of transactions are being rejected by risk engine"
+
+    - name: aegispay.ai
+      interval: 60s
+      rules:
+        - alert: AiPlatformLatencyHigh
+          expr: |
+            histogram_quantile(0.99, rate(ai_rag_query_latency_seconds_bucket[5m])) > 10
+          for: 5m
+          labels:
+            severity: warning
+            team: ai
+          annotations:
+            summary: "AI platform p99 RAG query latency exceeds 10 seconds"
+
+    - name: aegispay.notification
+      interval: 30s
+      rules:
+        - alert: NotificationDeliveryFailureHigh
+          expr: |
+            sum(rate(notification_delivery_failure_total[5m])) > {{ .Values.monitoring.thresholds.notificationErrorRatePerMin | default 0.5 }}
+          for: 5m
+          labels:
+            severity: warning
+            team: platform
+          annotations:
+            summary: "Notification delivery failure rate is elevated"
+            description: "More than {{ .Values.monitoring.thresholds.notificationErrorRatePerMin | default 0.5 }} notification delivery failures/min over the last 5 minutes. Check SMTP, Slack webhook, and Fast2SMS configs."
+
+        - alert: NotificationServiceDown
+          expr: |
+            up{job="notification-service"} == 0
+          for: 2m
+          labels:
+            severity: critical
+            team: platform
+          annotations:
+            summary: "Notification service is unreachable"
+            description: "The notification-service pod has been down for 2+ minutes — WebSocket, email, SMS and Slack notifications are not being delivered."
+
+    - name: aegispay.datapipeline
+      interval: 30s
+      rules:
+        - alert: DataPipelineSinkErrorHigh
+          expr: |
+            sum(rate(clickhouse_sink_error_total[5m])) > {{ .Values.monitoring.thresholds.dataPipelineSinkErrorsPerMin | default 0.2 }}
+          for: 5m
+          labels:
+            severity: warning
+            team: platform
+          annotations:
+            summary: "ClickHouse sink is experiencing elevated write errors"
+            description: "data-pipeline is failing to flush records to ClickHouse. Grafana dashboards will show stale data. Check ClickHouse connectivity and schema alignment."
+
+        - alert: DataPipelineSinkBacklogHigh
+          expr: |
+            clickhouse_sink_pending_records > 1000
+          for: 5m
+          labels:
+            severity: warning
+            team: platform
+          annotations:
+            summary: "ClickHouse sink backlog is high"
+            description: "More than 1000 records are queued in the data-pipeline sink without being flushed to ClickHouse."
+
+    - name: aegispay.reconciliation
+      interval: 60s
+      rules:
+        - alert: ReconciliationBreakCountHigh
+          expr: |
+            aegispay_reconciliation_unresolved_breaks > {{ .Values.monitoring.thresholds.reconciliationBreakCount | default 5 }}
+          for: 15m
+          labels:
+            severity: critical
+            team: finance
+          annotations:
+            summary: "High number of unresolved reconciliation breaks"
+            description: "There are {{ "{{" }} $value {{ "}}" }} unresolved reconciliation breaks. Investigate via the SLA & Latency Grafana dashboard → Reconciliation Breaks table."
+
+        - alert: ReconciliationJobFailed
+          expr: |
+            kube_job_failed{job_name=~"reconciliation.*", namespace="{{ .Values.global.namespace }}"} > 0
+          for: 0m
+          labels:
+            severity: critical
+            team: finance
+          annotations:
+            summary: "Reconciliation job has failed"
+            description: "The reconciliation CronJob has a failed run. Manual inspection required."
+
+    - name: aegispay.service
+      interval: 30s
+      rules:
+        - alert: ServiceHighErrorRate
+          expr: |
+            sum by (service) (
+              rate(http_server_requests_seconds_count{status=~"5.."}[5m])
+            ) /
+            sum by (service) (
+              rate(http_server_requests_seconds_count[5m])
+            ) > 0.05
+          for: 5m
+          labels:
+            severity: warning
+            team: platform
+          annotations:
+            summary: 'Service {{ "{{" }} $labels.service {{ "}}" }} has >5% HTTP 5xx error rate'
+
+        - alert: PodRestartingFrequently
+          expr: |
+            rate(kube_pod_container_status_restarts_total{namespace="{{ .Values.global.namespace }}"}[15m]) > 0.1
+          for: 5m
+          labels:
+            severity: warning
+            team: platform
+          annotations:
+            summary: 'Pod {{ "{{" }} $labels.pod {{ "}}" }} is restarting frequently'
+{{- end }}

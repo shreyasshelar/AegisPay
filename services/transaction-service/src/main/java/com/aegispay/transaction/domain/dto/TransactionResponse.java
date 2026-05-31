@@ -1,0 +1,38 @@
+package com.aegispay.transaction.domain.dto;
+
+import com.aegispay.common.domain.enums.TransactionStatus;
+import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.Builder;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.UUID;
+
+@Builder
+public record TransactionResponse(
+    /** Serialised as "transactionId" to match frontend contract. */
+    @JsonProperty("transactionId") UUID id,
+    UUID userId,
+    UUID payerId,
+    UUID payeeId,
+    @JsonFormat(shape = JsonFormat.Shape.STRING) BigDecimal amount,
+    String currency,
+    TransactionStatus status,
+    String idempotencyKey,
+    UUID sagaId,
+    /** Optional user-supplied memo; extracted from the metadata JSON blob. */
+    String note,
+    Instant initiatedAt,
+    Instant completedAt,
+    String failureReason,
+    String failureCode,
+    String externalReference,
+    /**
+     * Direction of this transaction from the perspective of the requesting user.
+     * {@code "SENT"} when the caller is the payer; {@code "RECEIVED"} when the caller
+     * is the payee. {@code null} on write-side responses (create/getById) where no
+     * caller context is available.
+     */
+    String direction
+) {}
