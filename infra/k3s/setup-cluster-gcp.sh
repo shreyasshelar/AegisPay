@@ -75,7 +75,7 @@ info "ESO CRDs ready."
 
 section "Creating ClusterSecretStore for GCP Secret Manager"
 cat <<EOF | kubectl apply -f -
-apiVersion: external-secrets.io/v1beta1
+apiVersion: external-secrets.io/v1
 kind: ClusterSecretStore
 metadata:
   name: gcp-secret-store

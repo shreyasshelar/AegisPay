@@ -24,7 +24,7 @@ vault kv put secret/aegispay/cloudflare \
 
 ```yaml
 # Apply this once to your cluster:
-apiVersion: external-secrets.io/v1beta1
+apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
   name: cloudflare-tunnel-secret
