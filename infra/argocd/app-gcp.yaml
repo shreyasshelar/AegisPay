@@ -1,0 +1,54 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: aegispay-gcp
+  namespace: argocd
+  labels:
+    environment: gcp
+    app.kubernetes.io/part-of: aegispay
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    notifications.argoproj.io/subscribe.on-sync-failed.slack: aegispay-alerts
+spec:
+  project: aegispay
+
+  source:
+    repoURL: https://github.com/shreyasshelar/AegisPay.git
+    # Watches main branch — GCP is the live/portfolio deployment
+    targetRevision: main
+    path: infra/helm/aegispay
+    helm:
+      valueFiles:
+        - values.yaml
+        - values-dev.yaml   # resource sizing, domains, JVM tuning
+        - values-gcp.yaml   # GCP SM secrets backend override
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: aegispay
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m
+
+  revisionHistoryLimit: 10
+
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas

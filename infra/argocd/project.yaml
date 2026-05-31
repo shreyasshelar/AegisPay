@@ -13,6 +13,10 @@ spec:
     - https://github.com/shreyasshelar/AegisPay.git
 
   destinations:
+    - namespace: aegispay           # GCP free-tier + dev (single-node k3s)
+      server: https://kubernetes.default.svc
+    - namespace: aegispay-infra     # backing services (Kafka, Postgres, Redis…)
+      server: https://kubernetes.default.svc
     - namespace: aegispay-dev
       server: https://kubernetes.default.svc
     - namespace: aegispay-staging
@@ -50,6 +54,8 @@ spec:
       kind: ExternalSecret
     - group: "external-secrets.io"
       kind: SecretStore
+    - group: "external-secrets.io"
+      kind: ClusterSecretStore
     - group: "monitoring.coreos.com"
       kind: ServiceMonitor
 
