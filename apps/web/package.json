@@ -47,7 +47,7 @@
     "@types/sockjs-client": "^1.5.4",
     "@vitejs/plugin-react": "^4.3.1",
     "autoprefixer": "^10.4.20",
-    "eslint": "^8.57.1",
+    "eslint": "^10.4.1",
     "eslint-config-next": "14.2.35",
     "happy-dom": "^20.9.0",
     "jsdom": "^29.1.1",
