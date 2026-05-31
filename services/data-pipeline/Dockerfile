@@ -25,7 +25,7 @@ RUN mvn -f /workspace/pom.xml \
         -am install -DskipTests -B --no-transfer-progress
 
 # ── Stage 2: runtime ──────────────────────────────────────────────────────────
-FROM eclipse-temurin:21-jre-alpine
+FROM eclipse-temurin:25-jre-alpine
 
 LABEL org.opencontainers.image.title="AegisPay Data Pipeline"
 LABEL org.opencontainers.image.vendor="AegisPay"
