@@ -1,11 +1,11 @@
 # Stage 1: extract Spring Boot layers
-FROM eclipse-temurin:21-jre-jammy AS builder
+FROM eclipse-temurin:25-jre-jammy AS builder
 WORKDIR /app
 COPY target/*.jar app.jar
 RUN java -Djarmode=layertools -jar app.jar extract
 
 # Stage 2: production image
-FROM eclipse-temurin:21-jre-jammy
+FROM eclipse-temurin:25-jre-jammy
 LABEL org.opencontainers.image.title="AegisPay Risk Engine"
 LABEL org.opencontainers.image.vendor="AegisPay"
 
