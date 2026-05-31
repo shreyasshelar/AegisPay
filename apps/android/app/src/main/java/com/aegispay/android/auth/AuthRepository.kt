@@ -179,6 +179,7 @@ class AuthRepository @Inject constructor(
         var userEmail: String? = null
         var userName:  String? = null
 
+        // Primary: decode the ID token (richer claims, always present on initial login).
         response.idToken?.let { jwt ->
             decodeJwtPayload(jwt)?.let { claims ->
                 // Keycloak adds aegispay_user_id as a custom claim via a mapper —
@@ -196,6 +197,25 @@ class AuthRepository @Inject constructor(
                 }
             }
         }
+        // Fallback: Keycloak does not always return an ID token on token refresh.
+        // If aegispay_user_id was absent from the ID token (or the ID token was null),
+        // decode the access token to pick up the claim once Keycloak has written the
+        // user attribute (mirrors the web refreshAccessToken fix in auth.ts).
+        if (userId.isNullOrBlank()) {
+            decodeJwtPayload(accessToken)?.let { claims ->
+                val newId = claims.optString("aegispay_user_id").takeIf { it.isNotBlank() }
+                if (newId != null) userId = newId
+            }
+        }
+
+        // Last resort: on refresh, Keycloak often omits the idToken entirely, leaving
+        // userId/userRole/userEmail/userName null above.  TokenStore.store() passes null
+        // straight to SharedPreferences.remove(), which would DELETE the existing values.
+        // Preserve whatever is already stored rather than wiping it.
+        if (userId.isNullOrBlank())    userId    = tokenStore.userId
+        if (userRole.isNullOrBlank())  userRole  = tokenStore.userRole
+        if (userEmail.isNullOrBlank()) userEmail = tokenStore.userEmail
+        if (userName.isNullOrBlank())  userName  = tokenStore.userName
 
         tokenStore.store(
             accessToken  = accessToken,

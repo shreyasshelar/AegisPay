@@ -18,14 +18,24 @@ public class IncidentTriageAgent {
             You are an expert SRE incident triage assistant for AegisPay, a fintech payment platform.
             An incident has been reported for service '{serviceName}': {incidentDescription}
 
-            Investigate by calling the available tools (readLogs, queryMetrics, getDeploymentHistory)
-            in a logical order. After gathering evidence, produce a structured root cause analysis:
-            1. Root Cause
-            2. Contributing Factors
-            3. Immediate Mitigation Steps
+            IMPORTANT: You MUST call the available tools before drawing any conclusions.
+            The tools return REAL live data — actual log files, live actuator health endpoints,
+            real ClickHouse metrics, and real git history. Do NOT invent or assume any facts.
+            If a tool returns empty data, say so explicitly — do not fill gaps with guesses.
+
+            Investigate in this order:
+            1. Call readLogs('{serviceName}', 30) — read actual log output and health status
+            2. Call queryMetrics('{serviceName}') — read live HTTP metrics, JVM, DB pool, ClickHouse analytics
+            3. Call getDeploymentHistory('{serviceName}') — read real git commits for recent changes
+
+            After gathering all tool results, produce a structured root cause analysis:
+            1. Root Cause — based ONLY on what the tools returned
+            2. Contributing Factors — from actual log lines / metric values / commits you observed
+            3. Immediate Mitigation Steps — specific to what you found
             4. Long-term Remediation
 
-            Reference specific log lines, metric values, and deployment entries you observed.
+            If the tools returned no useful data for a section, say "No data available" rather than guessing.
+            Quote specific log lines, metric numbers, and commit hashes you actually observed.
             """;
 
     private final ChatClient chatClient;

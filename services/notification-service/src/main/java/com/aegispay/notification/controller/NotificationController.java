@@ -2,6 +2,7 @@ package com.aegispay.notification.controller;
 
 import com.aegispay.common.domain.dto.ApiResponse;
 import com.aegispay.common.domain.dto.PagedResponse;
+import com.aegispay.notification.client.UserResolverService;
 import com.aegispay.notification.domain.dto.NotificationResponse;
 import com.aegispay.notification.repository.NotificationRepository;
 import org.springframework.validation.annotation.Validated;
@@ -22,6 +23,7 @@ import java.util.List;
 public class NotificationController {
 
     private final NotificationRepository notificationRepository;
+    private final UserResolverService userResolverService;
 
     @GetMapping
     public ResponseEntity<ApiResponse<PagedResponse<NotificationResponse>>> list(
@@ -29,9 +31,11 @@ public class NotificationController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
 
-        String userId = jwt.getClaimAsString("aegispay_user_id") != null
-                ? jwt.getClaimAsString("aegispay_user_id")
-                : jwt.getSubject();
+        // For social login users the JWT may not yet carry aegispay_user_id
+        // (write-back is async and requires a token refresh).  UserResolverService
+        // calls GET /api/v1/users/me which resolves by Keycloak sub as fallback,
+        // ensuring we always query with the correct AegisPay domain UUID.
+        String userId = userResolverService.resolveUserId(jwt);
 
         Page<NotificationResponse> results = notificationRepository
                 .findByUserIdOrderByCreatedAtDesc(userId, PageRequest.of(page, size))

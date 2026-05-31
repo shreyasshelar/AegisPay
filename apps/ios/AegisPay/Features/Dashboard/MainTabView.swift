@@ -7,6 +7,7 @@ struct MainTabView: View {
     @EnvironmentObject var authStore: AuthStore
     @State private var selectedTab     = 0
     @State private var unreadCount     = 0
+    @State private var didSetInitialTab = false
 
     /// True when the signed-in user has back-office access.
     private var isBackOfficeUser: Bool {
@@ -22,45 +23,50 @@ struct MainTabView: View {
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            DashboardView()
-                .tabItem {
-                    Label("Home", systemImage: selectedTab == 0 ? "house.fill" : "house")
-                }
-                .tag(0)
+            // ── Customer tabs — hidden for staff roles ────────────────────────
+            // Mirrors the web sidebar: isStaffRole(role) hides NAV_ITEMS so
+            // admins and back-office users don't see Dashboard, Send, etc.
+            if !isBackOfficeUser {
+                DashboardView()
+                    .tabItem {
+                        Label("Home", systemImage: selectedTab == 0 ? "house.fill" : "house")
+                    }
+                    .tag(0)
 
-            TransactionListView()
-                .tabItem {
-                    Label(
-                        "Transactions",
-                        systemImage: selectedTab == 1 ? "list.bullet.rectangle.fill" : "list.bullet.rectangle"
-                    )
-                }
-                .tag(1)
+                TransactionListView()
+                    .tabItem {
+                        Label(
+                            "Transactions",
+                            systemImage: selectedTab == 1 ? "list.bullet.rectangle.fill" : "list.bullet.rectangle"
+                        )
+                    }
+                    .tag(1)
 
-            SendMoneyView()
-                .tabItem {
-                    Label("Send", systemImage: "arrow.up.circle.fill")
-                }
-                .tag(2)
+                SendMoneyView()
+                    .tabItem {
+                        Label("Send", systemImage: "arrow.up.circle.fill")
+                    }
+                    .tag(2)
 
-            WalletView()
-                .tabItem {
-                    Label("Wallet", systemImage: selectedTab == 3 ? "wallet.pass.fill" : "wallet.pass")
-                }
-                .tag(3)
+                WalletView()
+                    .tabItem {
+                        Label("Wallet", systemImage: selectedTab == 3 ? "wallet.pass.fill" : "wallet.pass")
+                    }
+                    .tag(3)
 
-            NotificationsView()
-                .tabItem {
-                    Label("Alerts", systemImage: selectedTab == 4 ? "bell.fill" : "bell")
-                }
-                .badge(unreadCount > 0 ? unreadCount : 0)
-                .tag(4)
+                NotificationsView()
+                    .tabItem {
+                        Label("Alerts", systemImage: selectedTab == 4 ? "bell.fill" : "bell")
+                    }
+                    .badge(unreadCount > 0 ? unreadCount : 0)
+                    .tag(4)
 
-            ProfileView()
-                .tabItem {
-                    Label("Profile", systemImage: selectedTab == 5 ? "person.fill" : "person")
-                }
-                .tag(5)
+                ProfileView()
+                    .tabItem {
+                        Label("Profile", systemImage: selectedTab == 5 ? "person.fill" : "person")
+                    }
+                    .tag(5)
+            }
 
             // ── Back-office tab (role-gated) ───────────────────────────────────
             if isBackOfficeUser {
@@ -91,6 +97,15 @@ struct MainTabView: View {
             }
         }
         .tint(Color.aegisPrimary)
+        // Set role-based initial tab — mirrors web ROLE_LANDING and Android nav host.
+        // Admin → Triage (7), Back-office → Admin (6), Customer → Home (0).
+        // Only runs once: guard prevents re-entry on subsequent onAppear events.
+        .task {
+            guard !didSetInitialTab else { return }
+            didSetInitialTab = true
+            if isAdminUser      { selectedTab = 7 }
+            else if isBackOfficeUser { selectedTab = 6 }
+        }
         // Clear badge when Notifications tab selected
         .onChange(of: selectedTab) { _, newTab in
             if newTab == 4 { unreadCount = 0 }   // tab 4 = Alerts

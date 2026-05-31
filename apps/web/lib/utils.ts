@@ -62,6 +62,34 @@ export function resolveWsUrl(envUrl: string): string {
   return envUrl.replace('localhost', window.location.hostname)
 }
 
+/**
+ * Convert a local date string (YYYY-MM-DD from a date input) to the UTC ISO string
+ * that represents the **start** of that day in the browser's local timezone.
+ *
+ * Why this matters: `new Date("2026-05-31")` (date-only) is parsed as UTC midnight
+ * per the spec, which is WRONG when the user means "May 31 in IST".
+ * `new Date("2026-05-31T00:00:00")` (with T but no Z/offset) is parsed as LOCAL time
+ * per the spec, which is correct — `.toISOString()` then gives the UTC equivalent.
+ *
+ * Example (browser in IST = UTC+5:30):
+ *   localDateToUtcStart("2026-05-31") → "2026-05-30T18:30:00.000Z"  ✓
+ *   "2026-05-31T00:00:00Z"            → wrong — misses 6 hrs of IST data
+ */
+export function localDateToUtcStart(dateStr: string): string {
+  return new Date(`${dateStr}T00:00:00`).toISOString()
+}
+
+/**
+ * Convert a local date string (YYYY-MM-DD) to the UTC ISO string representing the
+ * **end** of that day (23:59:59) in the browser's local timezone.
+ *
+ * Example (IST = UTC+5:30):
+ *   localDateToUtcEnd("2026-05-31") → "2026-05-31T18:29:59.000Z"  ✓
+ */
+export function localDateToUtcEnd(dateStr: string): string {
+  return new Date(`${dateStr}T23:59:59`).toISOString()
+}
+
 /** Copy text to clipboard — returns promise. */
 export async function copyToClipboard(text: string): Promise<void> {
   if (navigator.clipboard) {

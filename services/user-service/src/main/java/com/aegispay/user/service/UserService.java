@@ -114,6 +114,7 @@ public class UserService {
     public UserResponse getById(UUID userId) {
         return userRepository.findById(userId)
                 .map(userMapper::toResponse)
+                .map(r -> enrichWithRejectionReason(r, userId))
                 .orElseThrow(() -> new AegisPayException(
                         "USER_NOT_FOUND",
                         "User not found: " + userId,
@@ -133,7 +134,7 @@ public class UserService {
     @Transactional(readOnly = true)
     public UserResponse getByExternalId(String externalId) {
         return userRepository.findByExternalId(externalId)
-                .map(userMapper::toResponse)
+                .map(u -> enrichWithRejectionReason(userMapper.toResponse(u), u.getId()))
                 .orElseThrow(() -> new AegisPayException(
                         "USER_NOT_FOUND",
                         "User not found for subject: " + externalId,
@@ -407,6 +408,31 @@ public class UserService {
 
     // ── Helpers ────────────────────────────────────────────────────────────────
 
+    /**
+     * Asserts that the authenticated caller is the owner of {@code userId} or has ADMIN role.
+     * Used by the Phone OTP endpoints which must be self-service.
+     */
+    public void assertSelfOrAdmin(java.util.UUID userId, org.springframework.security.oauth2.jwt.Jwt jwt) {
+        String claimId = jwt.getClaimAsString("aegispay_user_id");
+        String sub     = jwt.getSubject();
+        boolean isAdmin = jwt.getClaimAsStringList("realm_access") != null
+                || (jwt.getClaim("realm_access") instanceof java.util.Map<?,?> ra
+                        && ra.get("roles") instanceof java.util.List<?> roles
+                        && roles.contains("ADMIN"));
+        // Self-check: the caller's AegisPay UUID or Keycloak sub must match
+        boolean isSelf = userId.toString().equals(claimId) || userId.toString().equals(sub);
+        if (!isSelf && !isAdmin) {
+            // Fall back to DB lookup by sub (social users whose JWT lacks aegispay_user_id)
+            isSelf = userRepository.findById(userId)
+                    .map(u -> u.getExternalId().equals(sub))
+                    .orElse(false);
+        }
+        if (!isSelf && !isAdmin) {
+            throw new AegisPayException("FORBIDDEN",
+                    "You can only manage your own phone number.", HttpStatus.FORBIDDEN);
+        }
+    }
+
     private User requireUser(UUID userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new AegisPayException(
@@ -420,5 +446,22 @@ public class UserService {
                     "You do not have permission to modify this user's KYC.",
                     HttpStatus.FORBIDDEN);
         }
+    }
+
+    /**
+     * Enriches a {@link UserResponse} with the rejection reason from the user's
+     * most recent {@link com.aegispay.user.domain.entity.KycDocument}.
+     *
+     * <p>Only performs the extra DB lookup when {@code kycStatus == REJECTED}; for
+     * all other statuses the response is returned unchanged (no extra query fired).
+     */
+    private UserResponse enrichWithRejectionReason(UserResponse response, UUID userId) {
+        if (response.kycStatus() != com.aegispay.common.domain.enums.KycStatus.REJECTED) {
+            return response;
+        }
+        return kycDocumentRepository
+                .findFirstByUserIdOrderByCreatedAtDesc(userId)
+                .map(doc -> response.withRejectionReason(doc.getRejectionReason()))
+                .orElse(response);
     }
 }

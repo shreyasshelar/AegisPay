@@ -74,6 +74,7 @@ public class TransactionStatusConsumer {
                 case KafkaTopics.TRANSACTION_COMPLETED -> {
                     TransactionCompletedEvent e = objectMapper.readValue(record.value(), TransactionCompletedEvent.class);
                     String userId = e.getUserId().toString();
+                    String txId   = e.getTransactionId().toString();
                     Map<String, String> vars = Map.of(
                         "amount",            e.getAmount().toPlainString(),
                         "currency",          e.getCurrency(),
@@ -81,12 +82,12 @@ public class TransactionStatusConsumer {
 
                     // ── Payer notifications ───────────────────────────────────
                     // WebSocket — real-time in-app
-                    dispatcher.dispatch(userId, NotificationType.TRANSACTION_COMPLETED, "WEBSOCKET", null, vars);
+                    dispatcher.dispatch(userId, NotificationType.TRANSACTION_COMPLETED, "WEBSOCKET", null, vars, txId);
 
                     // Email — "Your payment was successful" receipt
                     String email = resolveEmail(userId);
                     if (email != null) {
-                        dispatcher.dispatch(userId, NotificationType.TRANSACTION_COMPLETED, "EMAIL", email, vars);
+                        dispatcher.dispatch(userId, NotificationType.TRANSACTION_COMPLETED, "EMAIL", email, vars, txId);
                     }
 
                     // ── Payee notifications ───────────────────────────────────
@@ -100,18 +101,18 @@ public class TransactionStatusConsumer {
                             "currency", e.getCurrency());
 
                         // WebSocket — real-time balance nudge
-                        dispatcher.dispatch(payeeUserId, NotificationType.MONEY_RECEIVED, "WEBSOCKET", null, receivedVars);
+                        dispatcher.dispatch(payeeUserId, NotificationType.MONEY_RECEIVED, "WEBSOCKET", null, receivedVars, txId);
 
                         // Email — "You received X" confirmation
                         String payeeEmail = resolveEmail(payeeUserId);
                         if (payeeEmail != null) {
-                            dispatcher.dispatch(payeeUserId, NotificationType.MONEY_RECEIVED, "EMAIL", payeeEmail, receivedVars);
+                            dispatcher.dispatch(payeeUserId, NotificationType.MONEY_RECEIVED, "EMAIL", payeeEmail, receivedVars, txId);
                         }
 
                         // SMS — immediate alert (only if phone on file)
                         String payeePhone = resolvePhone(payeeUserId);
                         if (payeePhone != null) {
-                            dispatcher.dispatch(payeeUserId, NotificationType.MONEY_RECEIVED, "SMS", payeePhone, receivedVars);
+                            dispatcher.dispatch(payeeUserId, NotificationType.MONEY_RECEIVED, "SMS", payeePhone, receivedVars, txId);
                         }
                     }
                 }
@@ -119,29 +120,30 @@ public class TransactionStatusConsumer {
                 case KafkaTopics.TRANSACTION_FAILED -> {
                     TransactionFailedEvent e = objectMapper.readValue(record.value(), TransactionFailedEvent.class);
                     String userId = e.getUserId().toString();
+                    String txId   = e.getTransactionId().toString();
                     Map<String, String> vars = Map.of(
                         "failureReason", e.getFailureReason() != null ? e.getFailureReason() : "Unknown",
                         "failureCode",   e.getFailureCode()   != null ? e.getFailureCode()   : "");
 
                     // WebSocket — real-time in-app
-                    dispatcher.dispatch(userId, NotificationType.TRANSACTION_FAILED, "WEBSOCKET", null, vars);
+                    dispatcher.dispatch(userId, NotificationType.TRANSACTION_FAILED, "WEBSOCKET", null, vars, txId);
 
                     // Email — failure notice to user
                     String email = resolveEmail(userId);
                     if (email != null) {
-                        dispatcher.dispatch(userId, NotificationType.TRANSACTION_FAILED, "EMAIL", email, vars);
+                        dispatcher.dispatch(userId, NotificationType.TRANSACTION_FAILED, "EMAIL", email, vars, txId);
                     }
 
                     // SMS — urgent alert (only if phone on file)
                     String phone = resolvePhone(userId);
                     if (phone != null) {
-                        dispatcher.dispatch(userId, NotificationType.TRANSACTION_FAILED, "SMS", phone, vars);
+                        dispatcher.dispatch(userId, NotificationType.TRANSACTION_FAILED, "SMS", phone, vars, txId);
                     }
 
                     // Slack — ops/internal alert (always fired if webhook configured)
                     if (!slackWebhookUrl.isBlank()) {
                         dispatcher.dispatch(userId, NotificationType.TRANSACTION_FAILED, "SLACK",
-                                slackWebhookUrl, vars);
+                                slackWebhookUrl, vars, txId);
                     }
                 }
 

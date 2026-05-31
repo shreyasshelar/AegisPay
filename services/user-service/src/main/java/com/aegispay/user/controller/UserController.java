@@ -1,8 +1,10 @@
 package com.aegispay.user.controller;
 
 import com.aegispay.common.domain.dto.ApiResponse;
+import com.aegispay.common.domain.dto.PagedResponse;
 import com.aegispay.common.domain.exception.AegisPayException;
 import com.aegispay.user.domain.dto.*;
+import com.aegispay.user.service.PhoneOtpService;
 import com.aegispay.user.service.UserService;
 import jakarta.validation.Valid;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -26,7 +28,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class UserController {
 
-    private final UserService userService;
+    private final UserService    userService;
+    private final PhoneOtpService phoneOtpService;
 
     // ── Registration ───────────────────────────────────────────────────────────
 
@@ -138,13 +141,26 @@ public class UserController {
      */
     @GetMapping
     @PreAuthorize("hasAnyRole('BACK_OFFICE', 'ADMIN', 'MERCHANT_OPS')")
-    public ResponseEntity<ApiResponse<Page<UserResponse>>> listUsers(
+    public ResponseEntity<ApiResponse<PagedResponse<UserResponse>>> listUsers(
             @RequestParam(defaultValue = "0")  int page,
             @RequestParam(defaultValue = "50") int size,
             @RequestParam(required = false)    String kycStatus) {
 
         Page<UserResponse> result = userService.listUsers(page, size, kycStatus);
-        return ResponseEntity.ok(ApiResponse.ok(result));
+
+        // Return the custom PagedResponse envelope (field 'page') instead of
+        // Spring's Page<T> (field 'number') so the frontend Zod schema parses correctly.
+        PagedResponse<UserResponse> response = PagedResponse.<UserResponse>builder()
+                .content(result.getContent())
+                .page(result.getNumber())
+                .size(result.getSize())
+                .totalElements(result.getTotalElements())
+                .totalPages(result.getTotalPages())
+                .first(result.isFirst())
+                .last(result.isLast())
+                .build();
+
+        return ResponseEntity.ok(ApiResponse.ok(response));
     }
 
     // ── Per-user endpoints ─────────────────────────────────────────────────────
@@ -284,6 +300,48 @@ public class UserController {
             @Valid @RequestBody UpdatePhoneRequest request,
             @AuthenticationPrincipal Jwt jwt) {
 
+        UserResponse response = userService.updatePhone(userId, request.phone(), jwt.getSubject());
+        return ResponseEntity.ok(ApiResponse.ok(response));
+    }
+
+    // ── Phone OTP (Fast2SMS — replaces Firebase Phone Auth for web) ───────────
+
+    /**
+     * Send a 6-digit OTP to the given phone number via Fast2SMS.
+     * The code is stored in Redis with a 5-minute TTL.
+     * Self-service only — caller must match the path userId.
+     */
+    @PostMapping("/{userId}/phone/send-otp")
+    public ResponseEntity<ApiResponse<Void>> sendPhoneOtp(
+            @PathVariable UUID userId,
+            @Valid @RequestBody SendOtpRequest request,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        userService.assertSelfOrAdmin(userId, jwt);
+        try {
+            phoneOtpService.sendOtp(request.phone());
+            return ResponseEntity.ok(ApiResponse.ok(null));
+        } catch (IllegalArgumentException e) {
+            throw new AegisPayException(e.getMessage(), "INVALID_PHONE", HttpStatus.BAD_REQUEST);
+        } catch (IllegalStateException e) {
+            throw new AegisPayException(e.getMessage(), "SMS_DELIVERY_FAILED", HttpStatus.BAD_GATEWAY);
+        }
+    }
+
+    /**
+     * Verify the OTP and, if correct, save the phone number to the user profile.
+     * Deletes the OTP from Redis on success (one-time use).
+     */
+    @PostMapping("/{userId}/phone/verify-otp")
+    public ResponseEntity<ApiResponse<UserResponse>> verifyPhoneOtp(
+            @PathVariable UUID userId,
+            @Valid @RequestBody VerifyOtpRequest request,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        userService.assertSelfOrAdmin(userId, jwt);
+        if (!phoneOtpService.verifyOtp(request.phone(), request.otp())) {
+            throw new AegisPayException("Invalid or expired OTP", "INVALID_OTP", HttpStatus.UNPROCESSABLE_ENTITY);
+        }
         UserResponse response = userService.updatePhone(userId, request.phone(), jwt.getSubject());
         return ResponseEntity.ok(ApiResponse.ok(response));
     }

@@ -34,6 +34,12 @@ export const UserSchema = z.object({
   active: z.boolean().optional(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime().optional(),
+  /**
+   * Non-null only when kycStatus === 'REJECTED'.
+   * Human-readable AI explanation of why the document was rejected,
+   * shown directly in the KYC status banner on the profile page.
+   */
+  rejectionReason: z.string().nullable().optional(),
 })
 export type User = z.infer<typeof UserSchema>
 

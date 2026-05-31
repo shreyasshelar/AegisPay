@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { ShieldCheck, Loader2, Sparkles, Terminal } from 'lucide-react'
 import { useApiClient } from '@aegispay/api-client'
 import { Header } from '@/components/header'
+import ReactMarkdown from 'react-markdown'
 
 export function IncidentsClient() {
   const { ai } = useApiClient()
@@ -91,9 +92,21 @@ export function IncidentsClient() {
               </h3>
             </div>
 
-            <pre className="overflow-x-auto rounded-lg bg-slate-900 p-5 text-sm text-green-300 whitespace-pre-wrap leading-relaxed">
-              {report}
-            </pre>
+            <div className="prose prose-sm prose-slate max-w-none
+              [&_h1]:text-base [&_h1]:font-bold [&_h1]:text-slate-900 [&_h1]:mt-4 [&_h1]:mb-2
+              [&_h2]:text-sm  [&_h2]:font-semibold [&_h2]:text-slate-800 [&_h2]:mt-3 [&_h2]:mb-1.5
+              [&_h3]:text-sm  [&_h3]:font-semibold [&_h3]:text-slate-700 [&_h3]:mt-2 [&_h3]:mb-1
+              [&_p]:text-sm   [&_p]:text-slate-700 [&_p]:leading-relaxed [&_p]:my-1.5
+              [&_ul]:my-2 [&_ul]:pl-5 [&_ul>li]:text-sm [&_ul>li]:text-slate-700 [&_ul>li]:my-0.5
+              [&_ol]:my-2 [&_ol]:pl-5 [&_ol>li]:text-sm [&_ol>li]:text-slate-700 [&_ol>li]:my-0.5
+              [&_code]:rounded [&_code]:bg-slate-100 [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-xs [&_code]:text-primary-700 [&_code]:font-mono
+              [&_pre]:rounded-lg [&_pre]:bg-slate-900 [&_pre]:p-4 [&_pre]:overflow-x-auto
+              [&_pre_code]:bg-transparent [&_pre_code]:text-green-300 [&_pre_code]:text-xs
+              [&_strong]:font-semibold [&_strong]:text-slate-900
+              [&_blockquote]:border-l-2 [&_blockquote]:border-primary-300 [&_blockquote]:pl-3 [&_blockquote]:italic [&_blockquote]:text-slate-500
+              [&_hr]:border-slate-200 [&_hr]:my-3">
+              <ReactMarkdown>{report}</ReactMarkdown>
+            </div>
           </div>
         )}
       </div>

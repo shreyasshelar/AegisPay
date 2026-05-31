@@ -42,6 +42,14 @@ public class SmsNotificationAdapter implements NotificationAdapter {
             return;
         }
 
+        // Fast2SMS bulkV2 expects a 10-digit Indian mobile number (no country code).
+        // Strip leading +91 / 91 / 0 so "+919876543210" → "9876543210".
+        String normalizedNumber = normalizeIndianPhone(recipient);
+        if (normalizedNumber == null || normalizedNumber.length() != 10) {
+            log.warn("Fast2SMS: skipping SMS — recipient '{}' is not a valid 10-digit Indian number", recipient);
+            return;
+        }
+
         try {
             HttpHeaders headers = new HttpHeaders();
             headers.set("authorization", apiKey);
@@ -51,7 +59,7 @@ public class SmsNotificationAdapter implements NotificationAdapter {
             String payload = objectMapper.writeValueAsString(Map.of(
                 "route",   "q",
                 "message", body,
-                "numbers", recipient,
+                "numbers", normalizedNumber,
                 "flash",   0
             ));
 
@@ -62,7 +70,7 @@ public class SmsNotificationAdapter implements NotificationAdapter {
             );
 
             if (response.getStatusCode().is2xxSuccessful()) {
-                log.info("SMS sent to {} via Fast2SMS", recipient);
+                log.info("SMS sent to {} (→{}) via Fast2SMS", recipient, normalizedNumber);
             } else {
                 log.warn("Fast2SMS non-2xx: status={} body={}", response.getStatusCode(), response.getBody());
             }
@@ -70,5 +78,19 @@ public class SmsNotificationAdapter implements NotificationAdapter {
             // SMS failure must never crash the notification pipeline
             log.error("Fast2SMS send failed for {}: {}", recipient, ex.getMessage());
         }
+    }
+
+    /**
+     * Normalises any Indian phone number to the 10-digit format Fast2SMS requires.
+     * Handles: "+919876543210", "919876543210", "09876543210", "9876543210".
+     * Returns {@code null} for numbers that can't be resolved to 10 digits.
+     */
+    private static String normalizeIndianPhone(String phone) {
+        if (phone == null) return null;
+        String digits = phone.replaceAll("[^0-9]", "");
+        if (digits.length() == 12 && digits.startsWith("91")) return digits.substring(2); // 919876543210
+        if (digits.length() == 11 && digits.startsWith("0"))  return digits.substring(1); // 09876543210
+        if (digits.length() == 10)                             return digits;              // 9876543210
+        return null; // unknown format — caller logs and skips
     }
 }

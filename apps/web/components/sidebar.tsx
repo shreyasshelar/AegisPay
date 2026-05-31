@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { useQueryClient } from '@tanstack/react-query'
+import { isStaffRole } from '@/lib/role-routing'
 import {
   ShieldCheck,
   LayoutDashboard,
@@ -42,12 +43,12 @@ const NAV_ITEMS: NavItem[] = [
 ]
 
 const BACKOFFICE_ITEMS: NavItem[] = [
-  { label: 'Users',      href: '/users',     icon: Users2,        roles: ['BACK_OFFICE', 'ADMIN'] },
-  { label: 'Risk Cases', href: '/risk',      icon: AlertTriangle, roles: ['BACK_OFFICE', 'ADMIN'] },
-  { label: 'Incidents',  href: '/incidents', icon: ShieldCheck,   roles: ['BACK_OFFICE', 'ADMIN'] },
-  { label: 'Ledger',     href: '/ledger',    icon: Database,      roles: ['BACK_OFFICE', 'ADMIN'] },
-  // ── ADMIN-only ─────────────────────────────────────────────────────────────
-  { label: 'AI Triage',  href: '/triage',    icon: Stethoscope,   roles: ['ADMIN'] },
+  { label: 'Users',      href: '/users',  icon: Users2,        roles: ['BACK_OFFICE', 'ADMIN'] },
+  { label: 'Risk Cases', href: '/risk',   icon: AlertTriangle, roles: ['BACK_OFFICE', 'ADMIN'] },
+  { label: 'Ledger',     href: '/ledger', icon: Database,      roles: ['BACK_OFFICE', 'ADMIN'] },
+  // AI Triage is available to both BACK_OFFICE and ADMIN — Incidents was a
+  // stripped-down duplicate of the same endpoint; merged here.
+  { label: 'AI Triage',  href: '/triage', icon: Stethoscope,   roles: ['BACK_OFFICE', 'ADMIN'] },
 ]
 
 export function Sidebar() {
@@ -156,13 +157,16 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto p-3 scrollbar-none">
-        <ul className="space-y-0.5">
-          {NAV_ITEMS.map((item) => (
-            <li key={item.href}>
-              <NavLink item={item} />
-            </li>
-          ))}
-        </ul>
+        {/* Customer nav — hidden for staff roles (ADMIN, BACK_OFFICE, etc.) */}
+        {!isStaffRole(role) && (
+          <ul className="space-y-0.5">
+            {NAV_ITEMS.map((item) => (
+              <li key={item.href}>
+                <NavLink item={item} />
+              </li>
+            ))}
+          </ul>
+        )}
 
         {visibleBackOffice.length > 0 && (
           <>

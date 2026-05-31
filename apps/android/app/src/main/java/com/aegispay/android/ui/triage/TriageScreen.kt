@@ -22,6 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.aegispay.android.ui.components.MarkdownText
 import com.aegispay.android.ui.theme.AegisColor
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -272,20 +273,17 @@ private fun TriageSessionCard(
                 }
             }
 
-            // Analysis (monospace terminal style)
+            // Analysis — rendered as Markdown (mirrors web ReactMarkdown prose)
             AnimatedVisibility(visible = expanded) {
-                Column(
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(Color(0xFF0F172A))
+                        .background(Color(0xFFF8FAFC))
                         .padding(16.dp),
                 ) {
-                    Text(
-                        text      = session.analysis,
-                        color     = Color(0xFF86EFAC),   // green-300
-                        fontFamily = FontFamily.Monospace,
-                        style     = MaterialTheme.typography.bodySmall,
-                        lineHeight = 20.sp,
+                    MarkdownText(
+                        markdown  = session.analysis,
+                        textColor = Color(0xFF1E293B),
                     )
                 }
             }

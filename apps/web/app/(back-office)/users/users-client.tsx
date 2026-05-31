@@ -74,7 +74,7 @@ export function UsersClient() {
 
   // ── Fetch via shared hook ────────────────────────────────────────────────────
 
-  const { data, isLoading, isFetching } = useUserList({
+  const { data, isLoading, isError, isFetching } = useUserList({
     page,
     size:      PAGE_SIZE,
     kycStatus: kycFilter || undefined,
@@ -160,6 +160,12 @@ export function UsersClient() {
           {isLoading ? (
             <div className="flex h-48 items-center justify-center">
               <Loader2 className="h-7 w-7 animate-spin text-slate-300" />
+            </div>
+          ) : isError ? (
+            <div className="flex h-48 flex-col items-center justify-center gap-2 text-slate-400">
+              <Users2 className="h-8 w-8 text-danger-400 opacity-60" />
+              <p className="text-sm text-danger-500">Failed to load users</p>
+              <p className="text-xs text-slate-400">Check that the user service is running</p>
             </div>
           ) : filtered.length === 0 ? (
             <div className="flex h-48 flex-col items-center justify-center gap-2 text-slate-400">

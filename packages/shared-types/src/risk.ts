@@ -9,7 +9,7 @@ export const RiskCaseSchema = z.object({
   userId: z.string().uuid(),
   riskScore: z.number().min(0).max(100),
   decision: RiskDecisionSchema,
-  ruleFlags: z.record(z.unknown()),
+  ruleFlags: z.array(z.string()),
   ragExplanation: z.string().nullable(),
   createdAt: z.string().datetime(),
 })

@@ -26,17 +26,32 @@ const ENTRY_TYPE_COLOR: Record<string, string> = {
 
 export function LedgerClient() {
   const { ledger }    = useApiClient()
-  const [userId,  setUserId]  = useState('')
-  const [txId,    setTxId]    = useState('')
+  const [userId,     setUserId]     = useState('')
+  const [txId,       setTxId]       = useState('')
   const [searchUser, setSearchUser] = useState('')
   const [searchTx,   setSearchTx]   = useState('')
 
-  const { data: account, isLoading: accountLoading } = useQuery({
+  // Mutual exclusion: only one result panel shows at a time.
+  function lookUpAccount() {
+    setSearchUser(userId)
+    setTxId('')          // clear the other input
+    setSearchTx('')      // clear the other result
+  }
+
+  function lookUpEntries() {
+    setSearchTx(txId)
+    setUserId('')        // clear the other input
+    setSearchUser('')    // clear the other result
+  }
+
+  // getAccountsForUser returns Account[] — pick the primary INR account.
+  const { data: accounts, isLoading: accountLoading, isError: accountError } = useQuery({
     queryKey: ['ledger', 'account', searchUser],
-    queryFn:  () => ledger.getAccount(searchUser),
+    queryFn:  () => ledger.getAccountsForUser(searchUser),
     enabled:  searchUser.length > 10,
     staleTime: 30_000,
   })
+  const account = accounts?.find(a => a.currency === 'INR') ?? accounts?.[0]
 
   const { data: entries, isLoading: entriesLoading } = useQuery({
     queryKey: ['ledger', 'entries', searchTx],
@@ -55,12 +70,14 @@ export function LedgerClient() {
           <input
             value={userId}
             onChange={(e) => setUserId(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && lookUpAccount()}
             placeholder="User ID (UUID) — look up account balance…"
             className="flex-1 rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-200"
           />
           <button
-            onClick={() => setSearchUser(userId)}
-            className="rounded-xl bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-primary-700 transition"
+            onClick={lookUpAccount}
+            disabled={userId.length < 10}
+            className="rounded-xl bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50 transition"
           >
             Look Up Account
           </button>
@@ -71,12 +88,14 @@ export function LedgerClient() {
           <input
             value={txId}
             onChange={(e) => setTxId(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && lookUpEntries()}
             placeholder="Transaction ID (UUID) — look up ledger entries…"
             className="flex-1 rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-200"
           />
           <button
-            onClick={() => setSearchTx(txId)}
-            className="rounded-xl bg-slate-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 transition"
+            onClick={lookUpEntries}
+            disabled={txId.length < 10}
+            className="rounded-xl bg-slate-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50 transition"
           >
             Look Up Entries
           </button>
@@ -87,6 +106,10 @@ export function LedgerClient() {
           <div className="flex h-24 items-center justify-center">
             <Loader2 className="h-6 w-6 animate-spin text-slate-300" />
           </div>
+        )}
+
+        {accountError && (
+          <p className="text-sm text-danger-600">Account not found or failed to load.</p>
         )}
 
         {account && (
