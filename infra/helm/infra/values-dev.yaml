@@ -63,8 +63,8 @@ mongodb:
   auth:
     enabled: true
     username: aegispay
-    existingSecret: aegispay-db-secret
-    existingSecretPasswordKey: password
+    existingSecret: aegispay-mongo-secret
+    existingSecretPasswordKey: mongodb-root-password
     database: aegispay
 
   # Single node, no replica set needed at this scale
