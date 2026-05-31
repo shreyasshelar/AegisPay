@@ -94,11 +94,11 @@ grafana:
       traefik.ingress.kubernetes.io/router.tls: "true"
       cert-manager.io/cluster-issuer: letsencrypt-prod
     hosts:
-      - grafana.aegispay.shreyasshelar.uk
+      - aegispay-metrics.shreyasshelar.uk
     tls:
       - secretName: grafana-tls
         hosts:
-          - grafana.aegispay.shreyasshelar.uk
+          - aegispay-metrics.shreyasshelar.uk
 
   # Pre-load AegisPay dashboards from ConfigMaps
   sidecar:

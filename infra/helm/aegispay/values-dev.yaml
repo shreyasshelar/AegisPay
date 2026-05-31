@@ -92,14 +92,14 @@ services:
         traefik.ingress.kubernetes.io/router.tls: "true"
         cert-manager.io/cluster-issuer: letsencrypt-prod
       hosts:
-        - host: api.aegispay.shreyasshelar.uk
+        - host: aegispay-api.shreyasshelar.uk
           paths:
             - path: /
               pathType: Prefix
       tls:
         - secretName: aegispay-api-tls
           hosts:
-            - api.aegispay.shreyasshelar.uk
+            - aegispay-api.shreyasshelar.uk
     jvmOpts: "-XX:MaxRAMPercentage=50.0 -XX:+UseG1GC -XX:+UseContainerSupport"
 
   user_service:
@@ -227,14 +227,14 @@ services:
         # WebSocket upgrade support
         traefik.ingress.kubernetes.io/service.serversscheme: http
       hosts:
-        - host: ws.aegispay.shreyasshelar.uk
+        - host: aegispay-ws.shreyasshelar.uk
           paths:
             - path: /ws
               pathType: Prefix
       tls:
         - secretName: aegispay-ws-tls
           hosts:
-            - ws.aegispay.shreyasshelar.uk
+            - aegispay-ws.shreyasshelar.uk
     jvmOpts: "-XX:MaxRAMPercentage=50.0 -XX:+UseG1GC -XX:+UseContainerSupport"
 
   data_pipeline:
@@ -345,7 +345,7 @@ grafana:
   ingress:
     enabled: true
     className: traefik
-    host: grafana.aegispay.shreyasshelar.uk
+    host: aegispay-grafana.shreyasshelar.uk
     tls:
       enabled: true
       secretName: grafana-tls
@@ -354,7 +354,7 @@ grafana:
       traefik.ingress.kubernetes.io/router.tls: "true"
       cert-manager.io/cluster-issuer: letsencrypt-prod
   alerting:
-    opsEmail: "ops@aegispay.shreyasshelar.uk"
+    opsEmail: "sshelar110.ss3@gmail.com"
     # slackWebhookSecretRef: not configured on dev; email-only alerting
   resources:
     requests:
