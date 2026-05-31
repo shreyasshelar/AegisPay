@@ -23,7 +23,7 @@ RUN mvn clean package -pl services/reconciliation-service --also-make \
     -DskipTests -q
 
 # ── Stage 2: Runtime ──────────────────────────────────────────────────────────
-FROM eclipse-temurin:21-jre-alpine
+FROM eclipse-temurin:25-jre-alpine
 
 # Non-root user
 RUN addgroup -S aegispay && adduser -S aegispay -G aegispay
