@@ -5,6 +5,9 @@
 # Every Bitnami chart default that assumes multi-node / cloud is overridden here.
 # ─────────────────────────────────────────────────────────────────────────────
 
+global:
+  namespace: "aegispay-infra"
+
 # ── PostgreSQL ────────────────────────────────────────────────────────────────
 postgresql:
   enabled: true
@@ -219,5 +222,4 @@ vault:
 clickhouse:
   enabled: false   # Override to true + set ha.enabled once you have ≥4 nodes
 
-# ── Namespace ────────────────────────────────────────────────────────────────
-namespace: "aegispay"
+# global.namespace is set at the top of this file
