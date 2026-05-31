@@ -122,7 +122,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           java-version: ${{ env.JAVA_VERSION }}
           distribution: temurin
@@ -157,7 +157,7 @@ jobs:
       needs.detect-changes.outputs.libs == 'true'
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with: { java-version: "${{ env.JAVA_VERSION }}", distribution: temurin, cache: maven }
       - uses: actions/cache/restore@v4
         with:
@@ -179,7 +179,7 @@ jobs:
       needs.detect-changes.outputs.libs == 'true'
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with: { java-version: "${{ env.JAVA_VERSION }}", distribution: temurin, cache: maven }
       - uses: actions/cache/restore@v4
         with:
@@ -201,7 +201,7 @@ jobs:
       needs.detect-changes.outputs.libs == 'true'
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with: { java-version: "${{ env.JAVA_VERSION }}", distribution: temurin, cache: maven }
       - uses: actions/cache/restore@v4
         with:
@@ -223,7 +223,7 @@ jobs:
       needs.detect-changes.outputs.libs == 'true'
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with: { java-version: "${{ env.JAVA_VERSION }}", distribution: temurin, cache: maven }
       - uses: actions/cache/restore@v4
         with:
@@ -245,7 +245,7 @@ jobs:
       needs.detect-changes.outputs.libs == 'true'
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with: { java-version: "${{ env.JAVA_VERSION }}", distribution: temurin, cache: maven }
       - uses: actions/cache/restore@v4
         with:
@@ -267,7 +267,7 @@ jobs:
       needs.detect-changes.outputs.libs == 'true'
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with: { java-version: "${{ env.JAVA_VERSION }}", distribution: temurin, cache: maven }
       - uses: actions/cache/restore@v4
         with:
@@ -289,7 +289,7 @@ jobs:
       needs.detect-changes.outputs.libs == 'true'
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with: { java-version: "${{ env.JAVA_VERSION }}", distribution: temurin, cache: maven }
       - uses: actions/cache/restore@v4
         with:
@@ -311,7 +311,7 @@ jobs:
       needs.detect-changes.outputs.libs == 'true'
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with: { java-version: "${{ env.JAVA_VERSION }}", distribution: temurin, cache: maven }
       - uses: actions/cache/restore@v4
         with:
@@ -335,7 +335,7 @@ jobs:
       needs.detect-changes.outputs.libs == 'true'
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with: { java-version: "${{ env.JAVA_VERSION }}", distribution: temurin, cache: maven }
       - uses: actions/cache/restore@v4
         with:
@@ -357,7 +357,7 @@ jobs:
       needs.detect-changes.outputs.libs == 'true'
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with: { java-version: "${{ env.JAVA_VERSION }}", distribution: temurin, cache: maven }
       - uses: actions/cache/restore@v4
         with:
@@ -398,7 +398,7 @@ jobs:
     permissions: { contents: read, packages: write }
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with: { java-version: "${{ env.JAVA_VERSION }}", distribution: temurin, cache: maven }
       - uses: actions/cache/restore@v4
         with:
@@ -433,7 +433,7 @@ jobs:
     permissions: { contents: read, packages: write }
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with: { java-version: "${{ env.JAVA_VERSION }}", distribution: temurin, cache: maven }
       - uses: actions/cache/restore@v4
         with: { path: ~/.m2/repository/com/aegispay, key: "aegispay-libs-${{ github.sha }}", restore-keys: "aegispay-libs-" }
@@ -459,7 +459,7 @@ jobs:
     permissions: { contents: read, packages: write }
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with: { java-version: "${{ env.JAVA_VERSION }}", distribution: temurin, cache: maven }
       - uses: actions/cache/restore@v4
         with: { path: ~/.m2/repository/com/aegispay, key: "aegispay-libs-${{ github.sha }}", restore-keys: "aegispay-libs-" }
@@ -485,7 +485,7 @@ jobs:
     permissions: { contents: read, packages: write }
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with: { java-version: "${{ env.JAVA_VERSION }}", distribution: temurin, cache: maven }
       - uses: actions/cache/restore@v4
         with: { path: ~/.m2/repository/com/aegispay, key: "aegispay-libs-${{ github.sha }}", restore-keys: "aegispay-libs-" }
@@ -511,7 +511,7 @@ jobs:
     permissions: { contents: read, packages: write }
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with: { java-version: "${{ env.JAVA_VERSION }}", distribution: temurin, cache: maven }
       - uses: actions/cache/restore@v4
         with: { path: ~/.m2/repository/com/aegispay, key: "aegispay-libs-${{ github.sha }}", restore-keys: "aegispay-libs-" }
@@ -537,7 +537,7 @@ jobs:
     permissions: { contents: read, packages: write }
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with: { java-version: "${{ env.JAVA_VERSION }}", distribution: temurin, cache: maven }
       - uses: actions/cache/restore@v4
         with: { path: ~/.m2/repository/com/aegispay, key: "aegispay-libs-${{ github.sha }}", restore-keys: "aegispay-libs-" }
@@ -563,7 +563,7 @@ jobs:
     permissions: { contents: read, packages: write }
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with: { java-version: "${{ env.JAVA_VERSION }}", distribution: temurin, cache: maven }
       - uses: actions/cache/restore@v4
         with: { path: ~/.m2/repository/com/aegispay, key: "aegispay-libs-${{ github.sha }}", restore-keys: "aegispay-libs-" }
@@ -589,7 +589,7 @@ jobs:
     permissions: { contents: read, packages: write }
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with: { java-version: "${{ env.JAVA_VERSION }}", distribution: temurin, cache: maven }
       - uses: actions/cache/restore@v4
         with: { path: ~/.m2/repository/com/aegispay, key: "aegispay-libs-${{ github.sha }}", restore-keys: "aegispay-libs-" }
@@ -615,7 +615,7 @@ jobs:
     permissions: { contents: read, packages: write }
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with: { java-version: "${{ env.JAVA_VERSION }}", distribution: temurin, cache: maven }
       - uses: actions/cache/restore@v4
         with: { path: ~/.m2/repository/com/aegispay, key: "aegispay-libs-${{ github.sha }}", restore-keys: "aegispay-libs-" }
@@ -641,7 +641,7 @@ jobs:
     permissions: { contents: read, packages: write }
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with: { java-version: "${{ env.JAVA_VERSION }}", distribution: temurin, cache: maven }
       - uses: actions/cache/restore@v4
         with: { path: ~/.m2/repository/com/aegispay, key: "aegispay-libs-${{ github.sha }}", restore-keys: "aegispay-libs-" }
