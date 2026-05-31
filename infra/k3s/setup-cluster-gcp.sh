@@ -60,6 +60,19 @@ helm upgrade --install external-secrets external-secrets/external-secrets \
 # ── 4. ClusterSecretStore → GCP Secret Manager ────────────────────────────────
 # The GCE VM's attached service account (aegispay-eso) provides credentials
 # via the metadata server — no explicit key needed.
+#
+# Wait for ESO CRDs to be registered with the API server before applying.
+# Helm --wait only waits for the controller pod, not CRD propagation.
+section "Waiting for ESO CRDs to be ready"
+for crd in clustersecretstores.external-secrets.io externalsecrets.external-secrets.io secretstores.external-secrets.io; do
+  info "Waiting for CRD: $crd"
+  until kubectl get crd "$crd" &>/dev/null; do
+    sleep 3
+  done
+  kubectl wait --for condition=established crd/"$crd" --timeout=60s
+done
+info "ESO CRDs ready."
+
 section "Creating ClusterSecretStore for GCP Secret Manager"
 cat <<EOF | kubectl apply -f -
 apiVersion: external-secrets.io/v1beta1

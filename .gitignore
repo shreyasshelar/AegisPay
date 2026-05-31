@@ -119,6 +119,17 @@ logs/
 
 # ── Claude Code ─────────────────────────────────────────────
 **/.claude/
+.claude/
+
+# ── Local dev only (not for deployment branches) ────────────
+docker-compose.yml
+docker-compose*.yml
+start-*.sh
+start-*.bat
+*.bat.template
+remaining.md
+BOOT-INF/
+local
 
 # already ignore patterns to verify exist:
 apps/android/app/google-services.json
