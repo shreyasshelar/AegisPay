@@ -62,8 +62,6 @@
 - [🚀 Getting Started](#-getting-started)
 - [🌿 Branch Guide](#-branch-guide)
 - [📦 Monorepo Structure](#-monorepo-structure)
-- [🎯 Feature Phases](#-feature-phases)
-- [🔭 Roadmap](#-roadmap)
 
 ---
 
@@ -752,30 +750,22 @@ npm run dev          # starts Next.js at http://localhost:3000
 
 ---
 
-### Step 7 — Test with pre-seeded accounts
+### Step 7 — Seed demo accounts
 
-The Keycloak realm includes two ready-to-use accounts:
+Run the seed script once after all services are up. It creates 4 accounts in Keycloak and registers the customers via API:
 
-| Role | Email | Password | Notes |
-|---|---|---|---|
-| `CUSTOMER` | `customer@aegispay.local` | `Test@1234` | End-user flows, KYC, send money |
-| `ADMIN` | `admin@aegispay.local` | `Admin@1234` | Back-office tab, risk cases, incident triage |
-
-**Quick smoke test — register the customer user:**
 ```bash
-# Get a token (replace with the token from Keycloak login)
-TOKEN=$(curl -s -X POST http://localhost:8180/realms/aegispay/protocol/openid-connect/token \
-  -d "grant_type=password&client_id=aegispay-web&username=customer@aegispay.local&password=Test@1234" \
-  | jq -r .access_token)
-
-# Register the user (idempotent — safe to call multiple times)
-curl -s -X POST http://localhost:8080/api/v1/users/register \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "X-Idempotency-Key: $(uuidgen)" \
-  -H "Content-Type: application/json" \
-  -d '{"email":"customer@aegispay.local","firstName":"Test","lastName":"Customer","phone":"+919876543210","tenantId":"default"}' \
-  | jq .
+bash infra/seed/seed-users.sh
 ```
+
+| Email | Password | Role | Balance |
+|---|---|---|---|
+| `alice@aegispay.local` | `Demo@1234` | `CUSTOMER` | ₹5,00,000 |
+| `bob@aegispay.local` | `Demo@1234` | `CUSTOMER` | ₹2,50,000 |
+| `backoffice@aegispay.local` | `Staff@1234` | `BACK_OFFICE` | — |
+| `admin@aegispay.local` | `Admin@1234` | `ADMIN` | — |
+
+**Demo flow** — log in as Alice, send ₹10,000 to Bob, watch real-time STOMP status updates, then log in as `backoffice` to see the risk assessment.
 
 ---
 
@@ -1063,64 +1053,6 @@ AegisPay/                              ← single GitHub repository
 └── tsconfig.base.json                 Shared TypeScript config
 ```
 
----
-
-## 🎯 Feature Phases
-
-### Frontend (all 3 platforms — Web · iOS · Android)
-
-| Phase | Status | Description |
-|---|---|---|
-| **F1** | ✅ | Auth — OAuth2 PKCE, splash screen, login flow |
-| **F2** | ✅ | Dashboard — live balance card, recent transactions, navigation |
-| **F3** | ✅ | Send Money — 4-step wizard, STOMP live status, AI error resolution |
-| **F4** | ✅ | KYC — camera/gallery, OCR quality scoring, tamper detection, extracted data review |
-| **F5** | ✅ | Push Notifications — APNs (iOS), FCM (Android), WebSocket badge (web) |
-| **F6** | ✅ | Back-office — risk case queue, AI fraud explanation, incident triage agent |
-| **F7** | ✅ | Hardening — biometric auth (Face ID / BiometricPrompt), certificate pinning, VoiceOver / TalkBack accessibility, Android Baseline Profiles |
-
-### Backend (Java 21 — Spring Boot 3.3 microservices)
-
-| Phase | Status | Description |
-|---|---|---|
-| **B1** | ✅ | Foundation — shared libs, Maven multi-module skeleton, CI/CD, Helm charts, ArgoCD |
-| **B2** | ✅ | API Gateway — OAuth2, Redis rate limiting, JWT relay, W3C tracing |
-| **B3** | ✅ | User Service — KYC state machine (5 states), multi-IdP federation, outbox |
-| **B4** | ✅ | Transaction Service — payment state machine, CQRS + MongoDB read models, WebSocket |
-| **B5** | ✅ | Ledger Service — immutable append-only ledger, optimistic locking, balance reservation |
-| **B6** | ✅ | Payment Orchestrator — 5-step Saga + compensation, timeout detection, external gateway |
-| **B7** | ✅ | Risk Engine — velocity/geo/amount rules, RAG fraud copilot, blacklist management |
-| **B8** | ✅ | Notification Service — WebSocket registry, email/SMS adapters, notification history |
-| **B9** | ✅ | AI Platform — RAG pipeline, Fraud Copilot, Error Agent, Incident Triage Agent, OCR+KYC |
-| **B10** | ✅ | Integration hardening — Stripe live payments + webhooks, ESO secrets, Alertmanager routing (Slack + Gmail), AI knowledge base seed, expanded e2e Testcontainers suite (11 tests), cost-optimised dev k3s stack (OpenRouter + Stripe sandbox) |
-| **B11** | ✅ | **Data Engineering** — Spring Batch settlement reconciliation vs Stripe, Kafka Streams fraud analytics, ClickHouse OLAP schema, Apache Superset dashboards, REST reconciliation API, `feat/data-engineering` branch merged to prod + dev |
-
----
-
-## 🔭 Roadmap
-
-**Shipped ✅**
-- [x] **Biometric auth** — Face ID / Touch ID (iOS `BiometricAuthService`) + BiometricPrompt BIOMETRIC_STRONG (Android)
-- [x] **Certificate pinning** — SPKI SHA-256 pinning (iOS `CertificatePinningDelegate`) + OkHttp `CertificatePinner` (Android)
-- [x] **Android Baseline Profiles** — cold-start + navigation benchmarks via `BaselineProfileGenerator`
-- [x] **Accessibility** — VoiceOver labels (iOS `AccessibilityHelper`) + Compose semantics (Android) + ARIA roles (Web)
-- [x] **ApiResponse envelope unwrapping** — consistent across Axios (Web), OkHttp (Android), URLSession (iOS)
-- [x] **Stripe live payments** — PaymentIntent confirm + 3DS webhook (`payment_intent.succeeded/.payment_failed`) + zero-decimal currency handling
-- [x] **External Secrets Operator** — Vault/AWS Secrets Manager → K8s secrets for Stripe, SMTP, Slack, ClickHouse
-- [x] **Alertmanager routing** — critical → Slack + Gmail, warning → Slack; secrets mounted as files
-- [x] **AI knowledge base** — 30 fraud cases + 30 bank error codes + 20 incident logs seeded to pgvector on startup
-- [x] **Settlement Reconciliation** — Spring Batch daily job, Stripe API pagination, 4 break types, REST API, ClickHouse write
-- [x] **Fraud velocity streaming** — Kafka Streams tumbling windows, ClickHouseSink batch flush, pipeline health endpoint
-- [x] **ClickHouse analytics schema** — 4 MergeTree tables + 3 Materialized Views, 2-3 year TTL
-- [x] **Apache Superset** — Helm-deployed to Kubernetes; local dev via Docker Compose; pre-wired to ClickHouse, Superset config with Redis cache + SMTP alerts
-- [x] **Cost-optimised dev stack** — k3s `dev` branch (1 replica, 256Mi, OpenRouter AI, Stripe sandbox, no cloud costs)
-
-**Planned 🔜**
-- [ ] **Multi-tenancy** — `tenantId` propagation through JWT claims → PostgreSQL row-level security per tenant
-- [ ] **k6 load test** — happy-path transaction at 500 RPS, verify no double-spend under concurrency
-- [ ] **Superset pre-built dashboards** — export JSON for Finance Summary, Fraud Velocity, Reconciliation Breaks, SLA Tracking
-- [ ] **ClickHouse replication** — 2-shard 2-replica ClickHouseKeeper cluster for prod HA
-- [ ] **Stripe Radar rules** — custom fraud rules feeding back from risk-engine risk score
 
 ---
 
