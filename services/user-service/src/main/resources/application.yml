@@ -88,6 +88,9 @@ aegispay:
   # The AI Platform passes this in X-Internal-Api-Key after async KYC processing.
   # Set USER_SERVICE_INTERNAL_API_KEY in production (via Vault / External Secrets).
   internal-api-key: ${USER_SERVICE_INTERNAL_API_KEY:aegispay-internal-dev-key}
+  sms:
+    fast2sms:
+      api-key: ${FAST2SMS_API_KEY:}
 
 logging:
   file:

@@ -38,10 +38,13 @@ Quick reference for every microservice: port, DB, Kafka topics, and key responsi
 **Kafka consumed**: none
 
 ### What it does
-- User registration with email + password, or social OAuth via Keycloak redirect
-- Stores user profile, KYC status, role
-- Publishes `UserRegisteredEvent` (with full email) to Kafka on registration
-- Password reset flow via email OTP
+- **SSO / PKCE only** — no email+password registration. Users register via Keycloak PKCE flow (Google, Microsoft, GitHub, Apple) and the web/mobile app calls `POST /api/v1/users/register` after the PKCE code exchange
+- Stores user profile, KYC status, role; resolves `aegispay_user_id` from Keycloak subject (`sub`)
+- `GET /api/v1/users/me` — resolves the caller's AegisPay profile from JWT subject
+- `GET /api/v1/users` — back-office: paginated user list (`PagedResponse<UserResponse>` with `page` field, not `number`); filterable by `kycStatus`
+- `PATCH /api/v1/users/{userId}/phone` — adds/replaces phone number after Firebase Phone Auth OTP verification; required for SMS notifications
+- Publishes `UserRegisteredEvent` on Kafka on first successful registration
+- Seeded accounts: admin (`97de22d4-…`) and back-office (`c3d4e5f6-…`) users via Flyway V6 migration
 
 ### Kafka event: `UserRegisteredEvent`
 ```json
@@ -50,10 +53,17 @@ Quick reference for every microservice: port, DB, Kafka topics, and key responsi
   "email": "customer@example.com",
   "maskedEmail": "cu*****@example.com",
   "firstName": "Test",
-  "lastName": "Customer",
-  "phone": "+919000000001"
+  "lastName": "Customer"
 }
 ```
+> `phone` is not in the event — it is added later via `PATCH /phone` after OTP verification. Social sign-in users may not have a phone until they add one in Profile.
+
+### DB migrations
+| Version | Description |
+|---------|-------------|
+| V1–V5 | Initial schema, indexes, KYC columns |
+| V6 | Seed admin + back-office users (`ON CONFLICT DO NOTHING`) |
+| V7 | `CREATE INDEX idx_users_created_at` for back-office list ordering |
 
 ---
 
@@ -139,6 +149,7 @@ Any state → FAILED (with failureCode + failureReason)
 - RAG query to AI Platform for pattern matching against historical fraud cases
 - Issues `ALLOW`, `REVIEW`, or `BLOCK` decision with numeric `riskScore` (0-100)
 - Publishes `rule_flags` array listing which rules fired (stored in ClickHouse for analytics)
+- `GET /api/v1/risk/cases` — back-office list of risk assessments, paginated, filterable by `decision` (APPROVED / REVIEW / REJECTED); returns `PagedResponse<RiskCaseResponse>`
 
 ### Decision thresholds (configurable)
 | Score | Decision |
@@ -146,6 +157,9 @@ Any state → FAILED (with failureCode + failureReason)
 | 0-49 | ALLOW |
 | 50-74 | REVIEW |
 | 75-100 | BLOCK |
+
+### RiskDecision enum
+`RiskDecision` lives in `libs/common-domain` (`com.aegispay.common.domain.enums.RiskDecision`). Do **not** create a local copy in the risk-engine package — the shared enum is what `RiskCaseRepository` uses.
 
 ---
 

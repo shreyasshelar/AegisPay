@@ -57,10 +57,32 @@ export function useConfirmKyc() {
   })
 }
 
+/** Send a Fast2SMS OTP to the user's phone number. */
+export function useSendPhoneOtp() {
+  const { users } = useApiClient()
+  return useMutation({
+    mutationFn: ({ userId, phone }: { userId: string; phone: string }) =>
+      users.sendPhoneOtp(userId, phone),
+  })
+}
+
 /**
- * Persist a Firebase-OTP-verified phone number.
+ * Verify OTP and save the phone number.
  * Invalidates the /me query so the profile card updates immediately.
  */
+export function useVerifyPhoneOtp() {
+  const { users } = useApiClient()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ userId, phone, otp }: { userId: string; phone: string; otp: string }) =>
+      users.verifyPhoneOtp(userId, phone, otp),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: userKeys.me() })
+    },
+  })
+}
+
+/** Directly update phone without OTP (back-office use). */
 export function useUpdatePhone() {
   const { users } = useApiClient()
   const queryClient = useQueryClient()

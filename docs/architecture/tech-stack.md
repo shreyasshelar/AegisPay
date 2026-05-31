@@ -119,17 +119,25 @@ Every technology choice answers the question: *"what problem does this solve tha
 
 ---
 
-## Secret Management — External Secrets Operator (ESO)
+## Secret Management — External Secrets Operator (ESO) + HashiCorp Vault
 
 **Why ESO over hardcoded K8s Secrets?**
 - K8s Secrets are base64, not encrypted at rest (unless etcd encryption is enabled)
-- ESO pulls secrets from Vault / AWS Secrets Manager on a refresh interval → secret rotation without pod restart
-- Single secret store config (`SecretStore` CR) per environment; all `ExternalSecret` CRs reference it
+- ESO pulls secrets from Vault on a refresh interval → secret rotation without pod restart
+- Single `SecretStore` CR per environment; all `ExternalSecret` CRs reference it
+- No passwords anywhere in code, values files, or Git — only in Vault and a git-ignored `.secrets.env`
 
-**Backend selection**:
-- Dev/Staging: AWS Secrets Manager (simple, no infrastructure)
-- Prod: HashiCorp Vault (Kubernetes auth, fine-grained policies)
-- On-Prem: HashiCorp Vault (self-hosted, same cluster)
+**Backend: HashiCorp Vault for all environments**
+- Local: `.env.local` (git-ignored) — Vault not used locally
+- Dev (GCP k3s): Vault in-cluster (`aegispay-vault` namespace), **GCP KMS auto-unseal** so VM restarts don't leave Vault sealed
+- Production: Vault in-cluster, same GCP KMS auto-unseal pattern
+
+**Bootstrap flow** (one-time, run from developer machine):
+```
+infra/secrets/.secrets.env   ← git-ignored, all real values in one file
+infra/scripts/vault-bootstrap.sh  ← reads .secrets.env, writes to Vault KV paths
+```
+After bootstrap, ESO creates K8s Secrets from Vault paths; pods mount them via `secretKeyRef`. Zero secrets in source control.
 
 ---
 
@@ -146,12 +154,55 @@ Every technology choice answers the question: *"what problem does this solve tha
 
 ---
 
-## CI/CD — GitHub Actions
+## Mobile Clients
+
+### iOS — Swift 6, SwiftUI, SPM
+
+| Library | Role |
+|---------|------|
+| AppAuth-iOS | OAuth 2.0 PKCE flow — no implicit grant, no client secret in binary |
+| KeychainAccess | `TokenStore` wraps Keychain — access token, refresh token, userId, role, all under `whenUnlockedThisDeviceOnly` |
+| Stripe iOS SDK | `PaymentSheet` for wallet top-up |
+| URLSession (native) | `ApiClient` — JWT auto-injection, certificate pinning via `CertificatePinningDelegate` |
+| Combine / `@StateObject` | `AuthStore` (@MainActor ObservableObject) owns the PKCE session and token refresh lifecycle |
+
+**`AuthStore.refreshTokens()`** starts `updatedUserId` from the existing stored value and only overwrites if a newer `aegispay_user_id` is found in the new ID token or access token — prevents claim loss when Keycloak omits the ID token on refresh.
+
+**Role-based UI**: `MainTabView` hides all customer tabs for staff roles; admin lands on Triage tab (tag 7) via `.task` on first appearance.
+
+**AegisMarkdownView**: custom SwiftUI view using `AttributedString(markdown:)` (iOS 15+) to render AI triage reports and fraud explanations with headings, bold, inline code, and bullets.
+
+### Android — Kotlin, Jetpack Compose, Hilt
+
+| Library | Role |
+|---------|------|
+| AppAuth-Android | OAuth 2.0 PKCE flow via Chrome Custom Tab — no password in APK |
+| EncryptedSharedPreferences | `TokenStore` — AES256-GCM encrypted token storage |
+| Hilt | DI framework — `@Singleton TriageSessionStore` survives NavBackStackEntry pops |
+| Retrofit + Moshi | Type-safe API client; `BigDecimalAdapter` for financial amounts |
+| OkHttp | `StompWebSocketClient` for live transaction status; certificate pinning |
+| Stripe Android SDK | `PaymentSheet` for wallet top-up |
+| WorkManager | `PaymentSyncWorker` — offline payment queue retry on reconnect |
+| FCM | `AegisFcmService` — push notifications for transaction state changes |
+
+**`AuthRepository.persistTokens()`** decodes both ID token and access token to extract `aegispay_user_id`; falls back to the existing stored value when neither token carries the claim (Keycloak often omits ID token on refresh).
+
+**Role-based navigation**: `AegisNavHost` routes admin → `Route.TRIAGE`, back-office → `Route.BACK_OFFICE`, customer → `Route.DASHBOARD` on `AuthState.Authenticated`.
+
+**`MarkdownText` composable**: renders `# H1`, `## H2`, `- bullets`, `**bold**`, `` `code` `` from AI triage and fraud explanation responses.
+
+---
+
+## CI/CD — GitHub Actions + ArgoCD GitOps
 
 | Workflow | Trigger | Action |
 |----------|---------|--------|
 | `ci.yml` | Push to any branch | Maven build + test, Docker build + push to GHCR |
-| `cd-dev.yml` | Push to `dev` | `yq` patches image tag in `values-dev.yaml`, ArgoCD k3s sync |
+| `cd-dev.yml` | Push to `dev` | `yq` patches image tag in `values-dev.yaml`, ArgoCD GCP k3s sync |
 | `cd-prod.yml` | Manual workflow dispatch | Updates `values-prod.yaml`, opens PR for review |
 
 **Why Argo CD (GitOps)?** The cluster's desired state is always in Git. Any manual `kubectl apply` is overwritten on the next sync cycle, preventing drift.
+
+**ArgoCD diff behaviour**: only the Deployment whose image tag changed is re-applied. Kafka, Postgres, Redis, MongoDB, ClickHouse StatefulSets are untouched by app-layer deploys — they live in a separate `aegispay-infra` ArgoCD Application.
+
+**GCP Cloud Scheduler** starts and stops the GCP VM on a cron schedule (08:00/22:00 IST weekdays, 09:00/15:00 IST weekends) using the Compute Engine API via a Service Account — no always-on cost while the project is sleeping.

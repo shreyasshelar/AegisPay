@@ -10,7 +10,7 @@
  */
 export const ROLE_LANDING: Record<string, string> = {
   ADMIN:       '/triage',
-  BACK_OFFICE: '/incidents',
+  BACK_OFFICE: '/triage',   // incidents was a duplicate of triage — merged
   // MERCHANT_OPS and PARTNER use the customer dashboard until
   // dedicated back-office pages are built for those roles.
   // When added, those pages must also be included in (back-office)/layout.tsx

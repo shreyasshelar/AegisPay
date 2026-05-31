@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.sp
 import com.aegispay.android.network.FraudExplainResponse
 import com.aegispay.android.network.RiskCase
 import com.aegispay.android.network.RiskDecision
+import com.aegispay.android.ui.components.MarkdownText
 import com.aegispay.android.ui.theme.AegisColor
 
 // ── Root screen ───────────────────────────────────────────────────────────────
@@ -422,7 +423,7 @@ private fun IncidentTriageTab(
         uiState.triageReport?.let { report ->
             Card(
                 shape  = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
             ) {
                 Column(
@@ -442,21 +443,16 @@ private fun IncidentTriageTab(
                             Text(
                                 "Triage Report",
                                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                                color = Color.White,
+                                color = AegisColor.Text,
                             )
                         }
                         TextButton(onClick = viewModel::resetTriage) {
                             Text("Clear", color = AegisColor.TextMuted, style = MaterialTheme.typography.labelSmall)
                         }
                     }
-                    Text(
-                        text  = report,
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            fontFamily = FontFamily.Monospace,
-                            fontSize   = 12.sp,
-                            lineHeight = 18.sp,
-                        ),
-                        color = Color(0xFF86EFAC), // green-300
+                    MarkdownText(
+                        markdown  = report,
+                        textColor = Color(0xFF1E293B),
                     )
                 }
             }

@@ -89,13 +89,28 @@ export class UsersClient {
   }
 
   /**
-   * Persist a Firebase-OTP-verified phone number to the backend.
-   * Must be called after successful Firebase Phone Auth verification — the server
-   * trusts the caller; OTP challenge is handled entirely by Firebase on the client.
+   * Directly update phone (back-office / internal use, no OTP required).
    * Pass `null` to remove an existing number.
    */
   async updatePhone(userId: string, phone: string | null): Promise<User> {
     const data = await this.client.patch<unknown>(`/api/v1/users/${userId}/phone`, { phone })
+    return UserSchema.parse(data)
+  }
+
+  /**
+   * Send a 6-digit OTP via Fast2SMS to the given phone number.
+   * The backend stores the OTP in Redis with a 5-minute TTL.
+   */
+  async sendPhoneOtp(userId: string, phone: string): Promise<void> {
+    await this.client.post<unknown>(`/api/v1/users/${userId}/phone/send-otp`, { phone })
+  }
+
+  /**
+   * Verify the OTP and, if correct, save the phone number to the user profile.
+   * Returns the updated User record.
+   */
+  async verifyPhoneOtp(userId: string, phone: string, otp: string): Promise<User> {
+    const data = await this.client.post<unknown>(`/api/v1/users/${userId}/phone/verify-otp`, { phone, otp })
     return UserSchema.parse(data)
   }
 }

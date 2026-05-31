@@ -7,6 +7,7 @@ import { Loader2, TrendingUp, Filter, X } from 'lucide-react'
 import { useInfiniteTransactions } from '@aegispay/api-client'
 import { AegisTransactionRow } from '@aegispay/design-system'
 import { Header } from '@/components/header'
+import { localDateToUtcStart, localDateToUtcEnd } from '@/lib/utils'
 import type { TransactionStatus } from '@aegispay/shared-types'
 
 const STATUS_OPTIONS: { label: string; value: TransactionStatus | '' }[] = [
@@ -30,9 +31,12 @@ export function TransactionsClient() {
   const [toDate,   setToDate]   = useState('')
 
   const activeFilters = {
-    ...(status   ? { status }                     : {}),
-    ...(fromDate ? { fromDate: `${fromDate}T00:00:00Z` } : {}),
-    ...(toDate   ? { toDate:   `${toDate}T23:59:59Z` }   : {}),
+    ...(status   ? { status }                              : {}),
+    // Convert local date (user's IST) to UTC before sending to backend.
+    // Appending Z would treat the date as UTC midnight, missing 5h30m of IST data.
+    // new Date("YYYY-MMT00:00:00") (no Z) = local midnight → .toISOString() = UTC.
+    ...(fromDate ? { fromDate: localDateToUtcStart(fromDate) } : {}),
+    ...(toDate   ? { toDate:   localDateToUtcEnd(toDate) }     : {}),
   }
 
   const hasFilters = status !== '' || fromDate !== '' || toDate !== ''

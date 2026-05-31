@@ -312,7 +312,7 @@ reconciliation-service
 ) do (
     echo   Building %%s...
 
-    call !MVN_CMD! --batch-mode --no-transfer-progress package ^
+    call !MVN_CMD! --batch-mode --no-transfer-progress clean package ^
     -pl services/%%s ^
     -DskipTests -q
 
@@ -593,7 +593,13 @@ REM =========================================================
 REM CREATE LOG DIRECTORY
 REM =========================================================
 
-IF NOT EXIST logs mkdir logs
+REM %~dp0 = absolute path to the directory containing this bat file (project root, with trailing \)
+REM Using an absolute path here means logs always land in the project-root logs\ folder
+REM regardless of which directory the user called this bat from, or whether a service
+REM is later started individually (IntelliJ, Maven, PowerShell).
+set LOGS_DIR=%~dp0logs
+
+IF NOT EXIST "!LOGS_DIR!" mkdir "!LOGS_DIR!"
 
 REM =========================================================
 REM START SERVICES (Wave 1 — all except reconciliation)
@@ -602,32 +608,45 @@ REM =========================================================
 echo.
 echo Starting backend services (Wave 1)...
 
+REM NOTE: Shell redirect (> logs\*.log) is intentionally REMOVED from all commands below.
+REM
+REM Root cause: On Windows, java.exe is a thin launcher that forks the real JVM as a child
+REM process. The shell redirect captures stdout of the launcher only; the child JVM's stdout
+REM is NOT inherited. Simultaneously, Spring Boot Logback tries to open the same file via its
+REM file appender — Windows file sharing violations prevent the write, so the file stays empty.
+REM
+REM Fix: all services already have "logging.file.name: logs/{service}.log" configured in their
+REM application.yml. Logback owns the log file exclusively — no competing shell redirect.
+REM
+REM To view logs: open the minimised cmd window for that service, or: type logs\api-gateway.log
+REM JVM crash dumps (rare) go to the default HotSpot crash file in the working directory.
+
 start "api-gateway" /MIN cmd /c ^
-"java -DUSER_SERVICE_URI=http://localhost:8081 -DTRANSACTION_SERVICE_URI=http://localhost:8082 -DLEDGER_SERVICE_URI=http://localhost:8083 -DORCHESTRATOR_SERVICE_URI=http://localhost:8084 -DRISK_ENGINE_URI=http://localhost:8085 -DNOTIFICATION_SERVICE_URI=http://localhost:8086 -DAI_PLATFORM_URI=http://localhost:8091 -DOAUTH2_PRIMARY_ISSUER_URI=http://!LAN_IP!:8180/realms/aegispay -DOAUTH2_ISSUER_KEYCLOAK=http://!LAN_IP!:8180/realms/aegispay -DOAUTH2_ISSUER_KEYCLOAK_LOCAL=http://localhost:8180/realms/aegispay -DCORS_ALLOWED_ORIGIN_1=http://!LAN_IP!:3000 -Dspring.data.redis.url=redis://default:aegispay_dev@localhost:6379 -jar services\api-gateway\target\api-gateway-1.0.0-SNAPSHOT.jar > logs\api-gateway.log 2>&1"
+"java -Dlogging.file.name=!LOGS_DIR!\api-gateway.log -DUSER_SERVICE_URI=http://localhost:8081 -DTRANSACTION_SERVICE_URI=http://localhost:8082 -DLEDGER_SERVICE_URI=http://localhost:8083 -DORCHESTRATOR_SERVICE_URI=http://localhost:8084 -DRISK_ENGINE_URI=http://localhost:8085 -DNOTIFICATION_SERVICE_URI=http://localhost:8086 -DAI_PLATFORM_URI=http://localhost:8091 -DOAUTH2_PRIMARY_ISSUER_URI=http://!LAN_IP!:8180/realms/aegispay -DOAUTH2_ISSUER_KEYCLOAK=http://!LAN_IP!:8180/realms/aegispay -DOAUTH2_ISSUER_KEYCLOAK_LOCAL=http://localhost:8180/realms/aegispay -DCORS_ALLOWED_ORIGIN_1=http://!LAN_IP!:3000 -Dspring.data.redis.url=redis://default:aegispay_dev@localhost:6379 -jar services\api-gateway\target\api-gateway-1.0.0-SNAPSHOT.jar"
 
 start "user-service" /MIN cmd /c ^
-"java -DAI_PLATFORM_URL=http://localhost:8091 -jar services\user-service\target\user-service-1.0.0-SNAPSHOT.jar > logs\user-service.log 2>&1"
+"java -Dlogging.file.name=!LOGS_DIR!\user-service.log -DAI_PLATFORM_URL=http://localhost:8091 -DFAST2SMS_API_KEY=!FAST2SMS_API_KEY! -jar services\user-service\target\user-service-1.0.0-SNAPSHOT.jar"
 
 start "transaction-service" /MIN cmd /c ^
-"java ""-Daegispay.user-service.base-url=http://localhost:8081"" -jar services\transaction-service\target\transaction-service-1.0.0-SNAPSHOT.jar > logs\transaction-service.log 2>&1"
+"java -Dlogging.file.name=!LOGS_DIR!\transaction-service.log ""-Daegispay.user-service.base-url=http://localhost:8081"" -jar services\transaction-service\target\transaction-service-1.0.0-SNAPSHOT.jar"
 
 start "ledger-service" /MIN cmd /c ^
-"java -DSTRIPE_SECRET_KEY=!STRIPE_SECRET_KEY! -DSTRIPE_WEBHOOK_SECRET=!STRIPE_WEBHOOK_SECRET! -jar services\ledger-service\target\ledger-service-1.0.0-SNAPSHOT.jar > logs\ledger-service.log 2>&1"
+"java -Dlogging.file.name=!LOGS_DIR!\ledger-service.log -DSTRIPE_SECRET_KEY=!STRIPE_SECRET_KEY! -DSTRIPE_WEBHOOK_SECRET=!STRIPE_WEBHOOK_SECRET! -jar services\ledger-service\target\ledger-service-1.0.0-SNAPSHOT.jar"
 
 start "payment-orchestrator" /MIN cmd /c ^
-"java -Djava.net.preferIPv4Stack=true -DSTRIPE_SECRET_KEY=!STRIPE_SECRET_KEY! -DSTRIPE_WEBHOOK_SECRET=!STRIPE_WEBHOOK_SECRET! -jar services\payment-orchestrator\target\payment-orchestrator-1.0.0-SNAPSHOT.jar > logs\payment-orchestrator.log 2>&1"
+"java -Dlogging.file.name=!LOGS_DIR!\payment-orchestrator.log -Djava.net.preferIPv4Stack=true -DSTRIPE_SECRET_KEY=!STRIPE_SECRET_KEY! -DSTRIPE_WEBHOOK_SECRET=!STRIPE_WEBHOOK_SECRET! -jar services\payment-orchestrator\target\payment-orchestrator-1.0.0-SNAPSHOT.jar"
 
 start "risk-engine" /MIN cmd /c ^
-"java -DAI_PLATFORM_URL=http://localhost:8091 -jar services\risk-engine\target\risk-engine-1.0.0-SNAPSHOT.jar > logs\risk-engine.log 2>&1"
+"java -Dlogging.file.name=!LOGS_DIR!\risk-engine.log -DAI_PLATFORM_URL=http://localhost:8091 -jar services\risk-engine\target\risk-engine-1.0.0-SNAPSHOT.jar"
 
 start "notification-service" /MIN cmd /c ^
-"java -DSMTP_PASSWORD=!SMTP_PASSWORD! -DFAST2SMS_API_KEY=!FAST2SMS_API_KEY! -DSLACK_WEBHOOK_URL=!SLACK_WEBHOOK_URL! -jar services\notification-service\target\notification-service-1.0.0-SNAPSHOT.jar > logs\notification-service.log 2>&1"
+"java -Dlogging.file.name=!LOGS_DIR!\notification-service.log -DSMTP_PASSWORD=!SMTP_PASSWORD! -DFAST2SMS_API_KEY=!FAST2SMS_API_KEY! -DSLACK_WEBHOOK_URL=!SLACK_WEBHOOK_URL! -DUSER_SERVICE_URI=http://localhost:8081 -jar services\notification-service\target\notification-service-1.0.0-SNAPSHOT.jar"
 
 start "ai-platform" /MIN cmd /c ^
-"java -Dspring.profiles.active=dev -DGROQ_API_KEY=!GROQ_API_KEY! -DOPENROUTER_API_KEY=!OPENROUTER_API_KEY! -DANTHROPIC_API_KEY=!ANTHROPIC_API_KEY! -DUSER_SERVICE_URL=http://localhost:8081 -jar services\ai-platform\target\ai-platform-1.0.0-SNAPSHOT.jar > logs\ai-platform.log 2>&1"
+"java -Dlogging.file.name=!LOGS_DIR!\ai-platform.log -Dspring.profiles.active=dev -DGROQ_API_KEY=!GROQ_API_KEY! -DOPENROUTER_API_KEY=!OPENROUTER_API_KEY! -DANTHROPIC_API_KEY=!ANTHROPIC_API_KEY! -DUSER_SERVICE_URL=http://localhost:8081 -DTRIAGE_LOGS_DIR=!LOGS_DIR! -DTRIAGE_PROJECT_ROOT=%~dp0 -jar services\ai-platform\target\ai-platform-1.0.0-SNAPSHOT.jar"
 
 start "data-pipeline" /MIN cmd /c ^
-"java -jar services\data-pipeline\target\data-pipeline-1.0.0-SNAPSHOT.jar > logs\data-pipeline.log 2>&1"
+"java -Dlogging.file.name=!LOGS_DIR!\data-pipeline.log -jar services\data-pipeline\target\data-pipeline-1.0.0-SNAPSHOT.jar"
 
 REM =========================================================
 REM WAIT FOR LEDGER (reconciliation depends on it)
@@ -656,7 +675,7 @@ REM START SERVICES (Wave 2 — reconciliation)
 REM =========================================================
 
 start "reconciliation-service" /MIN cmd /c ^
-"java -jar services\reconciliation-service\target\reconciliation-service-1.0.0-SNAPSHOT.jar > logs\reconciliation-service.log 2>&1"
+"java -Dlogging.file.name=!LOGS_DIR!\reconciliation-service.log -jar services\reconciliation-service\target\reconciliation-service-1.0.0-SNAPSHOT.jar"
 
 REM =========================================================
 REM HEALTH CHECKS
@@ -731,19 +750,27 @@ echo NEXT_PUBLIC_WS_BASE_URL=ws://!LAN_IP!:8086
 
 REM Append Firebase vars from .secrets.bat (only if set — phone OTP verification).
 REM NEXT_PUBLIC_* vars must be embedded at Next.js startup so they go into .env.local.
+REM All four vars must be set — an empty NEXT_PUBLIC_FIREBASE_APP_ID silently disables
+REM phone OTP even when the other three vars look correct.
 IF NOT "!NEXT_PUBLIC_FIREBASE_API_KEY!"=="" (
+    IF "!NEXT_PUBLIC_FIREBASE_APP_ID!"=="" (
+        echo WARNING: NEXT_PUBLIC_FIREBASE_APP_ID is empty in .secrets.bat
+        echo          Phone OTP verification will be disabled.
+        echo          Fix: Firebase Console -^> Project Settings -^> General -^> Your apps -^> Web app -^> App ID
+        echo          Then set NEXT_PUBLIC_FIREBASE_APP_ID=^<value^> in .secrets.bat and restart.
+    )
     echo.>> apps\web\.env.local
     echo # Firebase - phone OTP verification>> apps\web\.env.local
     echo NEXT_PUBLIC_FIREBASE_API_KEY=!NEXT_PUBLIC_FIREBASE_API_KEY!>> apps\web\.env.local
     echo NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=!NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN!>> apps\web\.env.local
     echo NEXT_PUBLIC_FIREBASE_PROJECT_ID=!NEXT_PUBLIC_FIREBASE_PROJECT_ID!>> apps\web\.env.local
     echo NEXT_PUBLIC_FIREBASE_APP_ID=!NEXT_PUBLIC_FIREBASE_APP_ID!>> apps\web\.env.local
-    echo Firebase vars written to .env.local
+    IF NOT "!NEXT_PUBLIC_FIREBASE_APP_ID!"=="" echo Firebase vars written to .env.local
 )
 echo Generated apps\web\.env.local with LAN_IP=!LAN_IP!
 
 call npm install --silent
-start "web-app" /MIN cmd /c "npm run dev --workspace=apps/web > logs\web.log 2>&1"
+start "web-app" /MIN cmd /c "npm run dev --workspace=apps/web"
 
 REM =========================================================
 REM ANDROID EMULATOR  (only when "android" argument given)

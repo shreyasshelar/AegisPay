@@ -365,21 +365,17 @@ private struct IncidentTriageTab: View {
                 .clipShape(RoundedRectangle(cornerRadius: 16))
                 .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
 
-                // ── Triage report ─────────────────────────────────────────────
+                // ── Triage report — rendered as Markdown ──────────────────────
                 if let report = vm.triageReport {
                     VStack(alignment: .leading, spacing: 8) {
                         Label("Triage Report", systemImage: "checkmark.shield")
                             .font(.subheadline).fontWeight(.semibold)
                             .foregroundStyle(Color.aegisText)
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            Text(report)
-                                .font(.system(.caption, design: .monospaced))
-                                .foregroundStyle(Color(hex: "#86efac")) // green-300
-                                .padding()
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        .background(Color(hex: "#0f172a")) // slate-900
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        AegisMarkdownView(markdown: report)
+                            .padding()
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color(hex: "#F8FAFC"))           // slate-50
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
 
                         Button("Clear", role: .destructive) { vm.resetTriage() }
                             .font(.caption)

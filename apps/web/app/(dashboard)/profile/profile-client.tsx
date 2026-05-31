@@ -55,6 +55,7 @@ const KYC_CONFIG: Record<KycStatus, { label: string; icon: React.ElementType; bg
     text:  'text-success-700',
   },
   REJECTED: {
+    // Static label — rejection reason (dynamic) is rendered separately in the banner
     label: 'KYC Rejected — please re-upload a valid document',
     icon:  XCircle,
     bg:    'bg-danger-50 ring-danger-200',
@@ -325,9 +326,21 @@ export function ProfileClient({ userId }: { userId: string }) {
         </div>
 
         {/* ── KYC status banner ────────────────────────────────────────────── */}
-        <div className={cn('flex items-center gap-3 rounded-xl px-4 py-3 ring-1', cfg.bg, cfg.text)}>
-          <KycIcon className={cn('h-5 w-5 shrink-0', (kycStatus === 'AI_PROCESSING' || kycStatus === 'DOCUMENT_SUBMITTED') && 'animate-spin')} />
-          <p className="text-sm font-medium">{cfg.label}</p>
+        <div className={cn('rounded-xl px-4 py-3 ring-1', cfg.bg, cfg.text)}>
+          <div className="flex items-center gap-3">
+            <KycIcon className={cn('h-5 w-5 shrink-0', (kycStatus === 'AI_PROCESSING' || kycStatus === 'DOCUMENT_SUBMITTED') && 'animate-spin')} />
+            <p className="text-sm font-medium">{cfg.label}</p>
+          </div>
+          {/* Rejection reason — only shown when REJECTED and backend supplied a reason */}
+          {kycStatus === 'REJECTED' && user?.rejectionReason && (
+            <div className="mt-2 ml-8 flex items-start gap-2">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-danger-500" />
+              <p className="text-xs leading-relaxed text-danger-700">
+                <span className="font-semibold">Reason: </span>
+                {user.rejectionReason}
+              </p>
+            </div>
+          )}
         </div>
 
         {/* ── Verified badge ───────────────────────────────────────────────── */}
@@ -452,22 +465,21 @@ export function ProfileClient({ userId }: { userId: string }) {
 type PhoneFlowStep = 'idle' | 'enter-phone' | 'sending' | 'enter-otp' | 'saving' | 'saved'
 
 /**
- * Guides the user through Firebase Phone Auth OTP verification to add or update
- * their phone number.  Flow:
- *   idle → enter-phone → sending (Firebase sends SMS) → enter-otp → saving
- *   (Firebase credential verified + backend PATCH called) → saved
+ * Phone OTP via Firebase Phone Auth with reCAPTCHA Enterprise (firebase >= 11).
  *
- * Firebase session is signed out immediately after verification — Keycloak handles
- * primary auth and must never be affected.
+ * Primary path (AUDIT/ENFORCE): SDK uses RecaptchaEnterpriseVerifier internally —
+ * loads recaptcha/enterprise.js, generates an Enterprise token, no visible widget.
+ *
+ * AUDIT fallback: if the Enterprise token is rejected, SDK automatically retries
+ * with a v2 reCAPTCHA token using the RecaptchaVerifier we provide.
+ * The container div must stay mounted the whole time; removing it mid-flight
+ * causes "Cannot read properties of null (reading 'style')" from the v2 script.
  */
 function PhoneVerificationCard({ userId }: { userId: string }) {
   const [step,         setStep]         = useState<PhoneFlowStep>('idle')
   const [phone,        setPhone]        = useState('')
   const [otp,          setOtp]          = useState('')
   const [error,        setError]        = useState<string | null>(null)
-  // Incrementing this key forces React to unmount + remount the reCAPTCHA
-  // container div, giving grecaptcha a brand-new DOM element it has never
-  // seen — the only reliable way to avoid "already been rendered" on retry.
   const [recaptchaKey, setRecaptchaKey] = useState(0)
 
   const confirmResultRef      = useRef<ConfirmationResult | null>(null)
@@ -477,28 +489,31 @@ function PhoneVerificationCard({ userId }: { userId: string }) {
   const { data: user } = useMe()
   const updatePhone    = useUpdatePhone()
 
-  // Tear down reCAPTCHA when the user cancels or after success.
-  // Two-step cleanup:
-  //  1. verifier.clear() — destroys the JS object and resets the grecaptcha widget.
-  //  2. recaptchaKey bump — forces React to replace the container <div> with a new
-  //     DOM node so grecaptcha's internal element-reference map is fully invalidated.
-  //     innerHTML = '' alone is not enough because grecaptcha keys off the element
-  //     reference itself, not just its children.
   function clearRecaptcha() {
+    // Destroy the verifier (marks it as destroyed, stops any in-flight callbacks).
     try { recaptchaVerifierRef.current?.clear() } catch { /* ignore */ }
     recaptchaVerifierRef.current = null
+    // RecaptchaVerifier.clear() does NOT remove child nodes for invisible widgets,
+    // so grecaptcha still thinks the element is registered. Incrementing the key
+    // forces React to unmount the old div and mount a fresh one — grecaptcha has
+    // never seen the new element reference and render() succeeds on the next attempt.
     setRecaptchaKey(k => k + 1)
   }
 
   async function handleSendOtp() {
     const trimmed = phone.trim()
     if (!trimmed) { setError('Enter a phone number (e.g. +919876543210)'); return }
-    if (!firebaseAuth) { setError('Phone verification is not available in this environment.'); return }
+    if (!firebaseAuth) { setError('Phone verification is not configured.'); return }
     setStep('sending')
     setError(null)
     try {
-      const { RecaptchaVerifier, signInWithPhoneNumber } = await import('firebase/auth')
-      // Lazily create reCAPTCHA verifier (must be created after the container div mounts)
+      const { RecaptchaVerifier, signInWithPhoneNumber, initializeRecaptchaConfig } = await import('firebase/auth')
+
+      // Ensure Enterprise config is cached before the call. The SDK auto-initialises
+      // if not loaded, but awaiting it here avoids that extra round-trip.
+      await initializeRecaptchaConfig(firebaseAuth)
+
+      // RecaptchaVerifier is used only if the Enterprise path falls back to v2.
       if (!recaptchaVerifierRef.current && recaptchaContainerRef.current) {
         recaptchaVerifierRef.current = new RecaptchaVerifier(
           firebaseAuth,
@@ -506,14 +521,26 @@ function PhoneVerificationCard({ userId }: { userId: string }) {
           { size: 'invisible' },
         )
       }
-      if (!recaptchaVerifierRef.current) throw new Error('reCAPTCHA not ready')
+      if (!recaptchaVerifierRef.current) throw new Error('reCAPTCHA container not ready')
+
       const result = await signInWithPhoneNumber(firebaseAuth, trimmed, recaptchaVerifierRef.current)
       confirmResultRef.current = result
       setStep('enter-otp')
     } catch (e) {
       setStep('enter-phone')
-      setError(e instanceof Error ? e.message : 'Failed to send OTP')
+      const raw  = e instanceof Error ? e.message : String(e)
+      const code = (e as { code?: string })?.code ?? ''
+      console.error('[Firebase OTP] failed — code:', code, '| message:', raw)
       clearRecaptcha()
+      setError(
+        code === 'auth/invalid-app-credential' || raw.includes('INVALID_APP_CREDENTIAL')
+          ? 'Firebase phone auth rejected the token. Check: Firebase Console → Authentication → Settings → reCAPTCHA Enterprise → Phone = AUDIT and Google Cloud → reCAPTCHA Enterprise API is enabled.'
+          : code === 'auth/too-many-requests'
+            ? 'Too many requests — wait a few minutes and try again.'
+            : code === 'auth/invalid-phone-number'
+              ? 'Invalid phone number — use international format, e.g. +919876543210'
+              : raw
+      )
     }
   }
 
@@ -526,10 +553,8 @@ function PhoneVerificationCard({ userId }: { userId: string }) {
     setError(null)
     try {
       await result.confirm(trimmedOtp)
-      // Sign out immediately — Firebase was used for verification only
       await firebaseAuth?.signOut()
       clearRecaptcha()
-
       await updatePhone.mutateAsync({ userId, phone: phone.trim() })
       setStep('saved')
       toast.success('Phone number saved')
@@ -590,8 +615,11 @@ function PhoneVerificationCard({ userId }: { userId: string }) {
         </div>
       )}
 
-      {/* Invisible reCAPTCHA container — key forces full remount on each clearRecaptcha() */}
-      <div key={recaptchaKey} ref={recaptchaContainerRef} id="phone-recaptcha-container" />
+      {/* reCAPTCHA container — always mounted, key-controlled.
+          key increments on clearRecaptcha() so React replaces the div with a
+          fresh element that grecaptcha has never registered; prevents the
+          "already rendered in this element" error on retry. */}
+      <div key={recaptchaKey} ref={recaptchaContainerRef} id="phone-recaptcha-container" className="hidden" />
 
       {/* Phone entry */}
       {(step === 'enter-phone' || step === 'sending') && (

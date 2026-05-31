@@ -9,9 +9,11 @@ import org.mapstruct.Named;
 @Mapper(componentModel = "spring")
 public interface UserMapper {
 
-    @Mapping(target = "email",  source = "email",  qualifiedByName = "maskEmail")
-    @Mapping(target = "phone",  source = "phone",  qualifiedByName = "maskPhone")
-    @Mapping(target = "name",   expression = "java(UserMapper.buildName(user))")
+    @Mapping(target = "email",           source = "email",  qualifiedByName = "maskEmail")
+    @Mapping(target = "phone",           source = "phone",  qualifiedByName = "maskPhone")
+    @Mapping(target = "name",            expression = "java(UserMapper.buildName(user))")
+    // rejectionReason lives on KycDocument, not on User — UserService enriches it separately
+    @Mapping(target = "rejectionReason", ignore = true)
     UserResponse toResponse(User user);
 
     @Named("buildName")

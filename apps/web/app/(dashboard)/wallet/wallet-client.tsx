@@ -32,6 +32,18 @@ const PRESET_AMOUNTS: Record<Currency, number[]> = {
   GBP: [10,  20,   50,   100],
 }
 
+/**
+ * Maximum wallet balance per currency — must match the server-side
+ * aegispay.ledger.topup.max-balance (default 100,000).
+ * The backend is the authority; this is an early UX guard only.
+ */
+const MAX_BALANCE: Record<Currency, number> = {
+  INR: 100_000,
+  USD: 100_000,
+  EUR: 100_000,
+  GBP: 100_000,
+}
+
 type Step = 'form' | 'processing' | 'success' | 'failed'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -79,12 +91,25 @@ export function WalletClient({ userId }: WalletClientProps) {
 
   if (blocking) return null
 
+  // ── Balance cap check (client-side early validation) ────────────────────────
+  const currentBalance   = account?.availableBalance ?? 0
+  const parsedAmt        = parseAmount(amount) ?? 0
+  const maxAllowed       = MAX_BALANCE[currency]
+  const remainingRoom    = Math.max(0, maxAllowed - currentBalance)
+  const wouldExceedLimit = parsedAmt > 0 && (currentBalance + parsedAmt) > maxAllowed
+
   // ── Handlers ────────────────────────────────────────────────────────────────
 
   const handleTopUp = async () => {
     const parsedAmount = parseAmount(amount)
     if (!parsedAmount) {
       toast.error('Please enter a valid amount')
+      return
+    }
+    if (wouldExceedLimit) {
+      toast.error('Balance limit exceeded', {
+        description: `Maximum wallet balance is ${formatAmount(maxAllowed, currency)}. You can add up to ${formatAmount(remainingRoom, currency)} more.`,
+      })
       return
     }
 
@@ -192,7 +217,17 @@ export function WalletClient({ userId }: WalletClientProps) {
 
             {/* Amount input */}
             <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1.5">Amount</label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-medium text-slate-500">Amount</label>
+                <span className="text-xs text-slate-400">
+                  Max balance: {formatAmount(maxAllowed, currency)}
+                  {remainingRoom < maxAllowed && (
+                    <span className="ml-1 text-slate-400">
+                      · room left: {formatAmount(remainingRoom, currency)}
+                    </span>
+                  )}
+                </span>
+              </div>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-400">
                   {currency}
@@ -204,9 +239,22 @@ export function WalletClient({ userId }: WalletClientProps) {
                   value={amount}
                   onChange={e => setAmount(e.target.value)}
                   placeholder="0.00"
-                  className="w-full rounded-xl border border-slate-300 bg-white py-3 pl-14 pr-4 text-lg font-bold text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-200"
+                  className={cn(
+                    'w-full rounded-xl border bg-white py-3 pl-14 pr-4 text-lg font-bold text-slate-900 focus:outline-none focus:ring-2',
+                    wouldExceedLimit
+                      ? 'border-danger-400 focus:border-danger-500 focus:ring-danger-200'
+                      : 'border-slate-300 focus:border-primary-500 focus:ring-primary-200',
+                  )}
                 />
               </div>
+              {wouldExceedLimit && (
+                <p className="mt-1.5 text-xs text-danger-600">
+                  This would exceed your {formatAmount(maxAllowed, currency)} balance limit.
+                  {remainingRoom > 0
+                    ? ` You can add up to ${formatAmount(remainingRoom, currency)}.`
+                    : ' Your wallet is full.'}
+                </p>
+              )}
             </div>
 
             {/* Quick-amount presets */}
@@ -245,7 +293,7 @@ export function WalletClient({ userId }: WalletClientProps) {
             {/* CTA */}
             <button
               onClick={handleTopUp}
-              disabled={!parseAmount(amount)}
+              disabled={!parseAmount(amount) || wouldExceedLimit}
               className="w-full flex items-center justify-center gap-2 rounded-xl bg-primary-600 px-5 py-3.5 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               <ArrowDownToLine className="h-4 w-4" />

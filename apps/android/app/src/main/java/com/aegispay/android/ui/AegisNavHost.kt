@@ -64,7 +64,14 @@ fun AegisNavHost(
     LaunchedEffect(authState) {
         when (authState) {
             is AuthState.Authenticated -> {
-                navController.navigate(Route.DASHBOARD) {
+                // Staff roles land on their work surfaces, not the customer dashboard —
+                // mirrors the web ROLE_LANDING map in role-routing.ts.
+                val landingRoute = when {
+                    isAdminUser      -> Route.TRIAGE
+                    isBackOfficeUser -> Route.BACK_OFFICE
+                    else             -> Route.DASHBOARD
+                }
+                navController.navigate(landingRoute) {
                     popUpTo(0) { inclusive = true }
                 }
             }

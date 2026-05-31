@@ -34,6 +34,17 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(ErrorResponse.builder().errorCode("BAD_REQUEST").message(ex.getMessage()).httpStatus(400).build()));
     }
 
+    @ExceptionHandler(BalanceLimitExceededException.class)
+    public ResponseEntity<ApiResponse<Void>> handleBalanceLimit(BalanceLimitExceededException ex) {
+        log.warn("Balance limit exceeded: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(ApiResponse.error(ErrorResponse.builder()
+                        .errorCode("BALANCE_LIMIT_EXCEEDED")
+                        .message(ex.getMessage())
+                        .httpStatus(422)
+                        .build()));
+    }
+
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<ApiResponse<Void>> handleIllegalState(IllegalStateException ex) {
         log.warn("Payment state error: {}", ex.getMessage());

@@ -1,6 +1,7 @@
 # AegisPay — Local Development Setup
 
-End-to-end guide for running the full AegisPay stack on **macOS** and **Windows** (WSL 2).  
+End-to-end guide for running the full AegisPay stack on **macOS**, **Windows** (WSL 2 or native PowerShell), and for running the **iOS** and **Android** apps against the local backend.
+
 After following this guide you will have every service running locally, ClickHouse populated with analytics data, Grafana dashboards live, and can send an end-to-end payment through the system.
 
 ---
@@ -18,7 +19,8 @@ After following this guide you will have every service running locally, ClickHou
 9. [Verify the Data Pipeline](#9-verify-the-data-pipeline)
 10. [Grafana Dashboards](#10-grafana-dashboards)
 11. [Notification Channels](#11-notification-channels)
-12. [Troubleshooting](#12-troubleshooting)
+12. [Mobile Apps (Android & iOS)](#12-mobile-apps-android--ios)
+13. [Troubleshooting](#13-troubleshooting)
 
 ---
 
@@ -194,6 +196,17 @@ Get-Content .env.local | ForEach-Object {
 
 ## 5. Start the Backend Services
 
+### Windows (recommended) — automated script
+
+Double-click **`start-aegispay.bat`** in the repo root, or run from PowerShell:
+```powershell
+.\start-aegispay.bat
+```
+
+The script auto-detects Maven, loads `.env.local`, starts all 10 services in separate windows in dependency order, and waits for each health check to pass before starting the next.
+
+### macOS / Linux — manual
+
 Each service runs as a standard Spring Boot app. Open a separate terminal tab for each, or use a process manager like [honcho](https://github.com/nicowillis/honcho) / [tmux](https://github.com/tmux/tmux).
 
 **Source the env file in every terminal before running:**
@@ -290,28 +303,25 @@ The Next.js app starts on **http://localhost:3000**.
 
 ### 8.1 Register a user
 
-```bash
-curl -s -X POST http://localhost:8080/api/v1/users/register \
-  -H "Content-Type: application/json" \
-  -d '{
-    "firstName": "Test",
-    "lastName": "User",
-    "email": "test@example.com",
-    "phone": "+919999999999",
-    "password": "Test@1234",
-    "currency": "INR"
-  }' | jq .
+AegisPay uses **PKCE / OAuth2 — there is no username+password registration endpoint**.  
+New users register through the web UI at **http://localhost:3000** (click "Sign in with Google" or any configured IdP). Keycloak creates the Keycloak account; the first call to the backend's `/register` endpoint is made automatically by the web app after the PKCE flow completes.
+
+To test the backend directly, use the **pre-seeded admin account** or register through Keycloak's admin console:
+
+```
+Keycloak Admin Console: http://localhost:8180  (admin / admin)
+Realm: aegispay
 ```
 
-Expected: `201 Created` with a user object.
+### 8.2 Get a JWT for testing (Keycloak resource-owner password grant — dev only)
 
-### 8.2 Log in and get a JWT
+> **Dev only.** Resource-owner password grant is enabled in `realm-export.json` for testing convenience. Never enable this in production.
 
 ```bash
 TOKEN=$(curl -s -X POST \
   "http://localhost:8180/realms/aegispay/protocol/openid-connect/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "client_id=aegispay-app&grant_type=password&username=test@example.com&password=Test@1234" \
+  -d "client_id=aegispay-app&client_secret=aegispay-secret&grant_type=password&username=customer@aegispay.local&password=Test@1234&scope=openid" \
   | jq -r '.access_token')
 
 echo "TOKEN=$TOKEN"
@@ -457,7 +467,72 @@ docker compose restart grafana
 
 ---
 
-## 12. Troubleshooting
+## 12. Mobile Apps (Android & iOS)
+
+The mobile apps connect to the same local backend. The API Gateway runs on `localhost:8080` and Keycloak on `localhost:8180` — you need to expose these to your phone/emulator.
+
+### Android
+
+**Prerequisites:**
+| Tool | Version |
+|------|---------|
+| Android Studio | Hedgehog 2023.1+ |
+| JDK | 17+ (bundled with Android Studio) |
+| Android SDK | API 31+ (target 35) |
+
+**Run on emulator (recommended for local dev):**
+1. Open `apps/android/` in Android Studio
+2. Create an AVD: API 34, Pixel 8 Pro (or any x86_64 device)
+3. In `apps/android/app/src/main/java/.../AppConfig.kt` set:
+   ```kotlin
+   const val BASE_URL = "http://10.0.2.2:8080"        // emulator → host localhost
+   const val KEYCLOAK_ISSUER = "http://10.0.2.2:8180/realms/aegispay"
+   ```
+4. Run → the app opens on the emulator, sign in with Google SSO (Keycloak broker)
+
+**Run on physical device:**
+- Use `adb reverse tcp:8080 tcp:8080` and `adb reverse tcp:8180 tcp:8180` to forward ports, then use `http://localhost:8080` in AppConfig.
+- Or point at the dev GCP VM hostname.
+
+**Firebase Phone OTP (for phone number verification in Profile):**
+1. Create a Firebase project → enable Phone Auth
+2. Download `google-services.json` → place in `apps/android/app/`
+3. Add your test phone number to Firebase Console → Authentication → Phone → Test phone numbers
+4. The OTP flow is handled by Firebase; the verified number is then PATCHed to `PUT /api/v1/users/{userId}/phone`
+
+---
+
+### iOS
+
+**Prerequisites:**
+| Tool | Version |
+|------|---------|
+| Xcode | 15.2+ |
+| macOS | Sonoma 14+ |
+| iOS Simulator | iOS 16+ |
+
+> iOS development requires macOS. On Windows, only Android is available locally.
+
+**Run on simulator:**
+1. Open `apps/ios/AegisPay.xcodeproj` in Xcode
+2. In `apps/ios/AegisPay/App/AppConfig.swift` set:
+   ```swift
+   static let baseURL  = "http://localhost:8080"
+   static let keycloakIssuer = URL(string: "http://localhost:8180/realms/aegispay")!
+   ```
+   (Simulator shares the host machine's network — `localhost` works directly)
+3. Select an iPhone 15 simulator → Run (⌘R)
+
+**Dependencies**: managed via Swift Package Manager — Xcode resolves them automatically on first build (AppAuth-iOS, KeychainAccess, Stripe iOS SDK).
+
+**Firebase Phone OTP:**
+1. Download `GoogleService-Info.plist` from your Firebase project
+2. Add to `apps/ios/AegisPay/` in Xcode (check "Add to target: AegisPay")
+3. Test numbers configured in Firebase Console work without a real SIM
+
+---
+
+## 13. Troubleshooting
 
 ### Keycloak fails to start
 
@@ -519,4 +594,4 @@ docker compose up -d            # fresh start — ClickHouse will re-init
 
 ---
 
-*Last updated: May 2026 — AegisPay v1.0*
+*Last updated: May 2026 — AegisPay v1.1 (added iOS/Android local setup, fixed registration flow, Windows bat script)*

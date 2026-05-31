@@ -147,7 +147,18 @@ Why 32 KB is still reasonable for now: the backends are internal services behind
 
 
 sms 
-keycloak social sign on + sign out issue 
-admin page triage and all users risk look up account 
+keycloak social sign on + sign out issue  done
+admin page triage and 
+all users risk look up account done
 android ios 
 gcp deploy 
+md files artifacts and embed in docs page 
+
+
+reason for rejection of kyc
+
+overflow limit on top up etc
+
+ Top-up can overflow balance and notifiaction time 
+
+rate limit for ai triage and risk cases rag and all

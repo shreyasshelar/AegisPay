@@ -7,6 +7,7 @@ import com.aegispay.android.network.TriageIncidentRequest
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import com.aegispay.android.ui.triage.TriageSessionStore
 import java.time.Instant
 import java.util.UUID
 import javax.inject.Inject
@@ -37,22 +38,31 @@ data class TriageUiState(
 
 @HiltViewModel
 class TriageViewModel @Inject constructor(
-    private val api: AegisApiService,
+    private val api:          AegisApiService,
+    private val sessionStore: TriageSessionStore,   // @Singleton — outlives this VM
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(TriageUiState())
-    val uiState: StateFlow<TriageUiState> = _uiState.asStateFlow()
+    private val _formState = MutableStateFlow(TriageUiState())
+
+    // Merge local form state with the singleton session history so the UI only
+    // needs to observe one flow — sessions survive screen navigation.
+    val uiState: StateFlow<TriageUiState> = combine(
+        _formState,
+        sessionStore.sessions,
+    ) { form, sessions ->
+        form.copy(sessions = sessions, expandedId = form.expandedId)
+    }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, TriageUiState())
 
     val canTriage: Boolean
-        get() = _uiState.value.serviceName.isNotBlank() &&
-                _uiState.value.description.isNotBlank()
+        get() = _formState.value.serviceName.isNotBlank() &&
+                _formState.value.description.isNotBlank()
 
-    fun onServiceNameChange(v: String) = _uiState.update { it.copy(serviceName = v) }
-    fun onDescriptionChange(v: String) = _uiState.update { it.copy(description = v) }
+    fun onServiceNameChange(v: String) = _formState.update { it.copy(serviceName = v) }
+    fun onDescriptionChange(v: String) = _formState.update { it.copy(description = v) }
 
     /** Pre-fill form from a failed transaction context (e.g. opened from transaction detail). */
     fun prefill(transactionId: String?, serviceName: String?) {
-        _uiState.update {
+        _formState.update {
             it.copy(
                 serviceName  = serviceName ?: it.serviceName,
                 description  = if (transactionId != null && it.description.isBlank())
@@ -64,9 +74,9 @@ class TriageViewModel @Inject constructor(
 
     fun runTriage() {
         if (!canTriage) return
-        val state = _uiState.value
+        val state = _formState.value
         viewModelScope.launch {
-            _uiState.update { it.copy(isTriaging = true, triageError = null) }
+            _formState.update { it.copy(isTriaging = true, triageError = null) }
             runCatching {
                 api.triageIncident(
                     TriageIncidentRequest(
@@ -82,23 +92,23 @@ class TriageViewModel @Inject constructor(
                         analysis    = res.analysis,
                         degraded    = res.analysis.startsWith("⚠"),
                     )
-                    _uiState.update {
-                        it.copy(
-                            isTriaging  = false,
-                            sessions    = listOf(session) + it.sessions,
-                            expandedId  = session.id,
-                        )
+                    sessionStore.add(session)   // persisted in @Singleton store
+                    _formState.update {
+                        it.copy(isTriaging = false, expandedId = session.id)
                     }
                 }
                 .onFailure { e ->
-                    _uiState.update { it.copy(isTriaging = false, triageError = e.message) }
+                    _formState.update { it.copy(isTriaging = false, triageError = e.message) }
                 }
         }
     }
 
     fun toggleExpanded(id: String) {
-        _uiState.update { it.copy(expandedId = if (it.expandedId == id) null else id) }
+        _formState.update { it.copy(expandedId = if (it.expandedId == id) null else id) }
     }
 
-    fun clearSessions() = _uiState.update { it.copy(sessions = emptyList(), expandedId = null) }
+    fun clearSessions() {
+        sessionStore.clear()
+        _formState.update { it.copy(expandedId = null) }
+    }
 }

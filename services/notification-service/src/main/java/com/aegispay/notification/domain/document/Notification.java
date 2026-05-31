@@ -39,4 +39,16 @@ public class Notification {
 
     private Instant createdAt;
     private Instant sentAt;
+
+    /**
+     * Idempotency key for Kafka at-least-once deduplication.
+     * Format: {@code transactionId:type:channel} — e.g.
+     * {@code a749ced1-...:TRANSACTION_COMPLETED:WEBSOCKET}.
+     *
+     * <p>Null for non-transaction notifications (KYC, user-registered, etc.).
+     * The sparse unique index means null values are not indexed and thus do
+     * not conflict — only duplicate transaction events are rejected.
+     */
+    @Indexed(unique = true, sparse = true)
+    private String eventKey;
 }
