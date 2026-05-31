@@ -1,0 +1,265 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>3.3.5</version>
+    <relativePath/>
+  </parent>
+
+  <groupId>com.aegispay</groupId>
+  <artifactId>aegispay-parent</artifactId>
+  <version>1.0.0-SNAPSHOT</version>
+  <packaging>pom</packaging>
+  <name>AegisPay :: Parent</name>
+  <description>Production-grade event-driven fintech platform</description>
+
+  <modules>
+    <!-- libs aggregator: Maven resolves aegispay-libs parent and builds sub-modules
+         in declared dependency order (domain, security, kafka, observability).
+         Previously modules were listed flat here, bypassing libs/pom.xml and
+         breaking the reactor parent resolution for the also-make flag. -->
+    <module>libs</module>
+    <module>services/api-gateway</module>
+    <module>services/user-service</module>
+    <module>services/transaction-service</module>
+    <module>services/ledger-service</module>
+    <module>services/payment-orchestrator</module>
+    <module>services/risk-engine</module>
+    <module>services/notification-service</module>
+    <module>services/ai-platform</module>
+    <module>services/data-pipeline</module>
+    <module>services/reconciliation-service</module>
+    <module>services/e2e-tests</module>
+  </modules>
+
+  <properties>
+    <java.version>21</java.version>
+    <maven.compiler.source>21</maven.compiler.source>
+    <maven.compiler.target>21</maven.compiler.target>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+
+    <!-- Dependency versions -->
+    <spring-cloud.version>2023.0.3</spring-cloud.version>
+    <spring-ai.version>1.0.0</spring-ai.version>
+    <mapstruct.version>1.5.5.Final</mapstruct.version>
+    <lombok.version>1.18.34</lombok.version>
+    <testcontainers.version>1.19.8</testcontainers.version>
+    <flyway.version>10.15.0</flyway.version>
+    <jjwt.version>0.12.6</jjwt.version>
+    <resilience4j.version>2.2.0</resilience4j.version>
+  </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <!-- Spring Cloud BOM -->
+      <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-dependencies</artifactId>
+        <version>${spring-cloud.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+
+      <!-- Spring AI BOM -->
+      <dependency>
+        <groupId>org.springframework.ai</groupId>
+        <artifactId>spring-ai-bom</artifactId>
+        <version>${spring-ai.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+
+      <!-- Testcontainers BOM -->
+      <dependency>
+        <groupId>org.testcontainers</groupId>
+        <artifactId>testcontainers-bom</artifactId>
+        <version>${testcontainers.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+
+      <!-- Internal shared libs -->
+      <dependency>
+        <groupId>com.aegispay</groupId>
+        <artifactId>common-domain</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.aegispay</groupId>
+        <artifactId>common-security</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.aegispay</groupId>
+        <artifactId>common-kafka</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.aegispay</groupId>
+        <artifactId>common-observability</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+
+      <!-- MapStruct -->
+      <dependency>
+        <groupId>org.mapstruct</groupId>
+        <artifactId>mapstruct</artifactId>
+        <version>${mapstruct.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.mapstruct</groupId>
+        <artifactId>mapstruct-processor</artifactId>
+        <version>${mapstruct.version}</version>
+      </dependency>
+
+      <!-- JJWT -->
+      <dependency>
+        <groupId>io.jsonwebtoken</groupId>
+        <artifactId>jjwt-api</artifactId>
+        <version>${jjwt.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.jsonwebtoken</groupId>
+        <artifactId>jjwt-impl</artifactId>
+        <version>${jjwt.version}</version>
+        <scope>runtime</scope>
+      </dependency>
+      <dependency>
+        <groupId>io.jsonwebtoken</groupId>
+        <artifactId>jjwt-jackson</artifactId>
+        <version>${jjwt.version}</version>
+        <scope>runtime</scope>
+      </dependency>
+
+      <!-- Resilience4j -->
+      <dependency>
+        <groupId>io.github.resilience4j</groupId>
+        <artifactId>resilience4j-spring-boot3</artifactId>
+        <version>${resilience4j.version}</version>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <!-- Dependencies common to ALL modules -->
+  <dependencies>
+    <dependency>
+      <groupId>org.projectlombok</groupId>
+      <artifactId>lombok</artifactId>
+      <optional>true</optional>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <!--
+    Spring AI artifacts are published to repo.spring.io/milestone BEFORE they
+    land in Maven Central.  Adding both repos ensures the BOM and its starters
+    resolve in CI without waiting for Central sync.
+  -->
+  <repositories>
+    <repository>
+      <id>spring-milestones</id>
+      <name>Spring Milestones</name>
+      <url>https://repo.spring.io/milestone</url>
+      <snapshots><enabled>false</enabled></snapshots>
+    </repository>
+    <repository>
+      <id>spring-releases</id>
+      <name>Spring Releases</name>
+      <url>https://repo.spring.io/release</url>
+      <snapshots><enabled>false</enabled></snapshots>
+    </repository>
+  </repositories>
+  <pluginRepositories>
+    <pluginRepository>
+      <id>spring-milestones</id>
+      <name>Spring Milestones</name>
+      <url>https://repo.spring.io/milestone</url>
+      <snapshots><enabled>false</enabled></snapshots>
+    </pluginRepository>
+  </pluginRepositories>
+
+  <build>
+    <pluginManagement>
+      <plugins>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-compiler-plugin</artifactId>
+          <configuration>
+            <source>21</source>
+            <target>21</target>
+            <parameters>true</parameters>
+            <annotationProcessorPaths>
+              <path>
+                <groupId>org.projectlombok</groupId>
+                <artifactId>lombok</artifactId>
+                <version>${lombok.version}</version>
+              </path>
+              <!-- binding ensures Lombok runs before MapStruct in every reactor module -->
+              <path>
+                <groupId>org.projectlombok</groupId>
+                <artifactId>lombok-mapstruct-binding</artifactId>
+                <version>0.2.0</version>
+              </path>
+              <path>
+                <groupId>org.mapstruct</groupId>
+                <artifactId>mapstruct-processor</artifactId>
+                <version>${mapstruct.version}</version>
+              </path>
+              <!--
+                Make internal platform libs visible to Lombok's embedded ECJ during
+                annotation processing.  Without these entries, ECJ (which runs in the
+                isolated annotation-processor classpath) cannot resolve types from
+                common-domain / common-kafka and writes unqualified-type error-recovery
+                bytecode.  That bytecode then causes "incompatible types" compilation
+                errors in test-compile because javac sees two different TransactionStatus /
+                KycStatus symbols.
+              -->
+              <path>
+                <groupId>com.aegispay</groupId>
+                <artifactId>common-domain</artifactId>
+                <version>${project.version}</version>
+              </path>
+              <path>
+                <groupId>com.aegispay</groupId>
+                <artifactId>common-kafka</artifactId>
+                <version>${project.version}</version>
+              </path>
+            </annotationProcessorPaths>
+          </configuration>
+        </plugin>
+
+        <plugin>
+          <groupId>org.springframework.boot</groupId>
+          <artifactId>spring-boot-maven-plugin</artifactId>
+          <configuration>
+            <excludes>
+              <exclude>
+                <groupId>org.projectlombok</groupId>
+                <artifactId>lombok</artifactId>
+              </exclude>
+            </excludes>
+            <layers>
+              <enabled>true</enabled>
+            </layers>
+          </configuration>
+        </plugin>
+
+        <plugin>
+          <groupId>org.flywaydb</groupId>
+          <artifactId>flyway-maven-plugin</artifactId>
+          <version>${flyway.version}</version>
+        </plugin>
+      </plugins>
+    </pluginManagement>
+  </build>
+</project>

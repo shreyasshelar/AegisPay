@@ -1,0 +1,195 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# AegisPay — Android CI
+#
+# Triggered ONLY on direct push to main or dev when Android files change.
+# No pull_request trigger — CI runs only after code lands on main/dev.
+#
+# Gradle wrapper fix:
+#   The gradlew script is not committed. We install Gradle via
+#   gradle/actions/setup-gradle@v4 with an explicit gradle-version,
+#   then generate the wrapper before any ./gradlew invocation.
+# ─────────────────────────────────────────────────────────────────────────────
+name: CI — Android
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+    paths:
+      - 'apps/android/**'
+      - '.github/workflows/ci-android.yml'
+
+env:
+  GRADLE_VERSION: "8.7"
+  JAVA_VERSION: "17"
+
+defaults:
+  run:
+    working-directory: apps/android
+
+jobs:
+  # ── Lint & Detekt ───────────────────────────────────────────────────────────
+  lint:
+    name: Lint & Detekt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+
+      # Install Gradle and generate wrapper so ./gradlew is available
+      - name: Set up Gradle ${{ env.GRADLE_VERSION }}
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: ${{ env.GRADLE_VERSION }}
+          cache-read-only: false
+
+      - name: Generate Gradle wrapper
+        run: gradle wrapper --gradle-version ${{ env.GRADLE_VERSION }}
+
+      - name: Run Android Lint
+        run: ./gradlew lint --stacktrace
+        env:
+          API_BASE_URL: "http://localhost:8080/"
+          WS_BASE_URL: "ws://localhost:8080/"
+          KEYCLOAK_ISSUER: "http://localhost:8180/realms/aegispay"
+          OAUTH_CLIENT_ID: "aegispay-android"
+          OAUTH_REDIRECT_URI: "aegispay://oauth/callback"
+
+      - name: Upload lint report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-report
+          path: apps/android/app/build/reports/lint-results-debug.html
+          retention-days: 7
+
+  # ── Unit Tests ──────────────────────────────────────────────────────────────
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+
+      - name: Set up Gradle ${{ env.GRADLE_VERSION }}
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: ${{ env.GRADLE_VERSION }}
+          cache-read-only: false
+
+      - name: Generate Gradle wrapper
+        run: gradle wrapper --gradle-version ${{ env.GRADLE_VERSION }}
+
+      - name: Run unit tests
+        run: ./gradlew testDebugUnitTest --stacktrace
+        env:
+          API_BASE_URL: "http://localhost:8080/"
+          WS_BASE_URL: "ws://localhost:8080/"
+          KEYCLOAK_ISSUER: "http://localhost:8180/realms/aegispay"
+          OAUTH_CLIENT_ID: "aegispay-android"
+          OAUTH_REDIRECT_URI: "aegispay://oauth/callback"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-results
+          path: apps/android/app/build/test-results/
+          retention-days: 7
+
+  # ── Debug APK Build ─────────────────────────────────────────────────────────
+  build:
+    name: Build Debug APK
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+
+      - name: Set up Gradle ${{ env.GRADLE_VERSION }}
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: ${{ env.GRADLE_VERSION }}
+          cache-read-only: false
+
+      - name: Generate Gradle wrapper
+        run: gradle wrapper --gradle-version ${{ env.GRADLE_VERSION }}
+
+      - name: Build debug APK
+        run: ./gradlew assembleDebug --stacktrace
+        env:
+          API_BASE_URL: ${{ secrets.ANDROID_API_BASE_URL || 'http://localhost:8080/' }}
+          WS_BASE_URL: ${{ secrets.ANDROID_WS_BASE_URL || 'ws://localhost:8080/' }}
+          KEYCLOAK_ISSUER: ${{ secrets.KEYCLOAK_ISSUER || 'http://localhost:8180/realms/aegispay' }}
+          OAUTH_CLIENT_ID: ${{ secrets.ANDROID_OAUTH_CLIENT_ID || 'aegispay-android' }}
+          OAUTH_REDIRECT_URI: "aegispay://oauth/callback"
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-apk-${{ github.sha }}
+          path: apps/android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 7
+
+  # ── Release APK (only on version tags) ─────────────────────────────────────
+  release-build:
+    name: Build Release APK
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/android-v')
+    needs: [lint, test]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+
+      - name: Set up Gradle ${{ env.GRADLE_VERSION }}
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: ${{ env.GRADLE_VERSION }}
+
+      - name: Generate Gradle wrapper
+        run: gradle wrapper --gradle-version ${{ env.GRADLE_VERSION }}
+
+      - name: Decode keystore
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > keystore.jks
+
+      - name: Build release APK
+        run: ./gradlew assembleRelease --stacktrace
+        env:
+          API_BASE_URL: ${{ secrets.ANDROID_API_BASE_URL }}
+          WS_BASE_URL: ${{ secrets.ANDROID_WS_BASE_URL }}
+          KEYCLOAK_ISSUER: ${{ secrets.KEYCLOAK_ISSUER }}
+          OAUTH_CLIENT_ID: ${{ secrets.ANDROID_OAUTH_CLIENT_ID }}
+          OAUTH_REDIRECT_URI: "aegispay://oauth/callback"
+          SIGNING_STORE_FILE: "../../keystore.jks"
+          SIGNING_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+      - name: Upload release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-apk-${{ github.ref_name }}
+          path: apps/android/app/build/outputs/apk/release/app-release.apk
+          retention-days: 30

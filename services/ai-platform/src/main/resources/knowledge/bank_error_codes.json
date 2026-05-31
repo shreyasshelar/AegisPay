@@ -1,0 +1,402 @@
+[
+  {
+    "code": "INSUFFICIENT_FUNDS",
+    "category": "BALANCE",
+    "title": "Insufficient Funds",
+    "description": "The account does not have enough available balance to complete this transaction.",
+    "customerMessage": "Your account balance is too low for this payment. Please add funds or try a smaller amount.",
+    "resolution": "Check available balance (not total balance - some may be reserved). Top up account or reduce payment amount.",
+    "retryable": false,
+    "suggestedAction": "TOP_UP_ACCOUNT"
+  },
+  {
+    "code": "ACCOUNT_NOT_FOUND",
+    "category": "ACCOUNT",
+    "title": "Account Not Found",
+    "description": "The destination account number does not exist in our system or the partner bank's system.",
+    "customerMessage": "The recipient account was not found. Please check the account number and IFSC code.",
+    "resolution": "Verify IFSC code and account number. Try the full 16-digit account number without spaces.",
+    "retryable": false,
+    "suggestedAction": "VERIFY_ACCOUNT_DETAILS"
+  },
+  {
+    "code": "ACCOUNT_BLOCKED",
+    "category": "ACCOUNT",
+    "title": "Account Blocked",
+    "description": "The source or destination account has been blocked by the bank due to suspicious activity or regulatory compliance.",
+    "customerMessage": "Your account has been temporarily blocked. Please contact your bank for assistance.",
+    "resolution": "Contact bank support to understand the reason for blocking. May require document submission.",
+    "retryable": false,
+    "suggestedAction": "CONTACT_SUPPORT"
+  },
+  {
+    "code": "TRANSACTION_LIMIT_EXCEEDED",
+    "category": "LIMIT",
+    "title": "Daily Transaction Limit Exceeded",
+    "description": "The transaction amount exceeds the daily or per-transaction limit set for this account type.",
+    "customerMessage": "You've reached your daily payment limit. The limit will reset at midnight, or you can request a higher limit.",
+    "resolution": "Split payment across multiple days, or request temporary limit increase via bank app/branch.",
+    "retryable": true,
+    "retryAfterHours": 24,
+    "suggestedAction": "RETRY_TOMORROW_OR_SPLIT"
+  },
+  {
+    "code": "BANK_TIMEOUT",
+    "category": "TECHNICAL",
+    "title": "Bank System Timeout",
+    "description": "The partner bank's payment system did not respond within the expected time window. The transaction status is uncertain.",
+    "customerMessage": "The payment is taking longer than expected. Please check back in a few minutes before retrying.",
+    "resolution": "Wait 5-10 minutes and check transaction status. Do not retry immediately as the original transaction may still process.",
+    "retryable": true,
+    "retryAfterMinutes": 10,
+    "suggestedAction": "WAIT_AND_CHECK_STATUS"
+  },
+  {
+    "code": "INVALID_IFSC",
+    "category": "ROUTING",
+    "title": "Invalid IFSC Code",
+    "description": "The IFSC code provided does not exist or has been decommissioned after bank branch restructuring.",
+    "customerMessage": "The bank branch code (IFSC) is invalid or has changed. Please get the updated IFSC from the recipient.",
+    "resolution": "Check RBI website or bank website for current IFSC. Many branches were merged and IFSC codes changed.",
+    "retryable": false,
+    "suggestedAction": "VERIFY_IFSC"
+  },
+  {
+    "code": "UPI_DEACTIVATED",
+    "category": "UPI",
+    "title": "UPI ID Deactivated",
+    "description": "The recipient's UPI ID has been deactivated or the linked bank account was changed.",
+    "customerMessage": "The UPI ID is not active. Please ask the recipient for their current UPI ID or bank details.",
+    "resolution": "Contact recipient to confirm their active UPI ID or use direct bank account transfer instead.",
+    "retryable": false,
+    "suggestedAction": "REQUEST_ALTERNATE_PAYMENT_METHOD"
+  },
+  {
+    "code": "RISK_DECLINED",
+    "category": "RISK",
+    "title": "Transaction Declined by Risk System",
+    "description": "The transaction was declined by the fraud and risk management system based on transaction patterns.",
+    "customerMessage": "This transaction was declined for security reasons. If you believe this is an error, please contact support.",
+    "resolution": "Customer can contact support for review. Common causes: new device, unusual amount, new payee.",
+    "retryable": false,
+    "suggestedAction": "CONTACT_SUPPORT_WITH_REASON"
+  },
+  {
+    "code": "KYC_NOT_COMPLETED",
+    "category": "COMPLIANCE",
+    "title": "KYC Verification Required",
+    "description": "Full transaction features are restricted until KYC verification is completed.",
+    "customerMessage": "Please complete your KYC verification to enable payments above ₹10,000.",
+    "resolution": "Complete KYC in the app using Aadhaar or PAN card. Process typically takes 5-10 minutes.",
+    "retryable": true,
+    "suggestedAction": "COMPLETE_KYC"
+  },
+  {
+    "code": "DUPLICATE_TRANSACTION",
+    "category": "IDEMPOTENCY",
+    "title": "Duplicate Transaction Detected",
+    "description": "An identical transaction was already processed recently. This is a safety guard against double payments.",
+    "customerMessage": "This payment was already processed. Please check your transaction history.",
+    "resolution": "Check transaction history in the app. If the previous transaction failed, wait 30 minutes before retrying.",
+    "retryable": false,
+    "suggestedAction": "CHECK_TRANSACTION_HISTORY"
+  },
+  {
+    "code": "PAYEE_BANK_DOWN",
+    "category": "TECHNICAL",
+    "title": "Recipient Bank Unavailable",
+    "description": "The recipient's bank system is currently unavailable due to maintenance or technical issues.",
+    "customerMessage": "The recipient's bank is temporarily unavailable. Please try again later.",
+    "resolution": "Check the recipient's bank official website for maintenance windows. Retry after 1-2 hours.",
+    "retryable": true,
+    "retryAfterHours": 2,
+    "suggestedAction": "RETRY_LATER"
+  },
+  {
+    "code": "IMPS_FAILED",
+    "category": "PAYMENT_NETWORK",
+    "title": "IMPS Transfer Failed",
+    "description": "Immediate Payment Service transfer failed. This is an NPCI network issue.",
+    "customerMessage": "IMPS transfer failed. Your money is safe and has not been deducted. Please try again.",
+    "resolution": "IMPS failures are usually temporary. Retry the transaction. If deducted, it will be reversed within 24 hours.",
+    "retryable": true,
+    "retryAfterMinutes": 5,
+    "suggestedAction": "RETRY_NOW"
+  },
+  {
+    "code": "NEFT_OUTSIDE_HOURS",
+    "category": "TIMING",
+    "title": "NEFT Processing Hours",
+    "description": "NEFT is processed in batches. The current time is outside normal NEFT processing hours.",
+    "customerMessage": "NEFT payments are processed between 8 AM and 7 PM on working days. Your payment is queued.",
+    "resolution": "Payment will be processed in the next NEFT batch. Choose IMPS or UPI for immediate transfer.",
+    "retryable": true,
+    "suggestedAction": "SWITCH_TO_UPI_OR_IMPS"
+  },
+  {
+    "code": "VPA_NOT_REGISTERED",
+    "category": "UPI",
+    "title": "UPI Address Not Registered",
+    "description": "The UPI Virtual Payment Address (VPA/UPI ID) is not registered with any bank.",
+    "customerMessage": "The UPI ID doesn't exist. Please check for typos or ask the recipient for their correct UPI ID.",
+    "resolution": "Double-check the UPI ID format (user@bank). Common errors: extra spaces, wrong bank handle.",
+    "retryable": false,
+    "suggestedAction": "VERIFY_UPI_ID"
+  },
+  {
+    "code": "CARD_EXPIRED",
+    "category": "CARD",
+    "title": "Card Expired",
+    "description": "The debit or credit card used for this transaction has expired.",
+    "customerMessage": "Your card has expired. Please use your new card or update your card details.",
+    "resolution": "Use the new replacement card issued by your bank. Update card details in all saved payment methods.",
+    "retryable": false,
+    "suggestedAction": "UPDATE_CARD_DETAILS"
+  },
+  {
+    "code": "INTERNATIONAL_BLOCKED",
+    "category": "RESTRICTION",
+    "title": "International Transactions Blocked",
+    "description": "International transactions are not enabled on this account/card.",
+    "customerMessage": "International payments are not enabled. Please enable them in your banking app or contact your bank.",
+    "resolution": "Enable international transactions via bank app or call bank's customer care. May have daily limit.",
+    "retryable": false,
+    "suggestedAction": "ENABLE_INTERNATIONAL"
+  },
+  {
+    "code": "SAGA_TIMEOUT",
+    "category": "SYSTEM",
+    "title": "Payment Processing Timeout",
+    "description": "The payment processing workflow exceeded the maximum allowed time. The transaction has been cancelled and any reserved funds will be released.",
+    "customerMessage": "Payment processing timed out. If funds were deducted, they will be returned within 24 hours. Please try again.",
+    "resolution": "Reserved funds automatically released within 2-4 hours. Check balance before retrying. If deducted, contact support.",
+    "retryable": true,
+    "retryAfterHours": 2,
+    "suggestedAction": "WAIT_FOR_REFUND_THEN_RETRY"
+  },
+  {
+    "code": "BENEFICIARY_NAME_MISMATCH",
+    "category": "COMPLIANCE",
+    "title": "Beneficiary Name Mismatch",
+    "description": "The name provided does not match the account holder name at the destination bank (Confirmation of Payee failed).",
+    "customerMessage": "The recipient name doesn't match the account records. Please verify the account details with the recipient.",
+    "resolution": "Ask recipient to confirm exact account holder name as registered with their bank. Common issue with joint accounts.",
+    "retryable": false,
+    "suggestedAction": "VERIFY_BENEFICIARY_NAME"
+  },
+  {
+    "code": "ACCOUNT_DORMANT",
+    "category": "ACCOUNT",
+    "title": "Recipient Account Dormant",
+    "description": "The destination account has been inactive for over 24 months and classified as dormant by the recipient bank.",
+    "customerMessage": "The recipient's account is dormant. Please ask them to activate their account first.",
+    "resolution": "Recipient needs to contact their bank to reactivate the account. May require KYC update.",
+    "retryable": false,
+    "suggestedAction": "INFORM_RECIPIENT_ACTIVATE_ACCOUNT"
+  },
+  {
+    "code": "GATEWAY_UNAVAILABLE",
+    "category": "TECHNICAL",
+    "title": "Payment Gateway Unavailable",
+    "description": "The external payment processing system is temporarily unreachable. Circuit breaker is open.",
+    "customerMessage": "Payment services are temporarily unavailable. Please try again in a few minutes.",
+    "resolution": "System will auto-recover. Retry after 5 minutes. Check status page for planned maintenance.",
+    "retryable": true,
+    "retryAfterMinutes": 5,
+    "suggestedAction": "RETRY_IN_5_MINUTES"
+  },
+  {
+    "code": "STRIPE_CARD_DECLINED",
+    "category": "CARD",
+    "title": "Card Declined by Issuer",
+    "description": "The card-issuing bank declined the transaction. This could be due to fraud prevention, insufficient credit, or bank policy.",
+    "customerMessage": "Your card was declined by your bank. Please contact your bank or try another payment method.",
+    "resolution": "Call number on back of card to understand decline reason. Try alternate card or payment method.",
+    "retryable": false,
+    "suggestedAction": "TRY_ALTERNATE_CARD"
+  },
+  {
+    "code": "STRIPE_DO_NOT_HONOR",
+    "category": "CARD",
+    "title": "Card Do Not Honor",
+    "description": "Generic decline code from card issuer meaning the bank is refusing the transaction without specific reason.",
+    "customerMessage": "Your card cannot be used for this transaction. Please contact your bank or use a different card.",
+    "resolution": "Contact card-issuing bank. May be due to temporary block, unusual activity flag, or credit limit.",
+    "retryable": false,
+    "suggestedAction": "CONTACT_CARD_ISSUER"
+  },
+  {
+    "code": "STRIPE_CARD_NOT_SUPPORTED",
+    "category": "CARD",
+    "title": "Card Type Not Supported",
+    "description": "The card type or brand is not supported for this transaction type.",
+    "customerMessage": "This card type is not supported. Please try a different card.",
+    "resolution": "Use Visa, Mastercard, or RuPay card. Prepaid cards and virtual cards may have restrictions.",
+    "retryable": false,
+    "suggestedAction": "USE_SUPPORTED_CARD"
+  },
+  {
+    "code": "BALANCE_INCONSISTENCY",
+    "category": "SYSTEM",
+    "title": "Balance Calculation Error",
+    "description": "System detected an inconsistency between the account balance in the cache and the ledger. Transaction paused for safety.",
+    "customerMessage": "A technical issue occurred. Your funds are safe. Please contact support.",
+    "resolution": "Engineering team must reconcile balance. Do not retry. File incident ticket immediately.",
+    "retryable": false,
+    "suggestedAction": "CONTACT_SUPPORT_URGENT"
+  },
+  {
+    "code": "PARTNER_BANK_REJECTION",
+    "category": "ROUTING",
+    "title": "Partner Bank Rejection",
+    "description": "The transaction was rejected by the partner/correspondent bank in the payment chain.",
+    "customerMessage": "The payment was rejected during processing. Your funds are safe and will be returned.",
+    "resolution": "Check if bank account details are current. Some accounts require specific payment reference formats.",
+    "retryable": true,
+    "retryAfterHours": 1,
+    "suggestedAction": "VERIFY_ACCOUNT_RETRY"
+  },
+  {
+    "code": "REGULATORY_HOLD",
+    "category": "COMPLIANCE",
+    "title": "Regulatory Hold",
+    "description": "Transaction held for compliance review due to regulatory requirements (FEMA, AML, etc.).",
+    "customerMessage": "Your transaction is under review. This typically takes 1-2 business days. No action required.",
+    "resolution": "Compliance team will review and either release or request documentation. Customer may need to provide purpose.",
+    "retryable": false,
+    "suggestedAction": "AWAIT_COMPLIANCE_REVIEW"
+  },
+  {
+    "code": "RATE_LIMIT_EXCEEDED",
+    "category": "RATE_LIMITING",
+    "title": "Too Many Requests",
+    "description": "The API request rate limit has been exceeded for this user or IP address.",
+    "customerMessage": "You've made too many requests. Please wait a moment and try again.",
+    "resolution": "Wait 60 seconds before retrying. If this is an integration, implement exponential backoff.",
+    "retryable": true,
+    "retryAfterSeconds": 60,
+    "suggestedAction": "WAIT_AND_RETRY"
+  },
+  {
+    "code": "FOREX_RATE_EXPIRED",
+    "category": "FOREX",
+    "title": "Foreign Exchange Rate Expired",
+    "description": "The quoted exchange rate for this international transfer has expired. Rates are valid for 30 seconds.",
+    "customerMessage": "The exchange rate has changed. Please confirm the new rate to proceed.",
+    "resolution": "Fetch new rate and re-confirm transaction with customer. Rate valid for 30 seconds after quote.",
+    "retryable": true,
+    "retryAfterSeconds": 0,
+    "suggestedAction": "REFRESH_RATE_AND_CONFIRM"
+  },
+  {
+    "code": "OTP_EXPIRED",
+    "category": "AUTHENTICATION",
+    "title": "OTP Expired",
+    "description": "The one-time password used for 2FA has expired. OTPs are valid for 5 minutes.",
+    "customerMessage": "The OTP has expired. Please request a new one.",
+    "resolution": "Request new OTP. If OTP not received, check SMS spam folder or try voice OTP.",
+    "retryable": true,
+    "retryAfterSeconds": 0,
+    "suggestedAction": "REQUEST_NEW_OTP"
+  },
+  {
+    "code": "MONTHLY_LIMIT_EXCEEDED",
+    "category": "LIMIT",
+    "title": "Monthly Transaction Limit Exceeded",
+    "description": "Total transactions this month have exceeded the allowed monthly limit for this account tier.",
+    "customerMessage": "You've reached your monthly transaction limit. It resets on the 1st of next month.",
+    "resolution": "Upgrade account tier for higher limits, or wait for monthly reset. Corporate accounts have higher limits.",
+    "retryable": true,
+    "retryAfterDays": "days until end of month",
+    "suggestedAction": "UPGRADE_ACCOUNT_OR_WAIT"
+  },
+  {
+    "code": "NACH_MANDATE_REJECTED",
+    "category": "MANDATE",
+    "title": "NACH Mandate Rejected by Destination Bank",
+    "description": "The NPCI NACH debit mandate was rejected by the beneficiary bank. Common reasons: invalid account number, signature mismatch, account type mismatch, or account closed.",
+    "customerMessage": "Your auto-pay mandate was rejected. Please re-register the mandate with correct bank details.",
+    "resolution": "Check mandate registration details. Common issues: savings vs current account mismatch, account number changed after bank merger. Re-register mandate via NPCI NACH portal.",
+    "retryable": false,
+    "suggestedAction": "REREGISTER_MANDATE",
+    "npciCode": "U010"
+  },
+  {
+    "code": "UPI_LITE_BALANCE_EXCEEDED",
+    "category": "UPI",
+    "title": "UPI Lite Balance Insufficient",
+    "description": "UPI Lite (offline UPI) wallet balance is insufficient. UPI Lite holds a small prepaid balance on-device (max ₹2,000 per RBI circular). Transactions above the UPI Lite balance fall back to full UPI.",
+    "customerMessage": "Your UPI Lite balance is low. Top up your UPI Lite wallet or switch to regular UPI for this payment.",
+    "resolution": "UPI Lite auto-refills from linked account when balance drops below threshold. Manual refill available in UPI app. Transactions > ₹500 automatically use regular UPI.",
+    "retryable": true,
+    "retryAfterSeconds": 0,
+    "suggestedAction": "TOPUP_UPI_LITE_OR_USE_REGULAR_UPI",
+    "rbiCircular": "RBI/2022-23/151"
+  },
+  {
+    "code": "TPAP_BLOCKED",
+    "category": "UPI",
+    "title": "Third-Party App Provider Blocked",
+    "description": "The UPI Third-Party Application Provider (TPAP — e.g. PhonePe, GPay, Paytm) has been temporarily blocked by NPCI or RBI for compliance issues.",
+    "customerMessage": "Payments via this UPI app are temporarily unavailable. Please try another UPI app or payment method.",
+    "resolution": "Use a different UPI-enabled app or bank's own UPI. TPAP blocks are typically resolved within hours. Check NPCI website for updates.",
+    "retryable": true,
+    "retryAfterHours": 4,
+    "suggestedAction": "USE_ALTERNATE_UPI_APP"
+  },
+  {
+    "code": "AML_FREEZE",
+    "category": "COMPLIANCE",
+    "title": "Account Frozen - AML Review",
+    "description": "The account has been frozen by the compliance team under Prevention of Money Laundering Act (PMLA) provisions pending investigation. FIU-IND report may have been filed.",
+    "customerMessage": "Your account has been temporarily frozen for a mandatory compliance review. Please contact support with your identity documents.",
+    "resolution": "Customer must contact compliance team. STR (Suspicious Transaction Report) may have been filed with FIU-IND. Resolution requires compliance review which may take 3-30 business days. Regulatory hold cannot be bypassed.",
+    "retryable": false,
+    "suggestedAction": "CONTACT_COMPLIANCE_TEAM"
+  },
+  {
+    "code": "NPCI_BENEFICIARY_BANK_OFFLINE",
+    "category": "PAYMENT_NETWORK",
+    "title": "Beneficiary Bank Offline - NPCI Network",
+    "description": "NPCI reports the beneficiary bank's connection to the payment network is offline. This affects all UPI, IMPS, and NEFT payments to accounts at that bank.",
+    "customerMessage": "The recipient's bank is temporarily disconnected from the payment network. Please try again in a few hours.",
+    "resolution": "This is an NPCI-level connectivity issue with the beneficiary bank. Monitor NPCI status page. Retry after 2-4 hours. Consider using a different transfer method if urgent.",
+    "retryable": true,
+    "retryAfterHours": 2,
+    "suggestedAction": "RETRY_LATER_OR_ALTERNATE_METHOD",
+    "npciCode": "U28"
+  },
+  {
+    "code": "STRIPE_CARD_VELOCITY_EXCEEDED",
+    "category": "CARD",
+    "title": "Card Velocity Limit Exceeded",
+    "description": "Too many card transactions within a short time window. Card network or issuer velocity rules triggered. Common after card testing attack or legitimate high-frequency purchases.",
+    "customerMessage": "Too many card transactions. Please wait 30 minutes before trying again, or contact your bank to temporarily raise your limit.",
+    "resolution": "Wait 30-60 minutes for velocity window to reset. If due to card testing, card may be temporarily blocked. Contact issuing bank's fraud line.",
+    "retryable": true,
+    "retryAfterMinutes": 30,
+    "suggestedAction": "WAIT_AND_RETRY"
+  },
+  {
+    "code": "PAYMENT_FROZEN_FRAUD_REVIEW",
+    "category": "FRAUD",
+    "title": "Payment Held for Fraud Review",
+    "description": "AegisPay risk system has flagged this transaction for real-time fraud review. Funds are temporarily held pending manual or automated review. No deduction has occurred.",
+    "customerMessage": "This payment is under security review. You will be notified within 2 hours. No money has been deducted yet.",
+    "resolution": "Risk team reviews flagged transactions within 2 hours. Customer may be asked to provide additional verification (OTP, selfie, document). If cleared, payment processes normally. If declined, no deduction occurs.",
+    "retryable": false,
+    "suggestedAction": "AWAIT_FRAUD_REVIEW"
+  },
+  {
+    "code": "BBPS_BILLER_NOT_AVAILABLE",
+    "category": "BILL_PAYMENT",
+    "title": "BBPS Biller System Unavailable",
+    "description": "The biller (electricity board, gas company, etc.) registered on Bharat Bill Payment System (BBPS) is not responding. BBPS is NPCI's integrated bill payment platform covering 20,000+ billers.",
+    "customerMessage": "The bill payment service for this provider is temporarily unavailable. Please try again later.",
+    "resolution": "BBPS biller outages are typically resolved within 1-4 hours. Bill due date is usually still met if payment initiated before midnight. Check BBPS status page or biller's website.",
+    "retryable": true,
+    "retryAfterHours": 2,
+    "suggestedAction": "RETRY_LATER",
+    "rbiCircular": "DPSS.CO.OD.No.2060/06.08.005/2018-19"
+  }
+]

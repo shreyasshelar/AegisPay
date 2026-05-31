@@ -1,0 +1,80 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# HashiCorp Vault — On-Prem / k3s Helm values
+#
+# Install with:
+#   helm repo add hashicorp https://helm.releases.hashicorp.com
+#   helm upgrade --install vault hashicorp/vault \
+#     --namespace aegispay-vault --create-namespace \
+#     -f infra/vault/values.yaml
+#
+# Then run infra/vault/init.sh to unseal + seed secrets.
+# ─────────────────────────────────────────────────────────────────────────────
+
+global:
+  enabled: true
+  tlsDisable: true   # TLS terminated at Traefik ingress; internal comms are plain
+
+server:
+  # Standalone mode — single pod, file storage backend.
+  # Sufficient for a single on-prem node. HA mode requires Consul or Raft with 3+ nodes.
+  standalone:
+    enabled: true
+    config: |
+      ui = true
+
+      listener "tcp" {
+        tls_disable = 1
+        address     = "[::]:8200"
+        cluster_address = "[::]:8201"
+      }
+
+      storage "file" {
+        path = "/vault/data"
+      }
+
+      # Allow Kubernetes auth method (used by ESO to authenticate)
+      api_addr     = "http://vault.aegispay-vault.svc.cluster.local:8200"
+      cluster_addr = "https://vault.aegispay-vault.svc.cluster.local:8201"
+
+  dataStorage:
+    enabled: true
+    size: 5Gi
+    storageClass: local-path
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+  # Ingress for Vault UI (optional — useful for debugging secrets)
+  ingress:
+    enabled: true
+    ingressClassName: traefik
+    annotations:
+      traefik.ingress.kubernetes.io/router.entrypoints: websecure
+      traefik.ingress.kubernetes.io/router.tls: "true"
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+    hosts:
+      - host: aegispay-vault.shreyasshelar.uk
+        paths: [/]
+    tls:
+      - secretName: vault-tls
+        hosts:
+          - aegispay-vault.shreyasshelar.uk
+
+  # Auto-unseal via Transit (not available on standalone — use manual unseal or
+  # store unseal keys securely after first init)
+  extraEnvironmentVars:
+    VAULT_ADDR: "http://127.0.0.1:8200"
+
+# Vault Agent Injector — not needed since we use ESO as the bridge
+injector:
+  enabled: false
+
+# Vault UI
+ui:
+  enabled: true
+  serviceType: ClusterIP

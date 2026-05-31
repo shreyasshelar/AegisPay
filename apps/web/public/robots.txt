@@ -1,0 +1,15 @@
+# AegisPay — robots.txt
+# Fintech application: no indexing of authenticated or sensitive routes.
+
+User-agent: *
+Disallow: /api/
+Disallow: /back-office/
+Disallow: /transactions/
+Disallow: /send/
+Disallow: /wallet/
+Disallow: /notifications/
+Disallow: /profile/
+Disallow: /onboarding/
+Allow: /
+
+Sitemap: https://app.aegispay.shreyasshelar.uk/sitemap.xml

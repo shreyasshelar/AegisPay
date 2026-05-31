@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- AegisPay brand palette -->
+    <color name="aegis_primary">#1A6BFF</color>
+    <color name="aegis_on_primary">#FFFFFF</color>
+    <color name="aegis_primary_container">#D6E4FF</color>
+    <color name="aegis_on_primary_container">#001848</color>
+    <color name="aegis_secondary">#00C896</color>
+    <color name="aegis_on_secondary">#FFFFFF</color>
+    <color name="aegis_tertiary">#7B61FF</color>
+    <color name="aegis_on_tertiary">#FFFFFF</color>
+    <color name="aegis_background">#F8F9FF</color>
+    <color name="aegis_on_background">#1A1C24</color>
+    <color name="aegis_surface">#FFFFFF</color>
+    <color name="aegis_on_surface">#1A1C24</color>
+    <color name="aegis_error">#FF3B30</color>
+    <color name="aegis_on_error">#FFFFFF</color>
+</resources>

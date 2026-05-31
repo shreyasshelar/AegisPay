@@ -1,0 +1,60 @@
+{{- if .Values.services.api_gateway.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: api-gateway-config
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "aegispay.labels" . | nindent 4 }}
+    app.kubernetes.io/name: api-gateway
+    app.kubernetes.io/component: api-gateway
+data:
+  application.yml: |
+    spring:
+      application:
+        name: api-gateway
+      cloud:
+        gateway:
+          routes: []
+          default-filters:
+            - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
+          httpclient:
+            connect-timeout: 3000
+            response-timeout: 30000
+      data:
+        redis:
+          host: {{ .Values.global.redis.host }}
+          port: {{ .Values.global.redis.port }}
+
+    server:
+      port: {{ .Values.services.api_gateway.port }}
+
+    management:
+      endpoints:
+        web:
+          exposure:
+            include: health,info,prometheus,metrics,gateway
+      endpoint:
+        health:
+          show-details: when_authorized
+
+    aegispay:
+      gateway:
+        oauth2-trusted-issuers:
+          - {{ .Values.global.oauth2.issuerUri }}
+          {{- range .Values.services.api_gateway.extraOauth2Issuers }}
+          - {{ . }}
+          {{- end }}
+        services:
+          user-service: http://user-service:8081
+          transaction-service: http://transaction-service:8082
+          ledger-service: http://ledger-service:8083
+          orchestrator-service: http://payment-orchestrator:8084
+          risk-engine: http://risk-engine:8085
+          notification-service: http://notification-service:8086
+          ai-platform: http://ai-platform:8088
+        rate-limiter:
+          max-requests: {{ .Values.services.api_gateway.rateLimiter.maxRequests | default 100 }}
+          window-seconds: {{ .Values.services.api_gateway.rateLimiter.windowSeconds | default 60 }}
+          key-ttl-seconds: {{ .Values.services.api_gateway.rateLimiter.keyTtlSeconds | default 65 }}
+{{- end }}

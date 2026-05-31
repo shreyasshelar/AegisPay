@@ -1,0 +1,203 @@
+﻿spring:
+  application:
+    name: ai-platform
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+  autoconfigure:
+    exclude:
+      - org.springframework.ai.vectorstore.pgvector.autoconfigure.PgVectorStoreAutoConfiguration
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5433}/${DB_NAME:aegispay_ai}
+    username: ${DB_USERNAME:aegispay}
+    password: ${DB_PASSWORD:aegispay_dev}
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:5}
+      minimum-idle: ${DB_POOL_MIN:2}
+      connection-timeout: 30000
+      keepalive-time: 30000
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    open-in-view: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+  ai:
+    anthropic:
+      api-key: ${ANTHROPIC_API_KEY:sk-ant-placeholder-local-dev}
+      chat:
+        options:
+          model: claude-sonnet-4-6
+          max-tokens: 4096
+          temperature: 0.1
+    openai:
+      api-key: ${OPENAI_API_KEY:sk-placeholder-local-dev}
+      embedding:
+        options:
+          model: text-embedding-3-small
+    vectorstore:
+      pgvector:
+        index-type: HNSW
+        distance-type: COSINE_DISTANCE
+        dimensions: 1536
+        initialize-schema: false
+
+  servlet:
+    multipart:
+      # KYC document images can be up to 5 MB; base64 encoding is done server-side
+      # (binary multipart payload is 33 % smaller than base64 JSON and streams through
+      # the Next.js proxy without buffering, eliminating the 30 s Axios timeout).
+      max-file-size: 6MB
+      max-request-size: 8MB
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: ${OAUTH2_JWK_SET_URI:http://localhost:8180/realms/aegispay/protocol/openid-connect/certs}
+
+server:
+  port: ${SERVER_PORT:8091}
+  shutdown: graceful
+  # KYC uploads arrive with a large Cookie header (chunked next-auth session token)
+  # plus the Authorization Bearer JWT.  Together they exceed Tomcat's 8 KB default,
+  # causing a 400 "Request header is too large" before the body is read.
+  max-http-request-header-size: 32KB
+  tomcat:
+    # Tomcat's default maxPostSize is 2 MB — this limit applies to multipart/form-data
+    # bodies and hard-aborts the TCP connection when exceeded (ECONNRESET at the
+    # API Gateway proxy layer).  It is SEPARATE from spring.servlet.multipart.*
+    # which only controls Spring's MultipartResolver after Tomcat has already accepted
+    # the body.  Setting -1 removes the connector-level cap so KYC document images
+    # up to the Spring multipart max-request-size (8 MB above) are accepted cleanly.
+    max-http-form-post-size: -1
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  metrics:
+    tags:
+      service: ${spring.application.name}
+
+aegispay:
+  ai:
+    rag:
+      top-k: 5
+      similarity-threshold: 0.7
+    audit:
+      enabled: true
+    agent:
+      max-iterations: 10
+    # User Service callback for async KYC processing results.
+    # The AI Platform calls PATCH /api/v1/users/{userId}/kyc/status after each
+    # document pipeline completes. Uses X-Internal-Api-Key (no JWT) for auth.
+    user-service:
+      base-url: ${USER_SERVICE_URL:http://user-service:8081}
+      internal-api-key: ${USER_SERVICE_INTERNAL_API_KEY:aegispay-internal-dev-key}
+    triage:
+      # Directory where service log files live (relative to the working dir).
+      # start-aegispay.bat writes logs here; also used by LogReaderTool.
+      logs-dir: ${TRIAGE_LOGS_DIR:logs}
+      # Absolute path to the git repo root — DeploymentHistoryTool runs git log here.
+      # Auto-detected from the JAR location if left blank.
+      project-root: ${TRIAGE_PROJECT_ROOT:}
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      rag-pipeline:
+        failure-rate-threshold: 50
+        sliding-window-size: 10
+        sliding-window-type: COUNT_BASED
+        wait-duration-in-open-state: 60s
+        permitted-number-of-calls-in-half-open-state: 3
+        record-exceptions:
+          - java.lang.RuntimeException
+          - java.util.concurrent.TimeoutException
+      # KYC vision pipeline (OCR, quality, tampering, validation)
+      # 4 sequential vision calls; each can take 30-90 s on free-tier providers.
+      # Higher failure tolerance (70 %) because free-tier rate limits are common.
+      kyc-ai:
+        failure-rate-threshold: 70
+        sliding-window-size: 5
+        sliding-window-type: COUNT_BASED
+        wait-duration-in-open-state: 60s
+        permitted-number-of-calls-in-half-open-state: 2
+        minimum-number-of-calls: 3
+        record-exceptions:
+          - java.lang.RuntimeException
+          - java.util.concurrent.TimeoutException
+      # AI triage agent
+      triage-agent:
+        failure-rate-threshold: 50
+        sliding-window-size: 5
+        sliding-window-type: COUNT_BASED
+        wait-duration-in-open-state: 60s
+        permitted-number-of-calls-in-half-open-state: 2
+        minimum-number-of-calls: 3
+        record-exceptions:
+          - java.lang.RuntimeException
+          - java.util.concurrent.TimeoutException
+  retry:
+    instances:
+      rag-pipeline:
+        max-attempts: 2
+        # 30s: outlasts OpenRouter's Retry-After (typically 20-21s on free tier 429s).
+        # Only 1 retry — if it fails twice the CB fallback fires rather than blocking longer.
+        wait-duration: 30s
+        enable-exponential-backoff: false
+        retry-exceptions:
+          - java.lang.RuntimeException
+      # KYC vision calls — single attempt, no retry.
+      # Vision calls send the full image (large payload) and each takes 30-90 s.
+      # A retry after a timeout would double the latency and almost certainly hit
+      # the same free-tier quota limit again.  The @CircuitBreaker fallback handles
+      # transient failures gracefully (optimistic pass-through for quality/tampering;
+      # MANUAL_REVIEW routing for OCR).  Let the user re-submit rather than retry.
+      kyc-ai:
+        max-attempts: 1
+        wait-duration: 500ms
+        retry-exceptions:
+          - java.lang.RuntimeException
+      # Triage agent — 2 attempts with 1 s backoff
+      triage-agent:
+        max-attempts: 2
+        wait-duration: 1s
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+        exponential-max-wait-duration: 8s
+        retry-exceptions:
+          - java.lang.RuntimeException
+  timelimiter:
+    instances:
+      rag-pipeline:
+        timeout-duration: 30s
+        cancel-running-future: true
+      # Vision API calls take longer — 90 s cap per individual step.
+      # The KYC pipeline has 4 sequential calls; the API Gateway's dedicated
+      # "kyc-circuit-breaker" TimeLimiter (360 s) guards the total pipeline.
+      kyc-ai:
+        timeout-duration: 90s
+        cancel-running-future: true
+      # Triage agent with tool calls — 45 s cap
+      triage-agent:
+        timeout-duration: 45s
+        cancel-running-future: true
+
+logging:
+  file:
+    name: logs/ai-platform.log
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} [traceId=%X{traceId}] [corrId=%X{correlationId}] - %msg%n"
+  level:
+    root: INFO
+    com.aegispay: DEBUG
+    org.springframework.ai: DEBUG

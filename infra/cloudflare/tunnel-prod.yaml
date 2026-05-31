@@ -1,0 +1,156 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Cloudflare Tunnel — Production (AWS/GKE)
+#
+# In prod the cluster has a public load-balancer IP, but Cloudflare Tunnel is
+# still used to:
+#   - Terminate TLS at Cloudflare edge (free cert, auto-renewed)
+#   - Apply WAF, DDoS protection, bot management
+#   - Hide origin IP (only Cloudflare IPs reach the cluster)
+#   - Zero-trust access for internal tools (ArgoCD, Grafana, Vault)
+#
+# Setup (once):
+#   1. Cloudflare Dashboard → Zero Trust → Networks → Tunnels
+#   2. Create tunnel → name: "aegispay-prod"
+#   3. Copy tunnel token → store in Vault:
+#        vault kv put secret/aegispay/cloudflare/prod tunnel_token="<token>"
+#   4. Add DNS routes in Tunnel config (Cloudflare UI):
+#        aegispay.io                    → http://nginx-ingress.ingress-nginx.svc:80
+#        api.aegispay.io                → http://nginx-ingress.ingress-nginx.svc:80
+#        grafana.internal.aegispay.io   → http://grafana.aegispay-prod.svc:3000
+#        argocd.internal.aegispay.io    → http://argocd-server.argocd.svc:80
+#        vault.internal.aegispay.io     → http://vault.aegispay-prod.svc:8200
+#        keycloak.aegispay.io           → http://keycloak.aegispay-prod.svc:8080
+#   5. Apply: kubectl apply -f infra/cloudflare/tunnel-prod.yaml -n aegispay-prod
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudflared
+  namespace: aegispay-prod
+  labels:
+    app: cloudflared
+    environment: prod
+spec:
+  # 3 replicas for prod HA — each connects independently to Cloudflare edge
+  replicas: 3
+  selector:
+    matchLabels:
+      app: cloudflared
+      environment: prod
+  template:
+    metadata:
+      labels:
+        app: cloudflared
+        environment: prod
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port:   "2000"
+    spec:
+      # Spread across nodes for resilience
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: cloudflared
+
+      containers:
+        - name: cloudflared
+          image: cloudflare/cloudflared:2024.12.2
+          args:
+            - tunnel
+            - --no-autoupdate
+            - --metrics
+            - 0.0.0.0:2000
+            - run
+            - --token
+            - $(TUNNEL_TOKEN)
+          env:
+            - name: TUNNEL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: cloudflare-tunnel-prod-secret
+                  key: tunnel-token
+          ports:
+            - name: metrics
+              containerPort: 2000
+          resources:
+            requests:
+              cpu:    50m
+              memory: 64Mi
+            limits:
+              cpu:    200m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /ready
+              port: 2000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 2000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+
+      # Anti-affinity: don't co-locate all replicas on the same node
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values: [cloudflared]
+                topologyKey: kubernetes.io/hostname
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cloudflared-metrics
+  namespace: aegispay-prod
+  labels:
+    app: cloudflared
+    environment: prod
+spec:
+  selector:
+    app: cloudflared
+    environment: prod
+  ports:
+    - name: metrics
+      port: 2000
+      targetPort: 2000
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: cloudflared-prod
+  namespace: aegispay-prod
+  labels:
+    app: cloudflared
+    environment: prod
+spec:
+  selector:
+    matchLabels:
+      app: cloudflared
+      environment: prod
+  endpoints:
+    - port: metrics
+      interval: 30s
+---
+# PodDisruptionBudget — keep at least 2 tunnel replicas up during node drains
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: cloudflared-pdb
+  namespace: aegispay-prod
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: cloudflared
+      environment: prod

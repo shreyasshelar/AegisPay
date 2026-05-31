@@ -1,0 +1,23 @@
+# Test configuration for data-pipeline — disables Spring Boot auto-wiring of Kafka Streams
+# and ClickHouse so unit tests run with TopologyTestDriver only (no broker, no DB).
+spring:
+  application:
+    name: data-pipeline-test
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration
+      - org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
+      - org.springframework.kafka.annotation.KafkaStreamsDefaultConfiguration
+
+  kafka:
+    bootstrap-servers: localhost:9092
+    streams:
+      application-id: aegispay-data-pipeline-test
+      properties:
+        processing.guarantee: at_least_once
+
+logging:
+  level:
+    root: WARN
+    com.aegispay: DEBUG

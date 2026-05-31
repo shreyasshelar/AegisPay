@@ -1,0 +1,25 @@
+{{- if .Values.services.notification_service.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: notification-service-config
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "aegispay.labels" . | nindent 4 }}
+    app.kubernetes.io/name: notification-service
+data:
+  DB_HOST: {{ .Values.global.postgresql.host | quote }}
+  DB_PORT: {{ .Values.global.postgresql.port | quote }}
+  DB_USERNAME: {{ .Values.global.postgresql.username | quote }}
+  DB_NAME: "aegispay_notifications"
+  KAFKA_BOOTSTRAP_SERVERS: {{ .Values.global.kafka.brokers | quote }}
+  REDIS_HOST: {{ .Values.global.redis.host | quote }}
+  REDIS_PORT: {{ .Values.global.redis.port | quote }}
+  MONGODB_URI: {{ .Values.global.mongodb.uri | quote }}
+  OAUTH2_ISSUER_URI: {{ .Values.global.oauth2.issuerUri | quote }}
+  SERVER_PORT: "8086"
+  SMTP_HOST: {{ .Values.global.smtp.host | default "smtp.gmail.com" | quote }}
+  SMTP_PORT: {{ .Values.global.smtp.port | default "587" | quote }}
+  SMTP_USERNAME: {{ .Values.global.smtp.username | default "" | quote }}
+  SMTP_FROM_ADDRESS: {{ .Values.global.smtp.fromAddress | default "" | quote }}
+{{- end }}

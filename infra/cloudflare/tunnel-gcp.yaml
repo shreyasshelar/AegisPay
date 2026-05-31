@@ -1,0 +1,79 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Cloudflare Tunnel — GCP (single-node K3s)
+#
+# One replica only (single node — no point in HA).
+# Token comes from GCP Secret Manager via ESO → K8s Secret.
+#
+# Cloudflare Dashboard ingress rules for this tunnel:
+# All hostnames are flat (one level under shreyasshelar.uk) so Cloudflare
+# Universal SSL wildcard *.shreyasshelar.uk covers them all.
+#
+#   aegispay.shreyasshelar.uk         → http://web.aegispay.svc.cluster.local:3000
+#   aegispay-api.shreyasshelar.uk     → http://api-gateway.aegispay.svc.cluster.local:8080
+#   aegispay-ws.shreyasshelar.uk      → http://notification-service.aegispay.svc.cluster.local:8086
+#   aegispay-argocd.shreyasshelar.uk  → http://argocd-server.argocd.svc.cluster.local:80
+#   aegispay-grafana.shreyasshelar.uk → http://grafana.aegispay.svc.cluster.local:3000
+#   aegispay-keycloak.shreyasshelar.uk→ http://keycloak.aegispay-infra.svc.cluster.local:8080
+#   aegispay-kafka.shreyasshelar.uk   → http://kafka-ui.aegispay-infra.svc.cluster.local:8080
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudflared
+  namespace: aegispay
+  labels:
+    app: cloudflared
+    environment: gcp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cloudflared
+  template:
+    metadata:
+      labels:
+        app: cloudflared
+        environment: gcp
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "2000"
+    spec:
+      containers:
+        - name: cloudflared
+          image: cloudflare/cloudflared:2024.12.2
+          args:
+            - tunnel
+            - --no-autoupdate
+            - --metrics
+            - 0.0.0.0:2000
+            - run
+            - --token
+            - $(TUNNEL_TOKEN)
+          env:
+            - name: TUNNEL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: aegispay-cloudflare-secret
+                  key: tunnel-token
+          ports:
+            - name: metrics
+              containerPort: 2000
+          resources:
+            requests:
+              cpu: 20m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+          livenessProbe:
+            httpGet:
+              path: /ready
+              port: 2000
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 2000
+            initialDelaySeconds: 5
+            periodSeconds: 10

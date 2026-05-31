@@ -1,0 +1,52 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# AegisPay Helm Chart — GCP Free-Tier values
+#
+# Applied on top of values.yaml + values-dev.yaml:
+#   helm install aegispay . -f values.yaml -f values-dev.yaml -f values-gcp.yaml
+#
+# What this file overrides:
+#   - Secrets backend: Vault → GCP Secret Manager (saves ~512 MB RAM on the VM)
+#   - Image pull policy: IfNotPresent (saves egress on restart)
+# Everything else (domains, replicas, JVM tuning) comes from values-dev.yaml.
+# ─────────────────────────────────────────────────────────────────────────────
+
+global:
+  # IfNotPresent avoids re-pulling on every pod restart when using SHA tags
+  imagePullPolicy: IfNotPresent
+
+# ─── Secrets: GCP Secret Manager via External Secrets Operator ───────────────
+# ESO authenticates using the GCE VM's attached service account (ADC).
+# No Vault pod needed — saves ~512 MB on the 16 GB VM.
+secrets:
+  useVault: false
+  useGcpSm: true
+  gcpSm:
+    # Replace with your actual GCP project ID (e.g. "aegispay-gcp-123456")
+    projectId: "aegispay"
+
+  # GCP Secret Manager secret names (created by infra/gcp/secrets-init.sh)
+  db:
+    secretName: "aegispay-db-password"
+  redis:
+    secretName: "aegispay-redis-password"
+  mongo:
+    secretName: "aegispay-mongo-password"
+  kafka:
+    secretName: "aegispay-kafka-password"
+  ai:
+    secretName: "aegispay-openrouter-api-key"
+  stripe:
+    secretName: "aegispay-stripe-secret-key"
+    webhookSecretName: "aegispay-stripe-webhook-secret"
+  smtp:
+    secretName: "aegispay-smtp-password"
+  slack:
+    secretName: "aegispay-slack-webhook-url"
+  fast2sms:
+    secretName: "aegispay-fast2sms-api-key"
+  clickhouse:
+    secretName: "aegispay-clickhouse-password"
+  keycloak:
+    secretName: "aegispay-keycloak-admin-password"
+  cloudflare:
+    secretName: "aegispay-cloudflare-tunnel-token"

@@ -1,0 +1,240 @@
+# AegisPay — Local Development Stack
+# Runs all infrastructure dependencies for local development.
+#
+# Usage:
+#   docker compose up -d          # start all infra
+#   docker compose down -v        # stop + remove volumes
+#   docker compose logs -f kafka  # tail a specific service
+#
+# After startup, run each Spring Boot service locally (mvn spring-boot:run)
+# pointing at the ports below, or run the full backend with:
+#   mvn -pl services/user-service spring-boot:run
+
+services:
+  # ── PostgreSQL 16 ────────────────────────────────────────────────────────────
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: aegispay-postgres
+    environment:
+      POSTGRES_USER: aegispay
+      POSTGRES_PASSWORD: aegispay_dev
+      POSTGRES_DB: aegispay
+    ports:
+      - "5433:5432" # 5433 on host avoids conflict with local PostgreSQL
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/local/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aegispay"]
+      interval: 10s
+      retries: 5
+    restart: unless-stopped
+    
+  # ── DB init (runs every start, idempotent — ensures all databases exist) ─────
+  db-init:
+    image: pgvector/pgvector:pg16
+    container_name: aegispay-db-init
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: aegispay_dev
+    command: >
+      bash -c "
+        for db in aegispay_users aegispay_transactions aegispay_ledger aegispay_sagas aegispay_risk aegispay_ai aegispay_keycloak; do
+
+          if ! psql -h postgres -U aegispay -d postgres -tAc \"SELECT 1 FROM pg_database WHERE datname='$$db'\" | grep -q 1; then
+            echo \"Creating database: $$db\"
+            psql -h postgres -U aegispay -d postgres -c \"CREATE DATABASE \\\"$$db\\\"\";
+          fi;
+
+          psql -h postgres -U aegispay -d postgres -c \"GRANT ALL PRIVILEGES ON DATABASE \\\"$$db\\\" TO aegispay\";
+
+        done
+      "
+    restart: "no"
+
+  # ── Redis 7 ─────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: aegispay-redis
+    command: redis-server --requirepass aegispay_dev --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "aegispay_dev", "ping"]
+      interval: 10s
+      retries: 5
+    restart: unless-stopped
+
+  # ── MongoDB 7 ────────────────────────────────────────────────────────────────
+  mongodb:
+    image: mongo:7
+    container_name: aegispay-mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: aegispay
+      MONGO_INITDB_ROOT_PASSWORD: aegispay_dev
+      MONGO_INITDB_DATABASE: aegispay
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'mongosh --eval "db.adminCommand(''ping'').ok" --quiet 2>/dev/null | grep -q 1',
+        ]
+      interval: 15s
+      retries: 10
+      start_period: 60s
+    restart: unless-stopped
+
+  # ── Kafka (KRaft, single-node) ───────────────────────────────────────────────
+  kafka:
+    # Official Apache Kafka image (free) — replaces Bitnami which went commercial.
+    # Env vars use KAFKA_ prefix directly (no KAFKA_CFG_ wrapper).
+    image: apache/kafka:3.7.0
+    container_name: aegispay-kafka
+    environment:
+      # KRaft mode — no ZooKeeper
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      # Fixed cluster ID ensures volume data survives container restarts
+      CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
+    ports:
+      - "9094:9094" # host access (EXTERNAL listener)
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 9092 || exit 1"]
+      interval: 10s
+      retries: 15
+      start_period: 30s
+    restart: unless-stopped
+
+  # ── Kafka UI (optional — remove if not needed) ───────────────────────────────
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: aegispay-kafka-ui
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+    ports:
+      - "8090:8080"
+    restart: unless-stopped
+
+  # ── Keycloak 24 (multi-IdP dev identity provider) ────────────────────────────
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0
+    container_name: aegispay-keycloak
+    command: start-dev --import-realm
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/aegispay_keycloak
+      KC_DB_USERNAME: aegispay
+      KC_DB_PASSWORD: aegispay_dev
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HTTP_PORT: 8180
+    ports:
+      - "8180:8180"
+    volumes:
+      - ./infra/local/keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "grep -q ':1FF4 ' /proc/net/tcp6"]
+      interval: 15s
+      retries: 30
+      start_period: 300s
+    restart: unless-stopped
+
+  # ── ClickHouse (OLAP analytics store) ────────────────────────────────────────
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.4-alpine
+    container_name: aegispay-clickhouse
+    environment:
+      CLICKHOUSE_DB: aegispay_analytics
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: "" # empty for local dev
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+    ports:
+      - "8123:8123" # HTTP interface (JDBC)
+      - "9000:9000" # Native protocol
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - ./infra/clickhouse/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8123/ping | grep -q Ok"]
+      interval: 15s
+      retries: 15
+      start_period: 520s
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    restart: unless-stopped
+
+  # ── Grafana (analytics dashboards — ClickHouse-backed) ───────────────────────
+  # Dashboards auto-provisioned from infra/grafana/dashboards/
+  # URL: http://localhost:3100  admin / admin
+  grafana:
+    image: grafana/grafana-oss:10.4.2
+    container_name: aegispay-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_INSTALL_PLUGINS: grafana-clickhouse-datasource
+      GF_PATHS_PROVISIONING: /etc/grafana/provisioning
+      GF_SERVER_HTTP_PORT: "3100"
+      SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-https://hooks.slack.com/services/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}
+      OPS_EMAIL: ${OPS_EMAIL:-ops@aegispay.shreyasshelar.uk}
+    ports:
+      - "3100:3100"   # avoids clash with Next.js on 3000
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3100/api/health | grep -q ok"]
+      interval: 15s
+      retries: 20
+      start_period: 90s
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  mongodb_data:
+  kafka_data:
+  clickhouse_data:
+  grafana_data:
+
+networks:
+  default:
+    name: aegispay-local

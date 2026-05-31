@@ -1,0 +1,16 @@
+{{- if .Values.services.api_gateway.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: api-gateway
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "aegispay.labels" . | nindent 4 }}
+    app.kubernetes.io/name: api-gateway
+    app.kubernetes.io/component: api-gateway
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      {{- include "aegispay.selectorLabels" (dict "name" "api-gateway" "context" .) | nindent 6 }}
+{{- end }}

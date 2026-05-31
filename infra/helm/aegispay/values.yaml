@@ -1,0 +1,417 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# AegisPay Helm Chart — Base Values
+# All environment-specific overrides live in values-{env}.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+
+global:
+  namespace: aegispay
+  imageRegistry: ghcr.io
+  imageRepositoryPrefix: ghcr.io/shreyasshelar/aegispay
+  imagePullPolicy: IfNotPresent
+  imagePullSecrets: []
+
+  # Shared infrastructure endpoints (overridden per env)
+  kafka:
+    brokers: "kafka-headless.aegispay-infra.svc.cluster.local:9092"
+  postgresql:
+    host: "postgresql.aegispay-infra.svc.cluster.local"
+    port: "5432"
+    username: "aegispay"
+  redis:
+    host: "redis-master.aegispay-infra.svc.cluster.local"
+    port: "6379"
+  mongodb:
+    uri: "mongodb://mongodb.aegispay-infra.svc.cluster.local:27017"
+  oauth2:
+    issuerUri: "http://keycloak.aegispay-infra.svc.cluster.local:8080/realms/aegispay"
+  clickhouse:
+    url: "jdbc:clickhouse://clickhouse.aegispay-infra.svc.cluster.local:8123/aegispay_analytics"
+    username: "default"
+  smtp:
+    host: "smtp.gmail.com"
+    port: "587"
+    username: ""          # set per-env or via ExternalSecret
+    fromAddress: ""       # set per-env
+
+# ─── Service definitions ──────────────────────────────────────────────────────
+services:
+  api_gateway:
+    enabled: true
+    image:
+      repository: api-gateway
+      tag: latest
+    replicas: 2
+    port: 8080
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 10
+      targetCPUUtilizationPercentage: 70
+    ingress:
+      enabled: false
+      className: nginx
+      hosts:
+        - host: api.aegispay.io
+      tls: []
+      annotations: {}
+    rateLimiter:
+      maxRequests: 100
+      windowSeconds: 60
+      keyTtlSeconds: 65
+    extraOauth2Issuers: []
+
+  user_service:
+    enabled: true
+    image:
+      repository: user-service
+      tag: latest
+    replicas: 2
+    port: 8081
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 6
+      targetCPUUtilizationPercentage: 70
+
+  transaction_service:
+    enabled: true
+    image:
+      repository: transaction-service
+      tag: latest
+    replicas: 3
+    port: 8082
+    resources:
+      requests:
+        cpu: 300m
+        memory: 768Mi
+      limits:
+        cpu: 1500m
+        memory: 1536Mi
+    autoscaling:
+      enabled: true
+      minReplicas: 3
+      maxReplicas: 12
+      targetCPUUtilizationPercentage: 65
+
+  ledger_service:
+    enabled: true
+    image:
+      repository: ledger-service
+      tag: latest
+    replicas: 3
+    port: 8083
+    resources:
+      requests:
+        cpu: 300m
+        memory: 768Mi
+      limits:
+        cpu: 1500m
+        memory: 1536Mi
+    autoscaling:
+      enabled: true
+      minReplicas: 3
+      maxReplicas: 12
+      targetCPUUtilizationPercentage: 65
+
+  payment_orchestrator:
+    enabled: true
+    image:
+      repository: payment-orchestrator
+      tag: latest
+    replicas: 2
+    port: 8084
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 8
+      targetCPUUtilizationPercentage: 70
+    extraEnv:
+      - name: STRIPE_SECRET_KEY
+        valueFrom:
+          secretKeyRef:
+            name: aegispay-stripe-secret
+            key: secret-key
+      - name: STRIPE_WEBHOOK_SECRET
+        valueFrom:
+          secretKeyRef:
+            name: aegispay-stripe-secret
+            key: webhook-secret
+
+  risk_engine:
+    enabled: true
+    image:
+      repository: risk-engine
+      tag: latest
+    replicas: 2
+    port: 8085
+    resources:
+      requests:
+        cpu: 300m
+        memory: 768Mi
+      limits:
+        cpu: 1500m
+        memory: 1536Mi
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 8
+      targetCPUUtilizationPercentage: 70
+
+  notification_service:
+    enabled: true
+    image:
+      repository: notification-service
+      tag: latest
+    replicas: 2
+    port: 8086
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        cpu: 800m
+        memory: 1Gi
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 6
+      targetCPUUtilizationPercentage: 70
+    extraEnv:
+      - name: SMTP_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: aegispay-smtp-secret
+            key: password
+      - name: SLACK_WEBHOOK_URL
+        valueFrom:
+          secretKeyRef:
+            name: aegispay-slack-secret
+            key: webhook-url
+            optional: true   # Slack is optional — service starts without it
+      - name: FAST2SMS_API_KEY
+        valueFrom:
+          secretKeyRef:
+            name: aegispay-fast2sms-secret
+            key: api-key
+            optional: true   # SMS is optional — service starts without it
+
+  ai_platform:
+    enabled: true
+    image:
+      repository: ai-platform
+      tag: latest
+    replicas: 2
+    port: 8091
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: 2000m
+        memory: 2Gi
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 6
+      targetCPUUtilizationPercentage: 60
+    extraEnv:
+      - name: ANTHROPIC_API_KEY
+        valueFrom:
+          secretKeyRef:
+            name: aegispay-ai-secret
+            key: anthropic-api-key
+
+  data_pipeline:
+    enabled: true
+    image:
+      repository: data-pipeline
+      tag: latest
+    replicas: 2
+    port: 8089
+    resources:
+      requests:
+        cpu: 300m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 6
+      targetCPUUtilizationPercentage: 70
+    extraEnv:
+      - name: CLICKHOUSE_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: aegispay-clickhouse-secret
+            key: password
+
+  reconciliation_service:
+    enabled: true
+    image:
+      repository: reconciliation-service
+      tag: latest
+    replicas: 1          # batch job — single instance is fine
+    port: 8087
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+    autoscaling:
+      enabled: false     # reconciliation is scheduled, not latency-sensitive
+    initContainers:
+      - name: wait-for-ledger
+        image: busybox:1.36
+        command:
+          - sh
+          - -c
+          - |
+            until wget -qO- http://ledger-service:8083/actuator/health 2>/dev/null | grep -q '"status":"UP"'; do
+              echo "waiting for ledger-service..."; sleep 5
+            done
+    extraEnv:
+      - name: STRIPE_SECRET_KEY
+        valueFrom:
+          secretKeyRef:
+            name: aegispay-stripe-secret
+            key: secret-key
+      - name: CLICKHOUSE_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: aegispay-clickhouse-secret
+            key: password
+
+# ─── Ingress (api-gateway only) ───────────────────────────────────────────────
+ingress:
+  enabled: false
+  className: nginx
+  host: api.aegispay.io
+  tls:
+    enabled: false
+    secretName: aegispay-tls
+
+# ─── Pod disruption budgets ──────────────────────────────────────────────────
+pdb:
+  minAvailable: 1
+
+# ─── External Secrets Operator ───────────────────────────────────────────────
+secrets:
+  useVault: false          # true = Vault, false = AWS Secrets Manager
+  vault:
+    address: "https://vault.aegispay-infra.svc.cluster.local:8200"
+    path: "aegispay"
+    role: "aegispay-app"
+  aws:
+    region: "ap-south-1"
+  db:
+    secretPath: "aegispay/db"
+  redis:
+    secretPath: "aegispay/redis"
+  ai:
+    secretPath: "aegispay/ai-keys"
+  kafka:
+    secretPath: "aegispay/kafka"
+  stripe:
+    secretPath: "aegispay/stripe"
+  smtp:
+    secretPath: "aegispay/smtp"
+  slack:
+    secretPath: "aegispay/slack"
+  fast2sms:
+    secretPath: "aegispay/fast2sms"
+  clickhouse:
+    secretPath: "aegispay/clickhouse"
+
+# ─── ClickHouse ──────────────────────────────────────────────────────────────
+clickhouse:
+  host: "clickhouse.aegispay-infra.svc.cluster.local"
+  port: 9000
+  user: default
+  initJob:
+    enabled: true
+    clientVersion: "24.4"
+
+# ─── Grafana (ClickHouse analytics dashboards) ───────────────────────────────
+# This deploys a dedicated Grafana for AegisPay's ClickHouse analytics.
+# Separate from kube-prometheus-stack's Grafana (which covers Prometheus metrics).
+grafana:
+  enabled: true
+  image:
+    tag: "10.4.2"
+  port: 3100
+  replicas: 1
+  adminUser: admin
+  # adminPassword is read from the grafana-admin-secret K8s secret (managed by ESO).
+  # Set grafana.adminPasswordPlain only for non-prod environments where ESO is not used.
+  adminPasswordPlain: ""
+  adminPasswordSecret:
+    name: grafana-admin-secret
+    key: admin-password
+  persistence:
+    enabled: true
+    storageClassName: ""    # empty = use cluster default StorageClass
+    size: 5Gi
+    accessMode: ReadWriteOnce
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  ingress:
+    enabled: false
+    className: nginx
+    host: grafana.aegispay.io
+    tls:
+      enabled: false
+      secretName: grafana-tls
+    annotations: {}
+  plugins:
+    - grafana-clickhouse-datasource
+  # ClickHouse datasource — points at the in-cluster ClickHouse
+  clickhouseDatasource:
+    host: "clickhouse.aegispay-infra.svc.cluster.local"
+    port: 9000
+    username: "default"
+    database: "aegispay_analytics"
+    # password is empty in dev; in prod it is read from aegispay-clickhouse-secret
+    passwordSecretRef:
+      name: aegispay-clickhouse-secret
+      key: password
+
+# ─── Monitoring & Alerting ───────────────────────────────────────────────────
+monitoring:
+  prometheusRules:
+    enabled: true
+  thresholds:
+    sagaTimeoutRatePerMin: 0.1
+    kafkaConsumerLagMax: 5000
+    notificationErrorRatePerMin: 0.5   # alert if >0.5 notification failures/min
+    dataPipelineSinkErrorsPerMin: 0.2  # alert if ClickHouse sink errors exceed threshold
+    reconciliationBreakCount: 5        # alert if unresolved breaks exceed this

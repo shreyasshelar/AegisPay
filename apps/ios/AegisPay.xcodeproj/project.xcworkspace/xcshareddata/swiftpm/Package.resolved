@@ -1,0 +1,33 @@
+{
+  "originHash" : "ae73df3e99c874f2eed8490c62a973b1e95f5ffcd018caca38ba9000e1d21548",
+  "pins" : [
+    {
+      "identity" : "appauth-ios",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/openid/AppAuth-iOS.git",
+      "state" : {
+        "revision" : "2781038865a80e2c425a1da12cc1327bcd56501f",
+        "version" : "1.7.6"
+      }
+    },
+    {
+      "identity" : "keychainaccess",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/kishikawakatsumi/KeychainAccess.git",
+      "state" : {
+        "revision" : "84e546727d66f1adc5439debad16270d0fdd04e7",
+        "version" : "4.2.2"
+      }
+    },
+    {
+      "identity" : "stripe-ios-spm",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/stripe/stripe-ios-spm.git",
+      "state" : {
+        "revision" : "653fc8cfc40b33740401f9bd9faa8588f9a53e5f",
+        "version" : "23.32.0"
+      }
+    }
+  ],
+  "version" : 3
+}

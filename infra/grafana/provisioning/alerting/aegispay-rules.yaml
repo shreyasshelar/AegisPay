@@ -1,0 +1,433 @@
+apiVersion: 1
+
+# ── Contact points ─────────────────────────────────────────────────────────────
+# Default routes go to the "aegispay-ops" contact point.
+# Override SLACK_WEBHOOK_URL and OPS_EMAIL env vars at runtime.
+
+contactPoints:
+  - orgId: 1
+    name: aegispay-ops
+    receivers:
+      - uid: aegispay-slack
+        type: slack
+        settings:
+          url: ${SLACK_WEBHOOK_URL}
+          title: |
+            {{ if eq .Status "firing" }}🔴{{ else }}✅{{ end }} AegisPay — {{ .CommonLabels.alertname }}
+          text: |
+            *Severity:* {{ .CommonLabels.severity }}
+            *Summary:* {{ .CommonAnnotations.summary }}
+            *Description:* {{ .CommonAnnotations.description }}
+            {{ range .Alerts }}• {{ .Labels.service }} — {{ .Annotations.description }}{{ end }}
+          username: Grafana Alerting
+          iconEmoji: ":rotating_light:"
+      - uid: aegispay-email
+        type: email
+        settings:
+          addresses: ${OPS_EMAIL}
+          subject: >
+            [AegisPay] {{ .Status | toUpper }} — {{ .CommonLabels.alertname }}
+
+# ── Notification policy ────────────────────────────────────────────────────────
+policies:
+  - orgId: 1
+    receiver: aegispay-ops
+    group_by: [alertname, service]
+    group_wait: 30s
+    group_interval: 5m
+    repeat_interval: 4h
+    routes:
+      - receiver: aegispay-ops
+        matchers:
+          - severity =~ "critical|high"
+        group_wait: 10s
+        repeat_interval: 1h
+
+# ── Alert rules ────────────────────────────────────────────────────────────────
+
+groups:
+  # ── Kafka / DLQ ──────────────────────────────────────────────────────────────
+  - orgId: 1
+    name: kafka-dlq
+    folder: AegisPay
+    interval: 1m
+    rules:
+      - uid: aegis-dlq-depth
+        title: Kafka DLQ Depth > 0
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: aegispay-clickhouse
+            model:
+              rawSql: |
+                SELECT
+                  topic_name,
+                  count() AS dlq_messages
+                FROM aegispay_analytics.kafka_dlq_events
+                WHERE occurred_at >= now() - INTERVAL 5 MINUTE
+                GROUP BY topic_name
+                HAVING dlq_messages > 0
+              format: table
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              reducer: sum
+              expression: A
+        noDataState: OK
+        execErrState: Alerting
+        for: 1m
+        labels:
+          severity: high
+          service: kafka
+        annotations:
+          summary: "Kafka DLQ has unprocessed messages"
+          description: "Messages are accumulating in a Kafka Dead Letter Queue. Manual reprocessing may be required."
+          runbook: "https://github.com/shreyasshelar/AegisPay/blob/main/docs/runbooks/kafka-dlq.md"
+
+  # ── Saga health ───────────────────────────────────────────────────────────────
+  - orgId: 1
+    name: saga-health
+    folder: AegisPay
+    interval: 2m
+    rules:
+      - uid: aegis-saga-stuck
+        title: Saga Stuck (no terminal state in 10 min)
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: aegispay-clickhouse
+            model:
+              rawSql: |
+                SELECT count() AS stuck_sagas
+                FROM aegispay_analytics.saga_latencies
+                WHERE
+                  final_status NOT IN ('COMPLETED', 'ROLLED_BACK', 'FAILED')
+                  AND started_at < now() - INTERVAL 10 MINUTE
+              format: table
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    params: [0]
+                    type: gt
+        noDataState: OK
+        execErrState: Alerting
+        for: 5m
+        labels:
+          severity: critical
+          service: payment-orchestrator
+        annotations:
+          summary: "Payment saga(s) stuck — no terminal state after 10 minutes"
+          description: "One or more sagas have been in a non-terminal state for over 10 minutes. Check payment-orchestrator and downstream services."
+          runbook: "https://github.com/shreyasshelar/AegisPay/blob/main/docs/runbooks/saga-stuck.md"
+
+      - uid: aegis-saga-rollback-rate
+        title: Saga Rollback Rate > 5% (5 min window)
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: aegispay-clickhouse
+            model:
+              rawSql: |
+                SELECT
+                  countIf(final_status IN ('ROLLED_BACK', 'FAILED')) * 100.0 / count() AS rollback_pct
+                FROM aegispay_analytics.saga_latencies
+                WHERE started_at >= now() - INTERVAL 5 MINUTE
+                  AND count() > 5
+              format: table
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    params: [5]
+                    type: gt
+        noDataState: OK
+        execErrState: Alerting
+        for: 5m
+        labels:
+          severity: high
+          service: payment-orchestrator
+        annotations:
+          summary: "Saga rollback rate exceeds 5% in the last 5 minutes"
+          description: "More than 5% of payment sagas are rolling back. Possible downstream failure in Stripe, Ledger, or Risk Engine."
+
+  # ── Transaction error rate ────────────────────────────────────────────────────
+  - orgId: 1
+    name: transaction-errors
+    folder: AegisPay
+    interval: 1m
+    rules:
+      - uid: aegis-txn-error-rate
+        title: Transaction Error Rate > 5% (5 min window)
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: aegispay-clickhouse
+            model:
+              rawSql: |
+                SELECT
+                  countIf(status IN ('FAILED', 'ROLLED_BACK')) * 100.0 / count() AS error_pct
+                FROM aegispay_analytics.transaction_metrics
+                WHERE event_time >= now() - INTERVAL 5 MINUTE
+                  AND count() > 10
+              format: table
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    params: [5]
+                    type: gt
+        noDataState: OK
+        execErrState: Alerting
+        for: 5m
+        labels:
+          severity: high
+          service: transaction-service
+        annotations:
+          summary: "Transaction failure rate > 5%"
+          description: "More than 5% of transactions in the last 5 minutes have failed or rolled back."
+
+      - uid: aegis-high-risk-spike
+        title: High-Risk Transaction Spike (score >= 70, > 10% of volume)
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: aegispay-clickhouse
+            model:
+              rawSql: |
+                SELECT
+                  countIf(risk_score >= 70) * 100.0 / count() AS high_risk_pct
+                FROM aegispay_analytics.transaction_metrics
+                WHERE event_time >= now() - INTERVAL 10 MINUTE
+                  AND count() > 10
+              format: table
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    params: [10]
+                    type: gt
+        noDataState: OK
+        execErrState: Alerting
+        for: 5m
+        labels:
+          severity: high
+          service: risk-engine
+        annotations:
+          summary: "High-risk transaction spike — possible fraud wave"
+          description: "More than 10% of recent transactions have a risk score ≥ 70. Review Risk Engine decisions and Stripe Radar."
+
+  # ── SLA / latency ─────────────────────────────────────────────────────────────
+  - orgId: 1
+    name: sla-latency
+    folder: AegisPay
+    interval: 2m
+    rules:
+      - uid: aegis-p95-latency
+        title: Saga P95 Latency > 800 ms
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: aegispay-clickhouse
+            model:
+              rawSql: |
+                SELECT quantile(0.95)(duration_ms) AS p95_ms
+                FROM aegispay_analytics.saga_latencies
+                WHERE started_at >= now() - INTERVAL 10 MINUTE
+                  AND final_status = 'COMPLETED'
+              format: table
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    params: [800]
+                    type: gt
+        noDataState: OK
+        execErrState: Alerting
+        for: 10m
+        labels:
+          severity: high
+          service: payment-orchestrator
+        annotations:
+          summary: "P95 saga latency exceeds 800 ms SLA"
+          description: "The 95th-percentile end-to-end payment saga latency has exceeded 800 ms over the last 10 minutes."
+
+      - uid: aegis-p99-latency
+        title: Saga P99 Latency > 1500 ms (SLA breach)
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: aegispay-clickhouse
+            model:
+              rawSql: |
+                SELECT quantile(0.99)(duration_ms) AS p99_ms
+                FROM aegispay_analytics.saga_latencies
+                WHERE started_at >= now() - INTERVAL 10 MINUTE
+                  AND final_status = 'COMPLETED'
+              format: table
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    params: [1500]
+                    type: gt
+        noDataState: OK
+        execErrState: Alerting
+        for: 10m
+        labels:
+          severity: critical
+          service: payment-orchestrator
+        annotations:
+          summary: "P99 saga latency exceeds 1500 ms — SLA breach"
+          description: "The 99th-percentile end-to-end payment saga latency has breached the 1500 ms SLA."
+
+  # ── KYC ───────────────────────────────────────────────────────────────────────
+  - orgId: 1
+    name: kyc-health
+    folder: AegisPay
+    interval: 5m
+    rules:
+      - uid: aegis-kyc-rejection-spike
+        title: KYC Rejection Rate > 20% (1 h window)
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: aegispay-clickhouse
+            model:
+              rawSql: |
+                SELECT
+                  countIf(final_status = 'REJECTED') * 100.0 / count() AS rejection_pct
+                FROM aegispay_analytics.kyc_funnel
+                WHERE submitted_at >= now() - INTERVAL 1 HOUR
+                  AND count() > 5
+              format: table
+          - refId: C
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    params: [20]
+                    type: gt
+        noDataState: OK
+        execErrState: Alerting
+        for: 15m
+        labels:
+          severity: high
+          service: ai-platform
+        annotations:
+          summary: "KYC rejection rate > 20% — possible AI model degradation"
+          description: "More than 20% of KYC submissions in the last hour were rejected. May indicate AI validation miscalibration or circuit breaker fallbacks activating."
+
+  # ── Reconciliation ────────────────────────────────────────────────────────────
+  - orgId: 1
+    name: reconciliation
+    folder: AegisPay
+    interval: 30m
+    rules:
+      - uid: aegis-reconciliation-mismatch
+        title: Reconciliation Mismatch Detected
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: aegispay-clickhouse
+            model:
+              rawSql: |
+                SELECT count() AS mismatches
+                FROM aegispay_analytics.reconciliation_results
+                WHERE run_at >= now() - INTERVAL 1 HOUR
+                  AND status = 'MISMATCH'
+              format: table
+          - refId: C
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    params: [0]
+                    type: gt
+        noDataState: OK
+        execErrState: Alerting
+        for: 5m
+        labels:
+          severity: critical
+          service: reconciliation-service
+        annotations:
+          summary: "Ledger reconciliation mismatch detected"
+          description: "The reconciliation service has found a discrepancy between ledger entries and Stripe settlement data. Immediate investigation required."
+          runbook: "https://github.com/shreyasshelar/AegisPay/blob/main/docs/runbooks/reconciliation-mismatch.md"

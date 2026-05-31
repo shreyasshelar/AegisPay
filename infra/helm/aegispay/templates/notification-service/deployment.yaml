@@ -1,0 +1,3 @@
+{{- if .Values.services.notification_service.enabled }}
+{{ include "aegispay.serviceDeployment" (dict "name" "notification-service" "key" "notification_service" "svc" .Values.services.notification_service "context" .) }}
+{{- end }}

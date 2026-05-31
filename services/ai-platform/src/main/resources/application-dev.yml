@@ -1,0 +1,86 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# AI Platform — Dev Spring Profile
+#
+# Activated when SPRING_PROFILES_ACTIVE=dev (set in values-dev.yaml).
+# Replaces Anthropic Claude with OpenRouter (free tier) for all AI tasks.
+#
+# OpenRouter is OpenAI-API-compatible — Spring AI's OpenAI adapter works
+# without any code changes. Only the base-url and model names change.
+#
+# Free models on OpenRouter (no billing required):
+#   Text / RAG / agents:
+#     meta-llama/llama-3.1-8b-instruct:free
+#     mistralai/mistral-7b-instruct:free
+#     google/gemma-2-9b-it:free
+#
+#   Vision / OCR (KYC document processing):
+#     meta-llama/llama-3.2-11b-vision-instruct:free
+#     qwen/qwen-2-vl-7b-instruct:free
+#
+# Get a free API key at: https://openrouter.ai
+# ─────────────────────────────────────────────────────────────────────────────
+
+spring:
+  ai:
+    # ── Disable Anthropic (not used on dev) ───────────────────────────────────
+    anthropic:
+      api-key: "not-used-on-dev"
+
+    # ── Groq via OpenAI-compatible adapter ────────────────────────────────────
+    # Groq is OpenAI-API-compatible and has native vision support on
+    # meta-llama/llama-4-scout-17b-16e-instruct (fast, free tier).
+    # Spring AI 1.0 appends /v1/chat/completions to base-url automatically.
+    openai:
+      base-url: https://api.groq.com/openai
+      # GROQ_API_KEY — get a free key at https://console.groq.com
+      api-key: ${GROQ_API_KEY}
+
+      chat:
+        options:
+          # llama-4-scout is a multimodal (vision) model — required for KYC document analysis.
+          model: meta-llama/llama-4-scout-17b-16e-instruct
+          max-tokens: 2048
+          temperature: 0.1
+
+      # Embedding model — OpenRouter does not provide embeddings directly.
+      # Use nomic-embed-text via Ollama (local), or a free embedding endpoint.
+      # For portfolio purposes we fall back to a deterministic hash embedding
+      # (see EmbeddingClient.java — dev profile uses HashEmbeddingClient).
+      embedding:
+        options:
+          model: text-embedding-ada-002   # placeholder — overridden in code
+
+    # pgvector dimensions must match the embedding model output.
+    # Llama/nomic embeddings = 768 dims. text-embedding-3-small = 1536 dims.
+    # On dev we use 768 to save space (nomic-embed-text or hash fallback).
+    vectorstore:
+      pgvector:
+        index-type: HNSW
+        distance-type: COSINE_DISTANCE
+        dimensions: 768
+
+# ── Dev AI model config ────────────────────────────────────────────────────────
+aegispay:
+  ai:
+    provider: openrouter
+
+    models:
+      chat: "meta-llama/llama-4-scout-17b-16e-instruct"
+      vision: "meta-llama/llama-4-scout-17b-16e-instruct"
+      # Embeddings — local via Ollama if running, else hash fallback
+      embedding: "nomic-embed-text"
+
+    rag:
+      top-k: 5
+      similarity-threshold: 0.65   # slightly lower than prod — free models embed differently
+
+    agent:
+      max-iterations: 5   # fewer iterations to stay within free tier rate limits
+
+    audit:
+      enabled: true   # still log all AI calls even on dev
+
+    # OpenRouter HTTP headers required for tracking / rate limit attribution
+    openrouter:
+      site-url: "https://aegispay.YOUR_DOMAIN.com"
+      site-name: "AegisPay Dev"

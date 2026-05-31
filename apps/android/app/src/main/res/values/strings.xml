@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">AegisPay</string>
+    <string name="biometric_prompt_title">Confirm identity</string>
+    <string name="biometric_prompt_subtitle">Use biometric to authorise this transfer</string>
+    <string name="biometric_prompt_cancel">Use PIN</string>
+</resources>
