@@ -166,7 +166,7 @@ jobs:
           restore-keys: aegispay-libs-
       - name: Build & test
         run: mvn --batch-mode --no-transfer-progress verify -pl services/api-gateway -Dspring.profiles.active=test
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with: { name: test-results-api-gateway, path: services/api-gateway/target/surefire-reports/ }
 
@@ -188,7 +188,7 @@ jobs:
           restore-keys: aegispay-libs-
       - name: Build & test
         run: mvn --batch-mode --no-transfer-progress verify -pl services/user-service -Dspring.profiles.active=test
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with: { name: test-results-user-service, path: services/user-service/target/surefire-reports/ }
 
@@ -210,7 +210,7 @@ jobs:
           restore-keys: aegispay-libs-
       - name: Build & test
         run: mvn --batch-mode --no-transfer-progress verify -pl services/transaction-service -Dspring.profiles.active=test
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with: { name: test-results-transaction-service, path: services/transaction-service/target/surefire-reports/ }
 
@@ -232,7 +232,7 @@ jobs:
           restore-keys: aegispay-libs-
       - name: Build & test
         run: mvn --batch-mode --no-transfer-progress verify -pl services/ledger-service -Dspring.profiles.active=test
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with: { name: test-results-ledger-service, path: services/ledger-service/target/surefire-reports/ }
 
@@ -254,7 +254,7 @@ jobs:
           restore-keys: aegispay-libs-
       - name: Build & test
         run: mvn --batch-mode --no-transfer-progress verify -pl services/payment-orchestrator -Dspring.profiles.active=test
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with: { name: test-results-payment-orchestrator, path: services/payment-orchestrator/target/surefire-reports/ }
 
@@ -276,7 +276,7 @@ jobs:
           restore-keys: aegispay-libs-
       - name: Build & test
         run: mvn --batch-mode --no-transfer-progress verify -pl services/risk-engine -Dspring.profiles.active=test
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with: { name: test-results-risk-engine, path: services/risk-engine/target/surefire-reports/ }
 
@@ -298,7 +298,7 @@ jobs:
           restore-keys: aegispay-libs-
       - name: Build & test
         run: mvn --batch-mode --no-transfer-progress verify -pl services/notification-service -Dspring.profiles.active=test
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with: { name: test-results-notification-service, path: services/notification-service/target/surefire-reports/ }
 
@@ -322,7 +322,7 @@ jobs:
         run: mvn --batch-mode --no-transfer-progress verify -pl services/ai-platform -Dspring.profiles.active=test
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY_TEST }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with: { name: test-results-ai-platform, path: services/ai-platform/target/surefire-reports/ }
 
@@ -344,7 +344,7 @@ jobs:
           restore-keys: aegispay-libs-
       - name: Build & test
         run: mvn --batch-mode --no-transfer-progress verify -pl services/reconciliation-service -Dspring.profiles.active=test
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with: { name: test-results-reconciliation-service, path: services/reconciliation-service/target/surefire-reports/ }
 
@@ -366,7 +366,7 @@ jobs:
           restore-keys: aegispay-libs-
       - name: Build & test
         run: mvn --batch-mode --no-transfer-progress verify -pl services/data-pipeline -Dspring.profiles.active=test
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with: { name: test-results-data-pipeline, path: services/data-pipeline/target/surefire-reports/ }
 

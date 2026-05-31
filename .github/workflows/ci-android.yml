@@ -63,7 +63,7 @@ jobs:
 
       - name: Upload lint report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: lint-report
           path: apps/android/app/build/reports/lint-results-debug.html
@@ -102,7 +102,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: unit-test-results
           path: apps/android/app/build/test-results/
@@ -141,7 +141,7 @@ jobs:
           OAUTH_REDIRECT_URI: "aegispay://oauth/callback"
 
       - name: Upload debug APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: debug-apk-${{ github.sha }}
           path: apps/android/app/build/outputs/apk/debug/app-debug.apk
@@ -188,7 +188,7 @@ jobs:
           SIGNING_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
 
       - name: Upload release APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-apk-${{ github.ref_name }}
           path: apps/android/app/build/outputs/apk/release/app-release.apk
