@@ -85,6 +85,12 @@ aegispay:
   ledger:
     balance-lock-expiry-minutes: 30
     optimistic-lock-max-retries: 3
+    topup:
+      # Maximum wallet balance per account in the account's native currency.
+      # Top-ups that would push the balance above this threshold are rejected
+      # with HTTP 422 / BALANCE_LIMIT_EXCEEDED before a Stripe charge is created.
+      # Override via TOPUP_MAX_BALANCE env var (e.g. 500000 for INR, 5000 for USD).
+      max-balance: ${TOPUP_MAX_BALANCE:100000}
 
 logging:
   file:

@@ -7,66 +7,69 @@ AegisPay is a production-grade, event-driven fintech platform. Every design deci
 ## High-Level Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              CLIENT TIER                                     │
-│                                                                              │
-│   Next.js Web (3000)          iOS (SwiftUI)         Android (Compose)       │
-└──────────────────────────────────────┬──────────────────────────────────────┘
-                                       │ HTTPS / WebSocket
-                                       ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                            API GATEWAY (8080)                                │
-│  Spring Cloud Gateway                                                        │
-│  • JWT validation (Keycloak JWKS)                                            │
-│  • Rate limiting (Redis token bucket)                                        │
-│  • Idempotency key enforcement                                               │
-│  • Circuit breaker (Resilience4j)                                            │
-│  • Retry (GET + POST on 502/503)                                             │
-│  • Route → downstream service                                                │
-└──────────┬───────────────┬──────────────────────┬───────────────────────────┘
-           │               │                      │
-    ┌──────▼──────┐ ┌──────▼──────┐      ┌───────▼──────┐
-    │ User Svc    │ │ Transaction │      │ AI Platform  │
-    │ (8081)      │ │ Svc (8082)  │      │ (8091)       │
-    └──────┬──────┘ └──────┬──────┘      └──────────────┘
-           │               │
-           │        ┌──────▼───────────────────────────────────────────────┐
-           │        │                    KAFKA                              │
-           │        │   transaction.initiated / risk.assessed               │
-           │        │   payment.completed / transaction.failed              │
-           │        │   ledger.reserved / saga.*                            │
-           │        └──────┬──────────────────────────────────────┬─────────┘
-           │               │                                      │
-    ┌──────▼──────┐ ┌──────▼──────┐ ┌──────────────┐ ┌──────────▼──────────┐
-    │ Ledger Svc  │ │ Risk Engine │ │  Payment     │ │ Notification Svc    │
-    │ (8083)      │ │ (8085)      │ │  Orchestrator│ │ (8086)              │
-    │             │ │             │ │  (8084)      │ │ WS / Email / SMS /  │
-    │ append-only │ │ rules + RAG │ │ Saga coord.  │ │ Slack               │
-    └──────┬──────┘ └─────────────┘ └──────────────┘ └─────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                               CLIENT TIER                                     │
+│                                                                               │
+│  Next.js Web (3000)     iOS (SwiftUI + AppAuth)    Android (Compose + Hilt)  │
+│  NextAuth.js · Zustand  TokenStore · Keychain      TokenStore · EncryptedSP  │
+│  ReactMarkdown          AegisMarkdownView           MarkdownText composable   │
+└───────────────────────────────────┬──────────────────────────────────────────┘
+                                    │ HTTPS / WebSocket (STOMP)
+                                    │ JWT Bearer — all three clients identical
+                                    ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                             API GATEWAY (8080)                                │
+│  Spring Cloud Gateway                                                         │
+│  • JWT validation (Keycloak JWKS, cached)    • max-http-request-header: 32KB │
+│  • Rate limiting (Redis sliding window)       • Idempotency key enforcement   │
+│  • Circuit breaker (Resilience4j)             • Retry (GET + POST 502/503)   │
+│  • Route → downstream service                 • X-User-Id header injection    │
+└──────────┬────────────────┬─────────────────────────┬────────────────────────┘
+           │                │                         │
+    ┌──────▼──────┐  ┌──────▼──────┐         ┌───────▼──────┐
+    │ User Svc    │  │ Transaction │         │ AI Platform  │
+    │ (8081)      │  │ Svc (8082)  │         │ (8091)       │
+    │ KYC · roles │  │ Outbox·CQRS │         │ RAG·Triage   │
+    └──────┬──────┘  └──────┬──────┘         │ KYC OCR      │
+           │                │                └──────────────┘
+           │         ┌──────▼──────────────────────────────────────────────┐
+           │         │                     KAFKA (KRaft)                    │
+           │         │   transaction.initiated  · balance.reserved          │
+           │         │   risk.assessed          · payment.completed         │
+           │         │   ledger.committed       · transaction.failed        │
+           │         │   user.registered        · risk.assessment.completed │
+           │         └──────┬───────────────────────────────────┬───────────┘
+           │                │                                   │
+    ┌──────▼──────┐  ┌──────▼──────┐  ┌─────────────┐  ┌──────▼──────────────┐
+    │ Ledger Svc  │  │ Risk Engine │  │  Payment    │  │ Notification Svc    │
+    │ (8083)      │  │ (8085)      │  │ Orchestrator│  │ (8086)              │
+    │ double-entry│  │ rules + RAG │  │  (8084)     │  │ WebSocket · Email   │
+    │ append-only │  │ ALLOW/BLOCK │  │ Saga + Stripe│  │ SMS · Slack        │
+    └──────┬──────┘  └─────────────┘  └─────────────┘  └─────────────────────┘
            │
-    ┌──────▼───────────────────────────────────────────────────────────────┐
-    │                         DATA LAYER                                    │
-    │                                                                       │
-    │  PostgreSQL 16 (pgvector)      Redis 7        MongoDB 7              │
-    │  ├─ aegispay_users             ├─ sessions    ├─ tx read models      │
-    │  ├─ aegispay_transactions      ├─ rate limits ├─ user contacts       │
-    │  ├─ aegispay_ledger            └─ idempotency └─ notification log    │
-    │  ├─ aegispay_sagas                                                   │
+    ┌──────▼────────────────────────────────────────────────────────────────┐
+    │                           DATA LAYER                                   │
+    │                                                                        │
+    │  PostgreSQL 16 (pgvector)       Redis 7          MongoDB 7            │
+    │  ├─ aegispay_users              ├─ idempotency   ├─ tx read models    │
+    │  ├─ aegispay_transactions       ├─ rate limits   ├─ user contacts     │
+    │  ├─ aegispay_ledger             └─ session cache └─ notification log  │
+    │  ├─ aegispay_sagas                                                    │
     │  ├─ aegispay_risk                                                     │
-    │  ├─ aegispay_ai                                                       │
+    │  ├─ aegispay_ai  (+ pgvector embeddings)                              │
     │  └─ aegispay_keycloak                                                 │
     └───────────────────────────────────────────────────────────────────────┘
            │
     ┌──────▼────────────────────────────────────────────────────────────────┐
-    │                       ANALYTICS LAYER                                  │
+    │                         ANALYTICS LAYER                                │
     │                                                                        │
     │  Data Pipeline (8089)          ClickHouse 24.4                        │
     │  Kafka → ClickHouseSink  →     ├─ transaction_facts                   │
     │  5-second batch flush          ├─ risk_assessments                    │
     │                                ├─ saga_latencies                      │
     │  Reconciliation Svc (8087)     └─ reconciliation_breaks               │
-    │  Scheduled batch job                   │                              │
-    │  Ledger ↔ Stripe diff check            ▼                              │
+    │  Ledger ↔ Stripe nightly diff           │                             │
+    │                                         ▼                             │
     │                                Grafana 10.4 (3100)                    │
     │                                3 pre-built dashboards                  │
     └───────────────────────────────────────────────────────────────────────┘
@@ -78,14 +81,17 @@ AegisPay is a production-grade, event-driven fintech platform. Every design deci
 
 | Component | Role |
 |-----------|------|
+| **Next.js Web** | NextAuth.js PKCE session, role-based nav (Customer/BackOffice/Admin), ReactMarkdown for AI output |
+| **iOS App** | SwiftUI + AppAuth PKCE, TokenStore (Keychain), AegisMarkdownView, Stripe iOS SDK |
+| **Android App** | Jetpack Compose + Hilt, AppAuth PKCE, TokenStore (EncryptedSharedPreferences), MarkdownText composable |
 | **API Gateway** | Single entry point — authenticates every request, enforces rate limits, routes to services |
-| **User Service** | Manages user registration, KYC status, profile — source of truth for identity |
-| **Transaction Service** | Owns the transaction state machine; publishes events via Outbox |
+| **User Service** | Manages user registration (SSO/PKCE), KYC status, profile — source of truth for identity |
+| **Transaction Service** | Owns the transaction state machine; publishes events via Outbox; CQRS writes to MongoDB |
 | **Ledger Service** | Append-only double-entry ledger; the financial truth store |
 | **Payment Orchestrator** | Saga coordinator — drives the sequence: reserve → risk → pay → commit |
-| **Risk Engine** | Rule-based + AI RAG fraud scoring; issues ALLOW / REVIEW / BLOCK decisions |
-| **Notification Service** | Delivers WebSocket, Email, SMS, Slack notifications; maps userId → contact |
-| **AI Platform** | RAG queries (Anthropic Claude), error explanation, fraud copilot, KYC OCR |
+| **Risk Engine** | Rule-based + AI RAG fraud scoring; issues ALLOW / REVIEW / BLOCK decisions; exposes `/cases` for back-office |
+| **Notification Service** | Delivers WebSocket (STOMP), Email, SMS, Slack notifications; maps userId → contact |
+| **AI Platform** | RAG queries (Anthropic Claude), error explanation, fraud copilot, incident triage agent, KYC OCR |
 | **Data Pipeline** | Consumes Kafka events, batch-flushes to ClickHouse every 5 s |
 | **Reconciliation Service** | Nightly batch — diffs ledger vs Stripe, writes breaks to ClickHouse |
 | **Grafana** | Live dashboards backed by ClickHouse (Payment Ops, Fraud Intel, SLA) |
@@ -115,6 +121,13 @@ Traditional synchronous REST chains fail under partial failure: if Ledger Servic
 
 | Environment | Kubernetes | Grafana | Secrets | Notes |
 |-------------|-----------|---------|---------|-------|
-| Local | Docker Compose | ✅ port 3100 | plaintext `.env.local` | Full stack, seeds test data |
-| Dev (k3s) | `aegispay` namespace | ✅ Traefik TLS | HashiCorp Vault | Single-node, OpenRouter AI, Stripe test mode |
-| Production (AWS EKS) | `aegispay-prod` namespace | ✅ TLS + basic-auth | HashiCorp Vault | HA, PDB, HPA |
+| Local (Windows) | Docker Compose (`start-aegispay.bat`) | ✅ port 3100 | plaintext `.env.local` | Full stack, seeds admin/backoffice users |
+| Dev / GCP VM | k3s on GCP `e2-standard-4` (16 GB), Traefik, ArgoCD GitOps | ✅ TLS via cert-manager | HashiCorp Vault in-cluster + GCP KMS auto-unseal | Single-node, OpenRouter AI, Stripe test mode, VM scheduled start/stop |
+| Production | k3s or managed K8s, `aegispay-prod` namespace | ✅ TLS + auth | HashiCorp Vault | HA replicas, PDB, HPA |
+
+### GCP VM Cost Strategy
+
+Dev VM scheduled on/off via GCP Cloud Scheduler (matches Indian tech-community peak hours):
+- Weekdays: **08:00–22:00 IST** on, off overnight
+- Weekends: **09:00–15:00 IST** on, off rest of day
+- Average uptime ≈ 49 % → compute cost ≈ $50/month on `e2-standard-4` vs $105 always-on

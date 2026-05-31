@@ -8,6 +8,7 @@ import com.aegispay.ledger.domain.dto.TopUpIntentResponse;
 import com.aegispay.ledger.domain.entity.Account;
 import com.aegispay.ledger.domain.entity.LedgerEntry;
 import com.aegispay.ledger.exception.AccountNotFoundException;
+import com.aegispay.ledger.exception.BalanceLimitExceededException;
 import com.aegispay.ledger.repository.AccountRepository;
 import com.aegispay.ledger.repository.LedgerEntryRepository;
 import com.stripe.Stripe;
@@ -41,6 +42,14 @@ public class TopUpService {
     private String stripeSecretKey;
 
     /**
+     * Maximum wallet balance per account (native currency).
+     * Top-ups that would push the balance above this are rejected before Stripe is charged.
+     * Configured via {@code aegispay.ledger.topup.max-balance} (default 100,000).
+     */
+    @Value("${aegispay.ledger.topup.max-balance:100000}")
+    private BigDecimal maxBalance;
+
+    /**
      * Stripe SDK request options applied to every outbound call.
      *
      * <p>The Stripe Java SDK default read timeout is 80 seconds, which is longer
@@ -66,10 +75,30 @@ public class TopUpService {
 
     /**
      * Creates a Stripe PaymentIntent for the requested top-up amount.
-     * The client-side SDK uses {@code clientSecret} to confirm payment.
+     *
+     * <p>Rejects the request before calling Stripe if the top-up would push the account
+     * above the configured {@code max-balance} threshold — preventing a Stripe charge that
+     * would then be rolled back at confirm time.
+     *
+     * <p>The client-side SDK uses {@code clientSecret} to confirm payment.
      * No balance is credited yet — that happens in {@link #confirmTopUp}.
      */
     public TopUpIntentResponse createIntent(UUID userId, TopUpIntentRequest request) {
+        // ── Balance cap pre-check ─────────────────────────────────────────────
+        // Find existing account for this currency (or any account if none exists yet).
+        // If no account exists the user will get one created at confirm time — skip check.
+        accountRepository
+                .findByUserIdAndCurrency(userId, request.currency().toUpperCase())
+                .or(() -> accountRepository.findByUserId(userId).stream().findFirst())
+                .ifPresent(account -> {
+                    BigDecimal currentBalance = account.getAvailableBalance();
+                    BigDecimal projected = currentBalance.add(request.amount());
+                    if (projected.compareTo(maxBalance) > 0) {
+                        throw new BalanceLimitExceededException(
+                                currentBalance, request.amount(), maxBalance, account.getCurrency());
+                    }
+                });
+
         // Stripe amounts are in the smallest currency unit (paise for INR, cents for USD).
         long amountInSmallestUnit = request.amount()
                 .multiply(BigDecimal.valueOf(100))
@@ -176,7 +205,18 @@ public class TopUpService {
         account = accountRepository.findByIdForUpdate(account.getId()).orElseThrow();
 
         BigDecimal balanceBefore = account.getAvailableBalance();
-        account.setAvailableBalance(balanceBefore.add(creditAmount));
+
+        // ── Balance cap defence-in-depth ──────────────────────────────────────
+        // The pre-check in createIntent guards against obvious over-limit requests, but
+        // concurrent top-ups or a race between check and confirm could still exceed the
+        // cap.  Enforce again here while holding the row lock — no charge has settled yet.
+        BigDecimal projected = balanceBefore.add(creditAmount);
+        if (projected.compareTo(maxBalance) > 0) {
+            throw new BalanceLimitExceededException(
+                    balanceBefore, creditAmount, maxBalance, accountCurrency);
+        }
+
+        account.setAvailableBalance(projected);
         accountRepository.save(account);
 
         LedgerEntry entry = ledgerEntryRepository.save(LedgerEntry.builder()
@@ -185,7 +225,7 @@ public class TopUpService {
                 .entryType(LedgerEntryType.CREDIT)
                 .amount(creditAmount)
                 .balanceBefore(balanceBefore)
-                .balanceAfter(account.getAvailableBalance())
+                .balanceAfter(projected)
                 .idempotencyKey(request.paymentIntentId())
                 .description("Wallet top-up via Stripe " + request.paymentIntentId()
                         + (paymentCurrency.equals(accountCurrency) ? ""

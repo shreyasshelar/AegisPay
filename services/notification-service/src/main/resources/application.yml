@@ -7,6 +7,9 @@ spring:
   data:
     mongodb:
       uri: ${MONGODB_URI:mongodb://aegispay:aegispay_dev@localhost:27017/aegispay_notifications?authSource=admin}
+      # Required for @Indexed(unique,sparse) on Notification.eventKey to take effect.
+      # Safe for dev; in prod, create indexes manually via a migration before enabling.
+      auto-index-creation: true
 
   kafka:
     bootstrap-servers: ${KAFKA_BROKERS:localhost:9094}
@@ -58,6 +61,8 @@ management:
       service: ${spring.application.name}
 
 aegispay:
+  user-service:
+    base-url: ${USER_SERVICE_URI:http://localhost:8081}
   notification:
     websocket:
       endpoint: /ws

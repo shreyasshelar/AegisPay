@@ -13,39 +13,52 @@
 
 ---
 
-## Login Flow (First-Party — Email + Password)
+## Login Flow — PKCE (all clients)
+
+AegisPay uses **OAuth 2.0 Authorization Code + PKCE** exclusively. There is no username+password login — all authentication goes through Keycloak (which federates Google, Microsoft, GitHub, Apple). This applies to Web, iOS, and Android identically.
 
 ```mermaid
 sequenceDiagram
     actor User
-    participant Web as Next.js (NextAuth.js)
+    participant Client as Client (Web / iOS / Android)
     participant KC as Keycloak (8180)
     participant GW as API Gateway (8080)
+    participant US as User Service (8081)
 
-    User->>Web: Navigate to /login
-    Web->>KC: Redirect to /realms/aegispay/protocol/openid-connect/auth<br/>response_type=code&client_id=aegispay-app&redirect_uri=...
-    KC->>User: Show login page
-    User->>KC: Submit email + password
+    User->>Client: Tap "Sign in with Google"
+    Client->>KC: Redirect (web) or open ASWebAuthenticationSession/Chrome Custom Tab<br/>response_type=code&code_challenge=S256&client_id=aegispay-app
+    KC->>User: Show Keycloak login (with Google IdP button)
+    User->>KC: Authenticate via Google
+    KC->>KC: Map Google profile → Keycloak user, issue authorization_code
+    KC-->>Client: Redirect with ?code=xxx
 
-    KC->>KC: Validate credentials
-    KC->>KC: Issue authorization_code
+    Client->>KC: POST /token { code, code_verifier, grant_type=authorization_code }
+    KC-->>Client: { access_token, refresh_token, id_token }
 
-    KC-->>Web: Redirect back with ?code=xxx
-    Web->>KC: POST /token { code, client_id, client_secret, grant_type=authorization_code }
-    KC-->>Web: { access_token (JWT), refresh_token, id_token }
+    Client->>Client: Decode id_token → extract aegispay_user_id, realm_access.roles
+    Client->>GW: GET /api/v1/users/me (Authorization: Bearer access_token)
+    GW->>US: Forward (JWT validated, X-User-Id injected)
 
-    Web->>Web: Store tokens in server-side NextAuth session (encrypted cookie)
-    Web-->>User: Redirect to dashboard
-
-    User->>Web: Click "Send Money"
-    Web->>GW: POST /api/v1/transactions<br/>Authorization: Bearer <access_token>
-
-    GW->>KC: GET /realms/aegispay/protocol/openid-connect/certs (JWKS cache)
-    GW->>GW: Verify JWT signature + expiry + issuer
-    GW->>GW: Extract aegispay_user_id claim → forward as X-User-Id header
-
-    GW->>TxSvc: Forward request (JWT + X-User-Id header)
+    alt User exists (returning login)
+        US-->>Client: 200 UserProfile { id, role, kycStatus }
+        Client->>Client: Store userId + role → navigate to role-based landing
+    else First login (no AegisPay account yet)
+        US-->>Client: 404
+        Client->>Client: Navigate to Onboarding/Registration screen
+        Client->>GW: POST /api/v1/users/register { firstName, lastName, email }
+        GW->>US: Create user, publish UserRegisteredEvent
+        US-->>Client: 201 UserProfile
+        Client->>Client: Store userId → navigate to landing
+    end
 ```
+
+### Role-based landing after login
+
+| Role | Web | iOS | Android |
+|------|-----|-----|---------|
+| `CUSTOMER` | `/dashboard` | Home tab (0) | `Route.DASHBOARD` |
+| `BACK_OFFICE` | `/backoffice` | Admin tab (6) | `Route.BACK_OFFICE` |
+| `ADMIN` | `/triage` | Triage tab (7) | `Route.TRIAGE` |
 
 ---
 
@@ -113,12 +126,28 @@ Supported IdPs (configured in `realm-export.json`):
 
 ## Token Refresh
 
-NextAuth.js handles token refresh transparently:
+### Web (NextAuth.js)
 
-1. Before each API call, NextAuth checks if `access_token` expires within 60 seconds
-2. If yes, it calls `POST /realms/aegispay/protocol/openid-connect/token` with `grant_type=refresh_token`
-3. New tokens are stored in the encrypted session cookie
-4. The refresh fails → NextAuth marks session as expired → user redirected to login
+Key behaviours fixed to handle Keycloak's `refreshTokenMaxReuse: 0` (single-use refresh tokens):
+
+| Setting | Value | Why |
+|---------|-------|-----|
+| `session.updateAge` | `0` | Forces every request to write the new RT to the cookie immediately. Without this a 240-second polling gap could pass with the old RT still in the cookie, causing a double-refresh race. |
+| Refresh buffer | `5 × 60 × 1000 ms` | Refresh fires 5 minutes before expiry — safely ahead of the 240 s polling interval. |
+| Chunked cookie clearing | clears `.session-token.0`…`.4` | NextAuth splits cookies > 4 096 bytes into numbered chunks. `middleware.ts` clears all variants on `RefreshAccessTokenError`. |
+| `max-http-request-header-size` | 32 KB on all 9 Tomcat services | Chunked cookies (~5 304 bytes) + Authorization JWT exceeded the default 8 KB limit, causing `400 Bad Request` on all PATCH/POST routes. |
+
+`aegispay_user_id` propagation on refresh: `refreshAccessToken()` in `lib/auth.ts` decodes the new access token payload to pick up `aegispay_user_id` if it wasn't in the ID token (Keycloak sometimes omits the ID token on refresh).
+
+**Sign-out**: `GET /api/auth/keycloak-signout` — custom Next.js route that reads the `idToken` from the JWT cookie, clears all session cookie variants (including chunks 0–4), then redirects to Keycloak's `end_session` endpoint. Using NextAuth's default `signOut()` alone would leave the Keycloak session alive.
+
+### iOS (AppAuth + AuthStore)
+
+`AuthStore.refreshTokens()` initialises `updatedUserId` from the existing Keychain value and only overwrites when a new `aegispay_user_id` is found in the refreshed ID token or access token. `tokenStore.store()` is called with at minimum the existing userId — the Keychain entry is never deleted on a claim-missing refresh.
+
+### Android (AppAuth + AuthRepository)
+
+`AuthRepository.persistTokens()` decodes ID token first, then falls back to the access token for `aegispay_user_id`. After both attempts, if `userId` is still blank it is set from `tokenStore.userId` (the previously stored value) before calling `tokenStore.store()`. This prevents `EncryptedSharedPreferences.remove(KEY_USER_ID)` being called on every token refresh where Keycloak omits the ID token.
 
 ---
 

@@ -298,10 +298,92 @@ IF "!MICROSOFT_CLIENT_ID!"=="" (
 )
 
 REM =========================================================
+REM 7. FIX aegispay-backend SERVICE ACCOUNT
+REM
+REM    Resets the aegispay-backend client secret to the expected
+REM    dev value (aegispay-backend-dev-secret) and grants the
+REM    manage-users role so KeycloakAdminService.writeUserAttributes()
+REM    can write aegispay_user_id back after social-login registration.
+REM
+REM    Without this fix:
+REM      - writeUserAttributes() gets 401 on every call (wrong secret)
+REM      - aegispay_user_id attribute never appears in Keycloak
+REM      - JWTs for social-login users carry no aegispay_user_id claim
+REM      - JwtRelayGatewayFilter skips X-User-Id header
+REM      - NotificationController falls back to jwt.getSubject()
+REM        (Keycloak sub != AegisPay domain UUID)
+REM      - GET /api/v1/notifications returns empty for social users
+REM =========================================================
+
+echo.
+echo [7/7] Fixing aegispay-backend service account...
+
+REM Get the aegispay-backend client UUID
+curl -s "%KC_URL%/admin/realms/%REALM%/clients?clientId=aegispay-backend" ^
+  -H "Authorization: Bearer !TOKEN!" ^
+  -o backend_client.json
+
+for /f "tokens=2 delims=:," %%a in ('findstr "\"id\"" backend_client.json') do (
+    set BACKEND_CLIENT_DB_ID=%%a
+    set BACKEND_CLIENT_DB_ID=!BACKEND_CLIENT_DB_ID:"=!
+    set BACKEND_CLIENT_DB_ID=!BACKEND_CLIENT_DB_ID: =!
+    goto :got_backend_client
+)
+:got_backend_client
+
+REM Reset client secret to the value user-service expects (application.yml default)
+curl -s -X POST "%KC_URL%/admin/realms/%REALM%/clients/!BACKEND_CLIENT_DB_ID!/client-secret" ^
+  -H "Authorization: Bearer !TOKEN!" ^
+  -H "Content-Type: application/json" ^
+  -d "{\"type\":\"secret\",\"value\":\"aegispay-backend-dev-secret\"}" ^
+  >nul 2>&1
+
+REM Fetch realm-management client UUID (needed to resolve manage-users role)
+curl -s "%KC_URL%/admin/realms/%REALM%/clients?clientId=realm-management" ^
+  -H "Authorization: Bearer !TOKEN!" ^
+  -o realm_mgmt_client.json
+
+for /f "tokens=2 delims=:," %%a in ('findstr "\"id\"" realm_mgmt_client.json') do (
+    set REALM_MGMT_ID=%%a
+    set REALM_MGMT_ID=!REALM_MGMT_ID:"=!
+    set REALM_MGMT_ID=!REALM_MGMT_ID: =!
+    goto :got_realm_mgmt
+)
+:got_realm_mgmt
+
+REM Get service-account user for aegispay-backend
+curl -s "%KC_URL%/admin/realms/%REALM%/clients/!BACKEND_CLIENT_DB_ID!/service-account-user" ^
+  -H "Authorization: Bearer !TOKEN!" ^
+  -o sa_user.json
+
+for /f "tokens=2 delims=:," %%a in ('findstr "\"id\"" sa_user.json') do (
+    set SA_USER_ID=%%a
+    set SA_USER_ID=!SA_USER_ID:"=!
+    set SA_USER_ID=!SA_USER_ID: =!
+    goto :got_sa_user
+)
+:got_sa_user
+
+REM Get manage-users role object from realm-management
+curl -s "%KC_URL%/admin/realms/%REALM%/clients/!REALM_MGMT_ID!/roles/manage-users" ^
+  -H "Authorization: Bearer !TOKEN!" ^
+  -o manage_users_role.json
+
+REM Wrap in array and assign to service-account user
+for /f "tokens=*" %%r in ('type manage_users_role.json') do set MANAGE_USERS_BODY=[%%r]
+curl -s -X POST "%KC_URL%/admin/realms/%REALM%/users/!SA_USER_ID!/role-mappings/clients/!REALM_MGMT_ID!" ^
+  -H "Authorization: Bearer !TOKEN!" ^
+  -H "Content-Type: application/json" ^
+  -d "!MANAGE_USERS_BODY!" >nul 2>&1
+
+echo   aegispay-backend service account configured
+
+REM =========================================================
 REM CLEANUP
 REM =========================================================
 
 del /q token.json client.json customer_role.json cust_user.json payee_user.json android_client.json ios_client.json web_client.json >nul 2>&1
+del /q backend_client.json realm_mgmt_client.json sa_user.json manage_users_role.json >nul 2>&1
 
 echo.
 echo =========================================================

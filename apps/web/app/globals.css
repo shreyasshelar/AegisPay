@@ -2,6 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Hide the Google reCAPTCHA badge — invisible reCAPTCHA is used for phone OTP,
+   so the badge is not needed and would confuse users. */
+.grecaptcha-badge { visibility: hidden !important; }
+
 /* ───────────────────────────────────────────────────────────
    CSS custom properties — used by design-system components
    for theming without Tailwind class names in library code.

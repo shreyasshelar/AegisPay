@@ -210,17 +210,14 @@ private struct TriageSessionCard: View {
             }
             .buttonStyle(.plain)
 
-            // ── Analysis (terminal style) ─────────────────────────────────────
+            // ── Analysis — rendered as Markdown ──────────────────────────────
+            // Uses iOS 15+ AttributedString(markdown:) — mirrors web ReactMarkdown.
             if expanded {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    Text(session.analysis)
-                        .font(.system(.caption, design: .monospaced))
-                        .foregroundStyle(Color(hex: "#86EFAC"))   // green-300
-                        .padding(14)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .background(Color(hex: "#0F172A"))                 // slate-900
-                .transition(.opacity.combined(with: .move(edge: .top)))
+                AegisMarkdownView(markdown: session.analysis)
+                    .padding(14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(hex: "#F8FAFC"))             // slate-50
+                    .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
         .background(Color.aegisSurface)

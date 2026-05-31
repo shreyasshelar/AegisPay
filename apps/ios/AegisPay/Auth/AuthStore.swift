@@ -224,12 +224,30 @@ final class AuthStore: ObservableObject {
             throw AuthError.refreshFailed
         }
 
+        // Try to pick up aegispay_user_id from the new ID token (Keycloak may have
+        // written the user attribute since the last login — mirrors the web
+        // refreshAccessToken fix that also decodes the access token payload).
+        var updatedUserId: String? = tokenStore.userId
+        if let newIdToken = response.idToken {
+            let claims = decodeJWTPayload(newIdToken)
+            if let newId = claims["aegispay_user_id"] as? String, !newId.isEmpty {
+                updatedUserId = newId
+            }
+        }
+        // Fallback: decode the access token (Keycloak always issues one; idToken is optional)
+        if updatedUserId == nil || updatedUserId == tokenStore.userId {
+            let atClaims = decodeJWTPayload(accessToken)
+            if let newId = atClaims["aegispay_user_id"] as? String, !newId.isEmpty {
+                updatedUserId = newId
+            }
+        }
+
         tokenStore.store(
             accessToken:  accessToken,
             refreshToken: response.refreshToken ?? refreshToken,
             idToken:      response.idToken,
             expiresIn:    response.accessTokenExpirationDate?.timeIntervalSinceNow ?? 3600,
-            userId:       tokenStore.userId,
+            userId:       updatedUserId,
             userRole:     tokenStore.userRole
         )
 

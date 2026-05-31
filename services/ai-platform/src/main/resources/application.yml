@@ -102,6 +102,13 @@ aegispay:
     user-service:
       base-url: ${USER_SERVICE_URL:http://user-service:8081}
       internal-api-key: ${USER_SERVICE_INTERNAL_API_KEY:aegispay-internal-dev-key}
+    triage:
+      # Directory where service log files live (relative to the working dir).
+      # start-aegispay.bat writes logs here; also used by LogReaderTool.
+      logs-dir: ${TRIAGE_LOGS_DIR:logs}
+      # Absolute path to the git repo root — DeploymentHistoryTool runs git log here.
+      # Auto-detected from the JAR location if left blank.
+      project-root: ${TRIAGE_PROJECT_ROOT:}
 
 resilience4j:
   circuitbreaker:

@@ -7,6 +7,7 @@ import com.aegispay.notification.repository.NotificationRepository;
 import com.aegispay.notification.template.NotificationTemplateService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
@@ -25,8 +26,7 @@ public class NotificationDispatcher {
     private final List<NotificationAdapter> adapters;
 
     /**
-     * Dispatch a notification to a user.
-     * Always pushes over WebSocket; also sends via adapter if channel is EMAIL or SMS.
+     * Dispatch a notification to a user (no idempotency — for non-transactional events).
      *
      * @param userId    target user UUID string
      * @param type      notification type (drives template selection)
@@ -36,9 +36,34 @@ public class NotificationDispatcher {
      */
     public void dispatch(String userId, NotificationType type, String channel,
                          String recipient, Map<String, String> vars) {
+        dispatch(userId, type, channel, recipient, vars, null);
+    }
+
+    /**
+     * Dispatch a notification to a user with idempotency support.
+     *
+     * <p>When {@code transactionId} is non-null, an {@code eventKey} is derived as
+     * {@code transactionId:type:channel}. A sparse unique MongoDB index on {@code eventKey}
+     * ensures that if the same Kafka event is re-delivered (at-least-once), the second
+     * attempt to save raises {@link DuplicateKeyException} which is caught and silently
+     * skipped — preventing duplicate notifications.
+     *
+     * @param userId        target user UUID string
+     * @param type          notification type (drives template selection)
+     * @param channel       "WEBSOCKET", "EMAIL", or "SMS"
+     * @param recipient     email address or phone number (null for WEBSOCKET-only)
+     * @param vars          template variable substitutions
+     * @param transactionId optional transaction UUID for idempotency (null = no dedup)
+     */
+    public void dispatch(String userId, NotificationType type, String channel,
+                         String recipient, Map<String, String> vars, String transactionId) {
 
         NotificationTemplateService.RenderedNotification rendered =
                 templateService.render(type, vars != null ? vars : Map.of(), "en");
+
+        String eventKey = (transactionId != null && !transactionId.isBlank())
+                ? transactionId + ":" + type.name() + ":" + channel
+                : null;
 
         Notification notification = Notification.builder()
                 .userId(userId)
@@ -49,9 +74,16 @@ public class NotificationDispatcher {
                 .body(rendered.body())
                 .metadata(vars)
                 .createdAt(Instant.now())
+                .eventKey(eventKey)
                 .build();
 
-        notification = notificationRepository.save(notification);
+        try {
+            notification = notificationRepository.save(notification);
+        } catch (DuplicateKeyException e) {
+            log.info("Duplicate notification skipped (idempotency): eventKey={} userId={} type={} channel={}",
+                    eventKey, userId, type, channel);
+            return;
+        }
 
         // Always push over WebSocket to the user's personal queue
         try {

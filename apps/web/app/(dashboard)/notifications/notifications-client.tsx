@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useAuthGuard } from '@/lib/useAuthGuard'
 import { Bell, Loader2, CheckCircle2, XCircle, Info, ArrowDownLeft, AlertCircle } from 'lucide-react'
@@ -33,6 +33,14 @@ export function NotificationsClient() {
 
   // Clear badge when this page is mounted (sidebar's WS handler skips increment here)
   useEffect(() => { resetUnread() }, [resetUnread])
+
+  // Tick every 60 s so timeAgo() recalculates — without this the "X minutes ago"
+  // labels are computed once at mount and never update while the page is open.
+  const [, setTick] = useState(0)
+  useEffect(() => {
+    const id = setInterval(() => setTick(t => t + 1), 60_000)
+    return () => clearInterval(id)
+  }, [])
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['notifications', 'list'],
