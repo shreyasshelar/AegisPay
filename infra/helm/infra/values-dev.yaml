@@ -7,6 +7,9 @@
 
 global:
   namespace: "aegispay-infra"
+  # Bitnami migrated all container images from docker.io/bitnami/ to ghcr.io/bitnami/
+  # This one override redirects every Bitnami chart image pull to GHCR.
+  imageRegistry: "ghcr.io"
 
 # ── PostgreSQL ────────────────────────────────────────────────────────────────
 postgresql:
