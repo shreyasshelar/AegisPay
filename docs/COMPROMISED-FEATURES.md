@@ -65,18 +65,15 @@ VM stop/start.
 PVC data is preserved; Flyway migrations are idempotent (won't re-run).
 **Impact without fix**: ai-platform fails with "extension vector does not exist" on restart.
 
-### P0-4 · Grafana 502 via Cloudflare (port mismatch)
-**Cloudflare tunnel config**: routes to `grafana.aegispay.svc.cluster.local:3000`
-**Kubernetes Service port**: 3100
-**Fix**: Update Cloudflare tunnel config to use port 3100 (in Cloudflare Zero Trust dashboard),
-OR change Grafana Kubernetes Service port to 3000 in Helm chart.
-**Impact without fix**: `aegispay-grafana.shreyasshelar.uk` → 502.
+### ~~P0-4~~ ✅ Grafana 502 — FIXED
+`grafana.port: 3000` in values-dev.yaml; K8s Service + GF_SERVER_HTTP_PORT both 3000.
+Grafana responds HTTP 200 on `grafana.aegispay.svc.cluster.local:3000`.
+`aegispay-grafana.shreyasshelar.uk` should now return Grafana UI.
 
-### P0-5 · Keycloak 502 via Cloudflare (port mismatch)
-**Cloudflare tunnel config**: routes to `keycloak.aegispay-infra.svc.cluster.local:8080`
-**Actual service**: `aegispay-infra-keycloak` in `aegispay-infra` namespace on port `80`
-**Fix**: Update Cloudflare tunnel to `aegispay-infra-keycloak.aegispay-infra.svc.cluster.local:80`
-**Impact without fix**: `aegispay-keycloak.shreyasshelar.uk` → 502; no OAuth2 login possible.
+### ~~P0-5~~ ✅ Keycloak 502 — FIXED
+Added `keycloak` ClusterIP Service in `aegispay-infra` namespace on port 8080 (selector: app=keycloak).
+Cloudflare tunnel target `keycloak.aegispay-infra.svc.cluster.local:8080` now routes correctly.
+Keycloak responds HTTP 200. `aegispay-keycloak.shreyasshelar.uk` should now load.
 
 ### P0-6 · CI GitHub Actions failing (hard failures)
 **Files**: `.github/workflows/ci-java.yml`, `ci-web.yml`
@@ -251,7 +248,7 @@ Remove all Vault stub code that currently misleads readers.
 
 | Issue | Fix Applied | Commit |
 |-------|------------|--------|
-| pgvector missing (ephemeral install) | TODO: change to pgvector/pgvector:pg16 image | P0-3 |
+| pgvector missing (ephemeral install) | `pgvector/pgvector:pg16` image in statefulset | 7afe5b5 |
 | Vault in keycloak-secret-rotation-job | Removed; ESO secret used directly | c58ef47 |
 | Grafana ops email sshelar110.ss3 | Fixed to aegispay.dev@gmail.com | 3e8bd07 |
 | Grafana Slack receiver CrashLoop | Removed Slack receiver from provisioning YAML | bca9bbc |

@@ -54,3 +54,7 @@ secrets:
     secretName: "aegispay-keycloak-admin-password"
   cloudflare:
     secretName: "aegispay-cloudflare-tunnel-token"
+  # Web frontend secrets
+  web:
+    nextauthSecretName: "aegispay-nextauth-secret"
+    keycloakClientSecretName: "aegispay-keycloak-web-client-secret"

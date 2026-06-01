@@ -1,0 +1,58 @@
+{{- if .Values.kafkaUi.enabled }}
+# ── Kafka-UI Deployment ───────────────────────────────────────────────────────
+# provectus/kafka-ui — free, Apache 2.0, no auth required for Docker Hub pull
+# Accessible at aegispay-kafka.shreyasshelar.uk via Cloudflare tunnel
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-ui
+  namespace: {{ .Values.global.namespace | default .Release.Namespace }}
+  labels:
+    app: kafka-ui
+    app.kubernetes.io/name: kafka-ui
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka-ui
+  template:
+    metadata:
+      labels:
+        app: kafka-ui
+        app.kubernetes.io/name: kafka-ui
+    spec:
+      containers:
+        - name: kafka-ui
+          image: "provectus/kafka-ui:latest"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: KAFKA_CLUSTERS_0_NAME
+              value: "aegispay"
+            - name: KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS
+              value: {{ .Values.kafkaUi.bootstrapServers | default "kafka.aegispay-infra.svc.cluster.local:9092" | quote }}
+            - name: SERVER_SERVLET_CONTEXT_PATH
+              value: "/"
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.kafkaUi.resources | nindent 12 }}
+{{- end }}
