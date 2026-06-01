@@ -16,8 +16,7 @@ global:
   # Update this to match your GitHub username.
   imageRepositoryPrefix: ghcr.io/shreyasshelar/aegispay
   imagePullPolicy: Always
-  imagePullSecrets: []   # GHCR public repo → no pull secret needed
-
+  imagePullSecrets: [] # GHCR public repo → no pull secret needed
   # ── Infra endpoints (backing services in aegispay-infra namespace) ──────────
   kafka:
     brokers: "kafka.aegispay-infra.svc.cluster.local:9092"
@@ -32,7 +31,6 @@ global:
     uri: "mongodb://aegispay:$(MONGO_PASSWORD)@mongodb.aegispay-infra.svc.cluster.local:27017/aegispay?authSource=admin"
   oauth2:
     issuerUri: "http://keycloak.aegispay-infra.svc.cluster.local:8080/realms/aegispay"
-
 # ─── Secrets backend ──────────────────────────────────────────────────────────
 secrets:
   # Vault running in the same cluster (aegispay-vault namespace)
@@ -61,18 +59,16 @@ secrets:
     secretPath: "secret/data/aegispay/clickhouse"
   keycloak:
     secretPath: "secret/data/aegispay/keycloak"
-
 # ─── Services — single replica, reduced resources for dev ────────────────────
 # JVM tuned with -XX:MaxRAMPercentage=50 so each container uses at most
 # half its memory limit (prevents OOMKills when all services start at once).
 # ─────────────────────────────────────────────────────────────────────────────
-
 services:
   api_gateway:
     enabled: true
     image:
       repository: api-gateway
-      tag: latest
+      tag: 5dd50af
     replicas: 1
     port: 8080
     resources:
@@ -83,7 +79,7 @@ services:
         cpu: 500m
         memory: 512Mi
     autoscaling:
-      enabled: false   # single node — no point in HPA
+      enabled: false # single node — no point in HPA
     ingress:
       enabled: true
       className: traefik
@@ -101,12 +97,11 @@ services:
           hosts:
             - aegispay-api.shreyasshelar.uk
     jvmOpts: "-XX:MaxRAMPercentage=50.0 -XX:+UseG1GC -XX:+UseContainerSupport"
-
   user_service:
     enabled: true
     image:
       repository: user-service
-      tag: latest
+      tag: 5dd50af
     replicas: 1
     port: 8081
     resources:
@@ -121,12 +116,11 @@ services:
     jvmOpts: "-XX:MaxRAMPercentage=50.0 -XX:+UseG1GC -XX:+UseContainerSupport"
     db:
       name: aegispay_users
-
   transaction_service:
     enabled: true
     image:
       repository: transaction-service
-      tag: latest
+      tag: 5dd50af
     replicas: 1
     port: 8082
     resources:
@@ -141,12 +135,11 @@ services:
     jvmOpts: "-XX:MaxRAMPercentage=50.0 -XX:+UseG1GC -XX:+UseContainerSupport"
     db:
       name: aegispay_transactions
-
   ledger_service:
     enabled: true
     image:
       repository: ledger-service
-      tag: latest
+      tag: 5dd50af
     replicas: 1
     port: 8083
     resources:
@@ -161,12 +154,11 @@ services:
     jvmOpts: "-XX:MaxRAMPercentage=50.0 -XX:+UseG1GC -XX:+UseContainerSupport"
     db:
       name: aegispay_ledger
-
   payment_orchestrator:
     enabled: true
     image:
       repository: payment-orchestrator
-      tag: latest
+      tag: 5dd50af
     replicas: 1
     port: 8084
     resources:
@@ -181,12 +173,11 @@ services:
     jvmOpts: "-XX:MaxRAMPercentage=50.0 -XX:+UseG1GC -XX:+UseContainerSupport"
     db:
       name: aegispay_sagas
-
   risk_engine:
     enabled: true
     image:
       repository: risk-engine
-      tag: latest
+      tag: 5dd50af
     replicas: 1
     port: 8085
     resources:
@@ -201,12 +192,11 @@ services:
     jvmOpts: "-XX:MaxRAMPercentage=50.0 -XX:+UseG1GC -XX:+UseContainerSupport"
     db:
       name: aegispay_risk
-
   notification_service:
     enabled: true
     image:
       repository: notification-service
-      tag: latest
+      tag: 5dd50af
     replicas: 1
     port: 8086
     resources:
@@ -236,12 +226,11 @@ services:
           hosts:
             - aegispay-ws.shreyasshelar.uk
     jvmOpts: "-XX:MaxRAMPercentage=50.0 -XX:+UseG1GC -XX:+UseContainerSupport"
-
   data_pipeline:
     enabled: true
     image:
       repository: data-pipeline
-      tag: latest
+      tag: 5dd50af
     replicas: 1
     port: 8089
     resources:
@@ -254,12 +243,11 @@ services:
     autoscaling:
       enabled: false
     jvmOpts: "-XX:MaxRAMPercentage=50.0 -XX:+UseG1GC -XX:+UseContainerSupport"
-
   reconciliation_service:
     enabled: true
     image:
       repository: reconciliation-service
-      tag: latest
+      tag: 5dd50af
     replicas: 1
     port: 8087
     resources:
@@ -272,12 +260,11 @@ services:
     autoscaling:
       enabled: false
     jvmOpts: "-XX:MaxRAMPercentage=50.0 -XX:+UseG1GC -XX:+UseContainerSupport"
-
   ai_platform:
     enabled: true
     image:
       repository: ai-platform
-      tag: latest
+      tag: 5dd50af
     replicas: 1
     port: 8088
     resources:
@@ -295,13 +282,12 @@ services:
     jvmOpts: "-XX:MaxRAMPercentage=50.0 -XX:+UseG1GC -XX:+UseContainerSupport"
     db:
       name: aegispay_ai
-
   # ── Web (Next.js) ─────────────────────────────────────────────────────────
   web:
     enabled: true
     image:
       repository: web
-      tag: latest
+      tag: 5dd50af
     replicas: 1
     port: 3000
     resources:
@@ -327,14 +313,12 @@ services:
         - secretName: aegispay-web-tls
           hosts:
             - aegispay.shreyasshelar.uk
-
 global:
   smtp:
     host: "smtp.gmail.com"
     port: "587"
-    username: ""      # set from Vault secret/data/aegispay/smtp
+    username: "" # set from Vault secret/data/aegispay/smtp
     fromAddress: ""
-
 # ─── Grafana (ClickHouse analytics) ──────────────────────────────────────────
 grafana:
   enabled: true
@@ -371,7 +355,6 @@ grafana:
     passwordSecretRef:
       name: aegispay-clickhouse-secret
       key: password
-
 # ─── Monitoring ───────────────────────────────────────────────────────────────
 monitoring:
   prometheusRules:
@@ -382,7 +365,6 @@ monitoring:
     notificationErrorRatePerMin: 0.5
     dataPipelineSinkErrorsPerMin: 0.2
     reconciliationBreakCount: 5
-
 # ─── Storage class ────────────────────────────────────────────────────────────
 # local-path is the default k3s StorageClass — backed by a hostPath on your server.
 defaultStorageClass: local-path
