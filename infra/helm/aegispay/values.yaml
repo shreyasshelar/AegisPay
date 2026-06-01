@@ -155,7 +155,7 @@ services:
       - name: STRIPE_WEBHOOK_SECRET
         valueFrom:
           secretKeyRef:
-            name: aegispay-stripe-secret
+            name: aegispay-stripe-webhook-secret   # separate secret, separate ESO
             key: webhook-secret
 
   risk_engine:
@@ -236,11 +236,11 @@ services:
       maxReplicas: 6
       targetCPUUtilizationPercentage: 60
     extraEnv:
-      - name: ANTHROPIC_API_KEY
+      - name: OPENROUTER_API_KEY
         valueFrom:
           secretKeyRef:
             name: aegispay-ai-secret
-            key: anthropic-api-key
+            key: openrouter-api-key   # we use OpenRouter, not Anthropic direct
 
   data_pipeline:
     enabled: true
