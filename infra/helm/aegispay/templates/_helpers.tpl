@@ -138,7 +138,7 @@ spec:
             # slow startup on a loaded single-node VM.
             tcpSocket:
               port: http
-            initialDelaySeconds: 60
+            initialDelaySeconds: 180
             periodSeconds: 30
             timeoutSeconds: 5
             failureThreshold: 5
@@ -146,7 +146,7 @@ spec:
             httpGet:
               path: /actuator/health/readiness
               port: http
-            initialDelaySeconds: 60
+            initialDelaySeconds: 90
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 3
