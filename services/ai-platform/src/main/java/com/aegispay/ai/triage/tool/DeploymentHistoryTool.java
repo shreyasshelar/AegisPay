@@ -38,20 +38,26 @@ public class DeploymentHistoryTool {
         } else {
             // Auto-detect: JAR is at <root>/services/ai-platform/target/*.jar
             // Walk 4 levels up: BOOT-INF/classes → target → ai-platform → services → root
-            File fallback = new File(".");
+            File fallback = new File("/app"); // safe default for containerised deployment
             try {
                 File jarDir = new File(DeploymentHistoryTool.class
                         .getProtectionDomain().getCodeSource().getLocation().toURI());
-                fallback = jarDir.getParentFile()   // target/ (or BOOT-INF/classes/)
-                        .getParentFile()              // ai-platform/ (or target/)
-                        .getParentFile()              // services/   (or ai-platform/)
-                        .getParentFile();             // <project root> (or services/)
+                File candidate = jarDir;
+                for (int i = 0; i < 4; i++) {
+                    File parent = candidate.getParentFile();
+                    if (parent == null) break; // don't walk past filesystem root
+                    candidate = parent;
+                }
+                if (candidate.exists()) {
+                    fallback = candidate;
+                }
             } catch (Exception e) {
                 log.warn("DeploymentHistoryTool: could not resolve project root from JAR path: {}", e.getMessage());
             }
             resolved = fallback;
         }
-        this.projectRoot = resolved;
+        // Final safety net — should never be null but guard defensively
+        this.projectRoot = (resolved != null) ? resolved : new File("/app");
         log.debug("DeploymentHistoryTool: project root resolved to {}", this.projectRoot.getAbsolutePath());
     }
 
