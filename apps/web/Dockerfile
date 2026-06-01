@@ -13,7 +13,7 @@
 # Build context must be the repo root (docker build -f apps/web/Dockerfile .)
 # ─────────────────────────────────────────────────────────────────────────────
 
-FROM node:20-alpine AS base
+FROM node:22-alpine AS base
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
