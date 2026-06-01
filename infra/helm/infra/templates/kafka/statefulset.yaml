@@ -56,8 +56,12 @@ spec:
               value: "CONTROLLER"
             - name: KAFKA_INTER_BROKER_LISTENER_NAME
               value: "PLAINTEXT"
+            # Use per-pod StatefulSet DNS (kafka-0.kafka-headless.NAMESPACE) instead of
+            # the headless service name — the service returns no IPs until the pod is
+            # ready, creating a chicken-and-egg DNS failure. The per-pod record always
+            # resolves to the pod IP regardless of readiness state.
             - name: KAFKA_CONTROLLER_QUORUM_VOTERS
-              value: "1@kafka-headless:9093"
+              value: "1@kafka-0.kafka-headless.{{ .Values.global.namespace | default .Release.Namespace }}.svc.cluster.local:9093"
 
             # ── Topic defaults (safe for single-node dev) ───────────────────
             - name: KAFKA_AUTO_CREATE_TOPICS_ENABLE

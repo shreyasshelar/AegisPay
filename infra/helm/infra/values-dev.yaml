@@ -114,7 +114,7 @@ keycloak:
   auth:
     adminUser: admin
     existingSecret: aegispay-keycloak-secret
-    existingSecretPasswordKey: admin-password
+    existingSecretPasswordKey: password   # ESO stores keycloak secret under key "password"
 
   externalDatabase:
     host: postgresql
