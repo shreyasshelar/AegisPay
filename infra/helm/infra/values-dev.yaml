@@ -64,7 +64,7 @@ mongodb:
     enabled: true
     username: aegispay
     existingSecret: aegispay-mongo-secret
-    existingSecretPasswordKey: mongodb-root-password
+    # MongoDB 16.x reads mongodb-root-password and mongodb-passwords keys directly
     database: aegispay
 
   # Single node, no replica set needed at this scale

@@ -17,13 +17,13 @@ dependencies:
 
   - name: mongodb
     repository: https://charts.bitnami.com/bitnami
-    version: "15.x.x"
+    version: "16.x.x"    # MongoDB 8.0.x — 15.x tags were purged from Docker Hub
     alias: mongodb
     condition: mongodb.enabled
 
   - name: redis
     repository: https://charts.bitnami.com/bitnami
-    version: "19.x.x"
+    version: "20.x.x"    # Redis 7.4.x — 19.x tags were purged from Docker Hub
     alias: redis
     condition: redis.enabled
 
