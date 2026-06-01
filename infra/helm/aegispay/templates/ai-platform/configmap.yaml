@@ -18,4 +18,6 @@ data:
   MONGODB_URI: {{ .Values.global.mongodb.uri | quote }}
   OAUTH2_ISSUER_URI: {{ .Values.global.oauth2.issuerUri | quote }}
   SERVER_PORT: "8088"
+  # triage tools need a writable project root; /app is the container workdir
+  AEGISPAY_TRIAGE_PROJECT__ROOT: "/app"
 {{- end }}
