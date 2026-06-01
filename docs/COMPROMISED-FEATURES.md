@@ -25,8 +25,8 @@
 | keycloak | ✅ Live | `aegispay-keycloak.shreyasshelar.uk` → 200 |
 | kafka-ui | ✅ Live | `aegispay-kafka.shreyasshelar.uk` → 200 |
 | cloudflared | ✅ Running | 4 QUIC connections |
-| web (Next.js) | 🔄 CI building | Image building — will deploy once CI completes |
-| ArgoCD | ✅ Fixed | Watches `dev` branch, ApplyOutOfSyncOnly |
+| web (Next.js) | 🔄 CI building | Image building (turbo env fix in progress) |
+| ArgoCD | ✅ Fixed | Watches `dev` branch, ApplyOutOfSyncOnly + RespectIgnoreDifferences |
 | CI/CD | ✅ Fixed | cd-dev.yml correct name + git identity |
 
 ---
@@ -95,29 +95,19 @@ at same SHA. CI pushes will resolve correctly.
 
 ## P1 — Fix within 1 week (stability)
 
-### P1-1 · web (Next.js) — 🔄 CI BUILDING (image push pending)
-**Status**: Dockerfile, Helm templates, ESO secret, K8s secret all created. CI building image.
-**Fix needed**:
-1. Add `apps/web/Dockerfile` (multi-stage Next.js build)
-2. Add `infra/helm/aegispay/templates/web/` deployment + service + networkpolicy
-3. Add `services.web` to `values.yaml` and `values-dev.yaml`
-4. Fix `ci-web.yml` to push `web:dev-latest` on dev branch
-5. Fix `cd-dev.yml` to include `web` in image tag update loop
-**Impact**: `aegispay.shreyasshelar.uk` returns 502 (no pod).
+### P1-1 · web (Next.js) — 🔄 CI BUILDING (3rd attempt — turbo env fix)
+**Status**: All code done. Blocking issues fixed in order:
+- ✅ `packageManager` field added to root `package.json` (turbo v2 workspace resolution)
+- ✅ turbo `globalPassThroughEnv` for `NEXTAUTH_SECRET`/`KEYCLOAK_*` (turbo v2 strict mode)
+- 🔄 Docker image `web:dev-latest` building — ArgoCD will auto-deploy once pushed
+**Remaining**: CI completes → cd-dev.yml updates image tag → ArgoCD deploys web pod
+**Impact**: `aegispay.shreyasshelar.uk` returns 502 until pod is running.
 
-### P1-2 · ArgoCD stuck in Running/OutOfSync (Ingress health)
-**Problem**: ArgoCD waits for ALL resources healthy. Ingress resources never get
-an `ADDRESS` on k3s + Cloudflare (no LoadBalancer, traffic comes from cloudflared pod).
-ArgoCD marks Ingress as `Progressing` indefinitely → entire sync stays `Running`.
-**Fix**: Add to `app-gcp.yaml`:
-```yaml
-ignoreDifferences:
-  - group: networking.k8s.io
-    kind: Ingress
-    jsonPointers:
-      - /status
-```
-And add `syncOptions: - RespectIgnoreDifferences=true` + `ApplyOutOfSyncOnly=true`
+### ~~P1-2~~ ✅ ArgoCD stuck in Running/OutOfSync — FIXED
+`RespectIgnoreDifferences=true` added to syncOptions in `infra/argocd/app-gcp.yaml`.
+Combined with the existing `ignoreDifferences` block for Ingress `/status/loadBalancer`,
+ArgoCD no longer marks syncs as OutOfSync due to missing Ingress ADDRESS.
+Applied on cluster: `kubectl apply -f infra/argocd/app-gcp.yaml` (commit 8e13f6c).
 
 ### P1-3 · GitHub contributor pollution (@claude, @sshelar110ss3-ship-it)
 **Problem**: Two bot identities appear in GitHub contributors:
@@ -131,28 +121,28 @@ And add `syncOptions: - RespectIgnoreDifferences=true` + `ApplyOutOfSyncOnly=tru
    on dev/main using git-filter-repo if needed.
 **Impact**: GitHub shows wrong contributors; looks unprofessional on portfolio.
 
-### P1-4 · GHCR package bloat — old tags accumulate
-**Problem**: Every CI run pushes a new SHA-tagged image. GHCR free tier has 500MB limit.
-Hundreds of old tags waste storage.
-**Fix**: Add `.github/workflows/ghcr-prune.yml` that runs weekly and deletes all
-non-`latest` / non-`dev-latest` package versions older than 30 days using
-`gh api` or `actions/delete-package-versions`.
+### ~~P1-4~~ ✅ GHCR package bloat — FIXED
+`.github/workflows/ghcr-prune.yml` added. Runs weekly (Monday 03:00 UTC) and
+on `workflow_dispatch`. Keeps `latest`, `dev-latest`, and last 7 versions per package.
+Covers all 11 packages: api-gateway, user-service, transaction-service, ledger-service,
+payment-orchestrator, risk-engine, notification-service, reconciliation-service,
+data-pipeline, ai-platform, web (commit 7afe5b5).
 
-### P1-5 · Keycloak realm re-imported on every restart (data loss risk)
-**Problem**: Keycloak starts with `--import-realm` flag. This re-imports the realm
-from ConfigMap on EVERY pod restart. Any changes made via Keycloak UI (new clients,
-user attributes, etc.) are overwritten.
-**Fix**: Remove `--import-realm` from args after first successful start, OR use
-`KC_IMPORT_STRATEGY=IGNORE_EXISTING` env var to make import idempotent.
+### ~~P1-5~~ ✅ Keycloak realm re-import on restart — FIXED
+Added `KC_IMPORT_STRATEGY=IGNORE_EXISTING` env var to Keycloak deployment in
+`infra/helm/infra/templates/keycloak/deployment.yaml`. Realm ConfigMap still mounted
+for cold-start imports, but existing realm objects (clients, users, roles) are NOT
+overwritten on pod restart. (commit 8e13f6c)
 
-### P1-6 · `secrets.useVault: true` stale flag in values-dev.yaml
-**File**: `infra/helm/aegispay/values-dev.yaml`
-**Problem**: Vault is not deployed. This flag misleads future maintainers.
-**Fix**: `useVault: false`, add `useGcpSecretManager: true`.
+### ~~P1-6~~ ✅ `secrets.useVault: true` stale flag — FIXED
+`useVault: false`, `useGcpSecretManager: true` set in `values-dev.yaml`. (commit 7afe5b5)
 
-### P1-7 · SMTP from address not configured
-**File**: `infra/helm/aegispay/values-dev.yaml` — `smtp.fromAddress: ""`
-**Fix**: Set to `aegispay.dev@gmail.com`; wire username from ESO secret `aegispay-smtp-secret`.
+### ~~P1-7~~ ✅ SMTP from address — FIXED
+`global.smtp.fromAddress: "aegispay.dev@gmail.com"` and `username: "aegispay.dev@gmail.com"`
+set in `values-dev.yaml`. Notification service ConfigMap reads from
+`global.smtp.fromAddress`. SMTP password still needs GCP SM secret
+`aegispay-smtp-secret` — create it with your Gmail app password when ready to
+enable email notifications (low priority until post-launch). (commit 8e13f6c)
 
 ---
 
@@ -232,9 +222,9 @@ Remove all Vault stub code that currently misleads readers.
 | Grafana alert rules | ❌ Disabled | `files/alerting/aegispay-rules.yaml` | P2-2 |
 | Grafana Slack contact point | ❌ Disabled | Same file | P2-3 |
 | Integration tests | ❌ Skipped | `ci-java.yml` (-DskipTests) | P2-1 |
-| Web frontend | ❌ Not deployed | No image / no Helm template | P1-1 |
+| Web frontend | 🔄 CI building | Dockerfile + Helm done; image building | P1-1 |
 | Keycloak secret rotation write | ⚠️ Read-only | `keycloak-secret-rotation-job.yaml` | P2-5 |
-| SMTP / email notifications | ⚠️ Unconfigured | `values-dev.yaml` smtp section | P1-7 |
+| SMTP / email notifications | ⚠️ Address set, password needed | `values-dev.yaml` smtp section fixed | P1-7 → P2 |
 | Security scanning on PRs | ⚠️ Main-only | `security-scan.yml` | P3-1 |
 | Dependabot auto-merge | ⚠️ Manual | GitHub settings | P2-6 |
 | HPA / autoscaling | ❌ Not configured | Helm chart | P3-2 |
@@ -247,6 +237,13 @@ Remove all Vault stub code that currently misleads readers.
 
 | Issue | Fix Applied | Commit |
 |-------|------------|--------|
+| root package.json missing packageManager | Added `"packageManager": "npm@10.9.2"` (turbo v2 requirement) | 5be29a4 |
+| turbo v2 strict env mode blocks NEXTAUTH_SECRET | Added globalPassThroughEnv in turbo.json | 8e13f6c |
+| ArgoCD Ingress OutOfSync blocks sync | Added RespectIgnoreDifferences=true to syncOptions | 8e13f6c |
+| Keycloak realm re-imported on restart | KC_IMPORT_STRATEGY=IGNORE_EXISTING in deployment | 8e13f6c |
+| SMTP fromAddress empty | global.smtp.fromAddress/username set to aegispay.dev@gmail.com | 8e13f6c |
+| kafka-ui ImagePullBackOff (provectus repo gone) | Changed to ghcr.io/kafbat/kafka-ui:latest | beb7a1f |
+| web: no Dockerfile or Helm templates | Multi-stage Dockerfile + Helm deployment/service/configmap | beb7a1f |
 | pgvector missing (ephemeral install) | `pgvector/pgvector:pg16` image in statefulset | 7afe5b5 |
 | Vault in keycloak-secret-rotation-job | Removed; ESO secret used directly | c58ef47 |
 | Grafana ops email sshelar110.ss3 | Fixed to aegispay.dev@gmail.com | 3e8bd07 |
