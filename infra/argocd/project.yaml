@@ -58,6 +58,22 @@ spec:
       kind: ClusterSecretStore
     - group: "monitoring.coreos.com"
       kind: ServiceMonitor
+    - group: "monitoring.coreos.com"
+      kind: PrometheusRule
+    - group: ""
+      kind: PersistentVolumeClaim
+    - group: "apps"
+      kind: StatefulSet
+    - group: "batch"
+      kind: Job
+    - group: "batch"
+      kind: CronJob
+    - group: ""
+      kind: Secret
+    - group: "rbac.authorization.k8s.io"
+      kind: Role
+    - group: "rbac.authorization.k8s.io"
+      kind: RoleBinding
 
   # Role: CI/CD can sync any app in this project
   roles:
