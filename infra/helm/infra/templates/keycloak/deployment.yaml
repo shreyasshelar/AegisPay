@@ -47,6 +47,9 @@ spec:
           args:
             - "start-dev"
             - "--import-realm"
+          # KC_IMPORT_STRATEGY=IGNORE_EXISTING prevents realm re-import from
+          # overwriting UI changes made after first start (fixes P1-5).
+          # The realm ConfigMap is still mounted so cold-start imports work.
           ports:
             - name: http
               containerPort: 8080
@@ -72,6 +75,10 @@ spec:
                   name: {{ .Values.keycloak.externalDatabase.existingSecret }}
                   key: {{ .Values.keycloak.externalDatabase.existingSecretPasswordKey | default "password" }}
             # HTTP settings — Cloudflare terminates TLS
+            # Idempotent re-import: existing realm/clients are NOT overwritten
+            # on restart. New objects in the ConfigMap are still imported.
+            - name: KC_IMPORT_STRATEGY
+              value: "IGNORE_EXISTING"
             - name: KC_HTTP_ENABLED
               value: "true"
             - name: KC_HOSTNAME_STRICT

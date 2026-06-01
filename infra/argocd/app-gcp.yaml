@@ -38,7 +38,8 @@ spec:
       - PrunePropagationPolicy=foreground
       - PruneLast=true
       - ServerSideApply=true
-      - ApplyOutOfSyncOnly=true   # only touch resources that actually drifted
+      - ApplyOutOfSyncOnly=true          # only touch resources that actually drifted
+      - RespectIgnoreDifferences=true   # ignoreDifferences items don't count as OutOfSync
     retry:
       limit: 5
       backoff:

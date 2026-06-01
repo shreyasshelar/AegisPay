@@ -32,6 +32,11 @@ global:
     # Full authenticated URI injected via extraEnv (MONGO_PASSWORD from aegispay-mongodb-secret)
   oauth2:
     issuerUri: "http://keycloak.aegispay-infra.svc.cluster.local:8080/realms/aegispay"
+  smtp:
+    host: "smtp.gmail.com"
+    port: "587"
+    username: "aegispay.dev@gmail.com"
+    fromAddress: "aegispay.dev@gmail.com"
 # ─── Secrets backend ──────────────────────────────────────────────────────────
 secrets:
   # GCP Secret Manager via External Secrets Operator (ESO) — Vault not deployed on dev

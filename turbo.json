@@ -5,7 +5,17 @@
     "NEXT_PUBLIC_API_URL",
     "NEXT_PUBLIC_WS_URL",
     "NEXT_PUBLIC_OAUTH_CLIENT_ID",
-    "NEXT_PUBLIC_OAUTH_ISSUER"
+    "NEXT_PUBLIC_OAUTH_ISSUER",
+    "NEXT_PUBLIC_API_BASE_URL",
+    "NEXT_PUBLIC_WS_BASE_URL",
+    "NEXT_PUBLIC_TX_WS_BASE_URL",
+    "NEXTAUTH_URL",
+    "KEYCLOAK_ISSUER"
+  ],
+  "globalPassThroughEnv": [
+    "NEXTAUTH_SECRET",
+    "KEYCLOAK_ID",
+    "KEYCLOAK_SECRET"
   ],
   "tasks": {
     "build": {
