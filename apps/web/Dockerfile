@@ -31,10 +31,8 @@ RUN npm ci --prefer-offline
 # ── Stage 2: Build all packages + web app ─────────────────────────────────────
 FROM base AS builder
 WORKDIR /app
+# npm workspaces hoists all deps to root node_modules — no per-workspace copies needed
 COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/packages/shared-types/node_modules ./packages/shared-types/node_modules 2>/dev/null || true
-COPY --from=deps /app/packages/design-system/node_modules ./packages/design-system/node_modules 2>/dev/null || true
-COPY --from=deps /app/packages/api-client/node_modules ./packages/api-client/node_modules 2>/dev/null || true
 
 # Copy all source files
 COPY . .
