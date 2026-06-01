@@ -314,7 +314,7 @@ services:
           - sh
           - -c
           - |
-            until wget -qO- http://ledger-service:8083/actuator/health/readiness 2>/dev/null | grep -q '"status":"UP"'; do
+            until wget -q --spider http://ledger-service:8083/actuator/health/readiness 2>/dev/null; do
               echo "waiting for ledger-service..."; sleep 5
             done
     extraEnv:
