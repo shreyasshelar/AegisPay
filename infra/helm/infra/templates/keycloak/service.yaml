@@ -1,0 +1,22 @@
+{{- if .Values.keycloak.enabled }}
+# ── Keycloak Service ──────────────────────────────────────────────────────────
+# Port 80 → container port 8080 (matches the keycloak-configure-job URL pattern)
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-keycloak
+  namespace: {{ .Values.global.namespace | default .Release.Namespace }}
+  labels:
+    app: keycloak
+    app.kubernetes.io/name: keycloak
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+  selector:
+    app: keycloak
+{{- end }}

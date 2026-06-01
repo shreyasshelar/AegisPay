@@ -1,0 +1,42 @@
+{{- if .Values.mongodb.enabled }}
+# ── MongoDB Services ──────────────────────────────────────────────────────────
+# App services connect via mongodb.aegispay-infra.svc.cluster.local:27017
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb
+  namespace: {{ .Values.global.namespace | default .Release.Namespace }}
+  labels:
+    app: mongodb
+    app.kubernetes.io/name: mongodb
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: mongodb
+      port: 27017
+      targetPort: mongodb
+      protocol: TCP
+  selector:
+    app: mongodb
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb-headless
+  namespace: {{ .Values.global.namespace | default .Release.Namespace }}
+  labels:
+    app: mongodb
+    app.kubernetes.io/name: mongodb
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+    - name: mongodb
+      port: 27017
+      targetPort: mongodb
+      protocol: TCP
+  selector:
+    app: mongodb
+{{- end }}

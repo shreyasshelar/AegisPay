@@ -1,0 +1,83 @@
+{{- if .Values.redis.enabled }}
+# ── Redis StatefulSet ─────────────────────────────────────────────────────────
+# Uses official redis:7.4-alpine (Docker Hub, no auth required).
+# Bitnami redis chart was removed — its images require GHCR auth (Broadcom paywall).
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis-master
+  namespace: {{ .Values.global.namespace | default .Release.Namespace }}
+  labels:
+    app: redis
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  serviceName: redis-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+        app.kubernetes.io/name: redis
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      containers:
+        - name: redis
+          image: "redis:7.4-alpine"
+          imagePullPolicy: IfNotPresent
+          command:
+            - redis-server
+            - "--requirepass"
+            - "$(REDIS_PASSWORD)"
+            - "--save"
+            - "60"
+            - "1"
+            - "--loglevel"
+            - "warning"
+            - "--maxmemory-policy"
+            - "allkeys-lru"
+          ports:
+            - name: redis
+              containerPort: 6379
+              protocol: TCP
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.redis.auth.existingSecret }}
+                  key: {{ .Values.redis.auth.existingSecretPasswordKey | default "password" }}
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - redis-cli -a "$REDIS_PASSWORD" ping
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            tcpSocket:
+              port: redis
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.redis.master.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: {{ .Values.redis.master.persistence.storageClass | default "local-path" }}
+        resources:
+          requests:
+            storage: {{ .Values.redis.master.persistence.size | default "2Gi" }}
+{{- end }}

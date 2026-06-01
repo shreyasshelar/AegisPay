@@ -8,30 +8,15 @@ type: application
 version: 0.1.0
 appVersion: "1.0.0"
 
-dependencies:
-  - name: postgresql
-    repository: https://charts.bitnami.com/bitnami
-    version: "15.x.x"
-    alias: postgresql
-    condition: postgresql.enabled
-
-  - name: mongodb
-    repository: https://charts.bitnami.com/bitnami
-    version: "16.x.x"    # MongoDB 8.0.x — 15.x tags were purged from Docker Hub
-    alias: mongodb
-    condition: mongodb.enabled
-
-  - name: redis
-    repository: https://charts.bitnami.com/bitnami
-    version: "20.x.x"    # Redis 7.4.x — 19.x tags were purged from Docker Hub
-    alias: redis
-    condition: redis.enabled
-
-  # kafka: removed Bitnami dependency — paywalled on Docker Hub.
-  # Replaced with custom templates in templates/kafka/ using apache/kafka:3.7.0 (free, ASF).
-
-  - name: keycloak
-    repository: https://charts.bitnami.com/bitnami
-    version: "21.x.x"
-    alias: keycloak
-    condition: keycloak.enabled
+# All Bitnami chart dependencies have been replaced with custom templates
+# using official Docker Hub images (postgres:16-alpine, redis:7.4-alpine,
+# mongo:7.0, quay.io/keycloak/keycloak:24.0).
+#
+# Reason: Bitnami removed all specific-version image tags from docker.io/bitnami/
+# and GHCR (ghcr.io/bitnami/) requires a paid Broadcom/VMware Tanzu account
+# even for anonymous pulls. Official Docker Hub images are free with no auth.
+#
+# Custom templates live in:
+#   templates/postgresql/   templates/mongodb/
+#   templates/redis/        templates/keycloak/
+#   templates/kafka/        (existing)

@@ -1,0 +1,83 @@
+{{- if .Values.mongodb.enabled }}
+# ── MongoDB StatefulSet ───────────────────────────────────────────────────────
+# Uses official mongo:7.0 (Docker Hub, no auth required).
+# Bitnami mongodb chart was removed — its images require GHCR auth (Broadcom paywall).
+#
+# MONGO_INITDB_ROOT_USERNAME is set to the aegispay user so the connection string:
+#   mongodb://aegispay:password@mongodb:27017/aegispay?authSource=admin
+# works without a separate user-creation init script.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mongodb
+  namespace: {{ .Values.global.namespace | default .Release.Namespace }}
+  labels:
+    app: mongodb
+    app.kubernetes.io/name: mongodb
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  serviceName: mongodb-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mongodb
+  template:
+    metadata:
+      labels:
+        app: mongodb
+        app.kubernetes.io/name: mongodb
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      containers:
+        - name: mongodb
+          image: "mongo:7.0"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: mongodb
+              containerPort: 27017
+              protocol: TCP
+          env:
+            # Use the aegispay user as root so connection string
+            # mongodb://aegispay:pass@mongodb:27017/aegispay?authSource=admin works directly.
+            - name: MONGO_INITDB_ROOT_USERNAME
+              value: {{ .Values.mongodb.auth.username | default "aegispay" | quote }}
+            - name: MONGO_INITDB_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.mongodb.auth.existingSecret }}
+                  key: "mongodb-root-password"
+            - name: MONGO_INITDB_DATABASE
+              value: {{ .Values.mongodb.auth.database | default "aegispay" | quote }}
+          readinessProbe:
+            exec:
+              command:
+                - mongosh
+                - --quiet
+                - --eval
+                - "db.adminCommand('ping')"
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            tcpSocket:
+              port: mongodb
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.mongodb.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /data/db
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: {{ .Values.mongodb.persistence.storageClass | default "local-path" }}
+        resources:
+          requests:
+            storage: {{ .Values.mongodb.persistence.size | default "10Gi" }}
+{{- end }}
