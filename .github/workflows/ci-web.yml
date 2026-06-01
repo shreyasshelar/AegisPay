@@ -42,9 +42,9 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
-          cache-dependency-path: apps/web/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
         run: npm install --prefer-offline
@@ -64,9 +64,9 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
-          cache-dependency-path: apps/web/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
         run: npm install --prefer-offline
@@ -107,15 +107,21 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
-          cache-dependency-path: apps/web/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
         run: npm install --prefer-offline
 
+      - name: Install turbo
+        run: npm install -g turbo
+
+      - name: Build shared packages
+        run: npx turbo run build --filter=@aegispay/shared-types --filter=@aegispay/design-system --filter=@aegispay/api-client || true
+
       - name: Build web app
-        run: npm run build --workspace=apps/web
+        run: npx turbo run build --filter=@aegispay/web
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
@@ -150,7 +156,7 @@ jobs:
       - name: Build and push web image (dev)
         uses: docker/build-push-action@v6
         with:
-          context: apps/web
+          context: .
           file: apps/web/Dockerfile
           push: true
           tags: |
@@ -174,9 +180,9 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
-          cache-dependency-path: apps/web/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
         run: npm install --prefer-offline
@@ -228,7 +234,7 @@ jobs:
       - name: Build and push web image (prod)
         uses: docker/build-push-action@v6
         with:
-          context: apps/web
+          context: .
           file: apps/web/Dockerfile
           push: true
           tags: |
