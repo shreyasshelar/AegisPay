@@ -12,6 +12,7 @@ contactPoints:
         type: slack
         settings:
           url: ${SLACK_WEBHOOK_URL}
+          recipient: "#aegispay-alerts"   # required by Grafana 10.4+ even when using webhook URL
           title: |
             {{ if eq .Status "firing" }}🔴{{ else }}✅{{ end }} AegisPay — {{ .CommonLabels.alertname }}
           text: |
