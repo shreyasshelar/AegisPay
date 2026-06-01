@@ -360,6 +360,13 @@ monitoring:
     notificationErrorRatePerMin: 0.5
     dataPipelineSinkErrorsPerMin: 0.2
     reconciliationBreakCount: 5
+# ─── ClickHouse — disabled on dev (ClickHouse not deployed in dev cluster) ────
+# The initJob would otherwise block every ArgoCD sync waiting for a connection
+# that never comes. Re-enable when ClickHouse is deployed (infra/helm/infra).
+clickhouse:
+  initJob:
+    enabled: false
+
 # ─── Storage class ────────────────────────────────────────────────────────────
 # local-path is the default k3s StorageClass — backed by a hostPath on your server.
 defaultStorageClass: local-path
