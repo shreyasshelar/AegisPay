@@ -13,6 +13,13 @@
 name: CI — Java (Smart)
 
 on:
+  workflow_dispatch:
+    inputs:
+      force_all:
+        description: "Build all services regardless of changes (true/false)"
+        required: false
+        default: "true"
+        type: string
   push:
     branches:
       - main
@@ -50,27 +57,37 @@ jobs:
     name: Detect Changed Services
     runs-on: ubuntu-latest
     outputs:
-      libs:                   ${{ steps.filter.outputs.libs }}
-      api-gateway:            ${{ steps.filter.outputs.api-gateway }}
-      user-service:           ${{ steps.filter.outputs.user-service }}
-      transaction-service:    ${{ steps.filter.outputs.transaction-service }}
-      ledger-service:         ${{ steps.filter.outputs.ledger-service }}
-      payment-orchestrator:   ${{ steps.filter.outputs.payment-orchestrator }}
-      risk-engine:            ${{ steps.filter.outputs.risk-engine }}
-      notification-service:   ${{ steps.filter.outputs.notification-service }}
-      ai-platform:            ${{ steps.filter.outputs.ai-platform }}
-      reconciliation-service: ${{ steps.filter.outputs.reconciliation-service }}
-      data-pipeline:          ${{ steps.filter.outputs.data-pipeline }}
-      helm:                   ${{ steps.filter.outputs.helm }}
+      libs:                   ${{ steps.force.outputs.libs || steps.filter.outputs.libs }}
+      api-gateway:            ${{ steps.force.outputs.api-gateway || steps.filter.outputs.api-gateway }}
+      user-service:           ${{ steps.force.outputs.user-service || steps.filter.outputs.user-service }}
+      transaction-service:    ${{ steps.force.outputs.transaction-service || steps.filter.outputs.transaction-service }}
+      ledger-service:         ${{ steps.force.outputs.ledger-service || steps.filter.outputs.ledger-service }}
+      payment-orchestrator:   ${{ steps.force.outputs.payment-orchestrator || steps.filter.outputs.payment-orchestrator }}
+      risk-engine:            ${{ steps.force.outputs.risk-engine || steps.filter.outputs.risk-engine }}
+      notification-service:   ${{ steps.force.outputs.notification-service || steps.filter.outputs.notification-service }}
+      ai-platform:            ${{ steps.force.outputs.ai-platform || steps.filter.outputs.ai-platform }}
+      reconciliation-service: ${{ steps.force.outputs.reconciliation-service || steps.filter.outputs.reconciliation-service }}
+      data-pipeline:          ${{ steps.force.outputs.data-pipeline || steps.filter.outputs.data-pipeline }}
+      helm:                   ${{ steps.force.outputs.helm || steps.filter.outputs.helm }}
     steps:
       - uses: actions/checkout@v4
         with:
-          # full history so dorny can compare base refs on PRs
           fetch-depth: 0
+
+      - name: Force all changed (workflow_dispatch with force_all=true)
+        id: force
+        if: github.event_name == 'workflow_dispatch' && inputs.force_all == 'true'
+        run: |
+          for svc in libs api-gateway user-service transaction-service ledger-service \
+                     payment-orchestrator risk-engine notification-service ai-platform \
+                     reconciliation-service data-pipeline helm; do
+            echo "${svc}=true" >> "$GITHUB_OUTPUT"
+          done
 
       - name: Detect changed paths
         uses: dorny/paths-filter@v3
         id: filter
+        if: github.event_name != 'workflow_dispatch' || inputs.force_all != 'true'
         with:
           filters: |
             libs:
