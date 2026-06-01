@@ -19,8 +19,8 @@ export default async function TriagePage({
 
   return (
     <TriageClient
-      prefillTxId={searchParams.txId}
-      prefillService={searchParams.service}
+      {...(searchParams.txId      ? { prefillTxId:      searchParams.txId }      : {})}
+      {...(searchParams.service   ? { prefillService:   searchParams.service }   : {})}
     />
   )
 }

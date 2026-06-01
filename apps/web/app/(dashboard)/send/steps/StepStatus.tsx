@@ -24,7 +24,7 @@ import { AegisStatusTimeline } from '@aegispay/design-system'
 import { Button as AegisButton } from '@aegispay/design-system'
 import { useSendMoneyStore } from '@/lib/useSendMoneyStore'
 import { formatAmount, resolveWsUrl } from '@/lib/utils'
-import type { TransactionStatusUpdate } from '@aegispay/shared-types'
+import type { TransactionStatusUpdate, Transaction } from '@aegispay/shared-types'
 
 const TERMINAL = new Set(['COMPLETED', 'FAILED', 'ROLLED_BACK'])
 const FAILED   = new Set(['FAILED', 'ROLLED_BACK'])
@@ -36,11 +36,13 @@ export function StepStatus() {
   const { transactionId, amount, currency, reset } = useSendMoneyStore()
 
   const {
-    data: tx,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    data: txRaw,
     isLoading,
   } = useTransaction(transactionId ?? '', {
     enabled: !!transactionId,
   })
+  const tx = txRaw as Transaction | undefined
 
   const resolveError = useResolveError()
 

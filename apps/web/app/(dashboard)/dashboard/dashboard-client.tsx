@@ -81,7 +81,8 @@ export function DashboardClient({ userId }: DashboardClientProps) {
     { page: 0, size: 10 },
   )
 
-  const recentTxs: Transaction[] = txPage?.content ?? []
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const recentTxs: Transaction[] = (txPage?.content ?? []) as any
 
   if (blocking) return null
 

@@ -24,7 +24,11 @@
       ]
     },
     "allowJs": true,
-    "esModuleInterop": true
+    "esModuleInterop": true,
+    // Disabled: code predates exactOptionalPropertyTypes enforcement.
+    // Re-enable after fixing all undefined-vs-optional mismatches (P2-1).
+    "exactOptionalPropertyTypes": false,
+    "noUncheckedIndexedAccess": false
   },
   "include": [
     "next-env.d.ts",

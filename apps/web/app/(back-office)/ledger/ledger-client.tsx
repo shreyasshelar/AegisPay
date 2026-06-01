@@ -161,7 +161,7 @@ export function LedgerClient() {
                       <div className="text-right">
                         <p className={`text-sm font-semibold ${color}`}>
                           {['CREDIT', 'RELEASE'].includes(entry.entryType) ? '+' : '-'}
-                          {formatAmount(entry.amount, account?.currency ?? 'INR')}
+                          {formatAmount(parseFloat(entry.amount as unknown as string), account?.currency ?? 'INR')}
                         </p>
                         <p className="text-xs text-slate-400">
                           {formatDate(entry.createdAt)}

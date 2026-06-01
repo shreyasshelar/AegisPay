@@ -77,7 +77,7 @@ export function UsersClient() {
   const { data, isLoading, isError, isFetching } = useUserList({
     page,
     size:      PAGE_SIZE,
-    kycStatus: kycFilter || undefined,
+    ...(kycFilter ? { kycStatus: kycFilter } : {}),
   })
 
   // ── Admin KYC approve / reject / manual-review ───────────────────────────────

@@ -20,6 +20,16 @@ import { useApiClient } from '@aegispay/api-client'
 import { Header } from '@/components/header'
 import { useTriageStore } from '@/lib/useTriageStore'
 
+// ── Types ─────────────────────────────────────────────────────────────────────
+interface TriageSession {
+  id:          string
+  serviceName: string
+  description: string
+  analysis:    string
+  degraded:    boolean
+  timestamp:   Date
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function TriageClient({

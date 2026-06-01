@@ -24,7 +24,8 @@ spec:
     spec:
       containers:
         - name: kafka-ui
-          image: "provectus/kafka-ui:latest"
+          # kafbat/kafka-ui is the maintained fork of provectus/kafka-ui (GHCR, no auth)
+          image: "ghcr.io/kafbat/kafka-ui:latest"
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

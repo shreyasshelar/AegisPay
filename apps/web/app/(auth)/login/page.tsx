@@ -39,7 +39,7 @@ export default function LoginPage() {
       SessionRequired:    'Your session has expired. Please sign in again.',
       default:            'An unexpected error occurred.',
     }
-    setError(messages[err] ?? messages['default'])
+    setError((messages[err] ?? messages['default']) ?? null)
   }, [params])
 
   async function handleSignIn() {
