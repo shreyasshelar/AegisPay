@@ -338,7 +338,7 @@ grafana:
       traefik.ingress.kubernetes.io/router.tls: "true"
       cert-manager.io/cluster-issuer: letsencrypt-prod
   alerting:
-    opsEmail: "sshelar110.ss3@gmail.com"
+    opsEmail: "aegispay.dev@gmail.com"
     slackWebhookSecretRef:
       name: aegispay-slack-secret
       key: webhook-url

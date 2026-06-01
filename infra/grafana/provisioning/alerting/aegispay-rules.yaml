@@ -13,7 +13,7 @@ contactPoints:
       - uid: aegispay-email
         type: email
         settings:
-          addresses: sshelar110.ss3@gmail.com
+          addresses: aegispay.dev@gmail.com
           subject: >
             [AegisPay] {{ .Status | toUpper }} — {{ .CommonLabels.alertname }}
 
