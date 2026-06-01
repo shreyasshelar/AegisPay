@@ -70,7 +70,7 @@ services:
     enabled: true
     image:
       repository: api-gateway
-      tag: latest
+      tag: 7afe5b5
     replicas: 1
     port: 8080
     resources:
@@ -103,7 +103,7 @@ services:
     enabled: true
     image:
       repository: user-service
-      tag: latest
+      tag: 7afe5b5
     replicas: 1
     port: 8081
     resources:
@@ -122,7 +122,7 @@ services:
     enabled: true
     image:
       repository: transaction-service
-      tag: latest
+      tag: 7afe5b5
     replicas: 1
     port: 8082
     resources:
@@ -141,7 +141,7 @@ services:
     enabled: true
     image:
       repository: ledger-service
-      tag: latest
+      tag: 7afe5b5
     replicas: 1
     port: 8083
     resources:
@@ -160,7 +160,7 @@ services:
     enabled: true
     image:
       repository: payment-orchestrator
-      tag: latest
+      tag: 7afe5b5
     replicas: 1
     port: 8084
     resources:
@@ -179,7 +179,7 @@ services:
     enabled: true
     image:
       repository: risk-engine
-      tag: latest
+      tag: 7afe5b5
     replicas: 1
     port: 8085
     resources:
@@ -198,7 +198,7 @@ services:
     enabled: true
     image:
       repository: notification-service
-      tag: latest
+      tag: 7afe5b5
     replicas: 1
     port: 8086
     resources:
@@ -232,7 +232,7 @@ services:
     enabled: true
     image:
       repository: data-pipeline
-      tag: latest
+      tag: 7afe5b5
     replicas: 1
     port: 8089
     resources:
@@ -249,7 +249,7 @@ services:
     enabled: true
     image:
       repository: reconciliation-service
-      tag: latest
+      tag: 7afe5b5
     replicas: 1
     port: 8087
     resources:
@@ -266,7 +266,7 @@ services:
     enabled: true
     image:
       repository: ai-platform
-      tag: latest
+      tag: 7afe5b5
     replicas: 1
     port: 8088
     resources:
@@ -289,7 +289,7 @@ services:
     enabled: true
     image:
       repository: web
-      tag: latest
+      tag: 7afe5b5
     replicas: 1
     port: 3000
     resources:
