@@ -1,0 +1,54 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# .dockerignore — applies when building apps/web/Dockerfile from repo root
+#
+# The web Docker build only needs:
+#   package.json, package-lock.json, turbo.json, tsconfig.base.json
+#   packages/shared-types, packages/design-system, packages/api-client
+#   apps/web/
+#
+# Everything else is excluded to keep the build context small and fast.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Java microservices source (not needed for web build)
+services/
+# libs are Java shared libraries
+libs/
+
+# Build outputs and caches
+**/target/
+**/.next/
+**/node_modules/
+**/dist/
+**/.turbo/
+**/storybook-static/
+**/coverage/
+
+# Infrastructure / ops files
+infra/
+docker-compose.yml
+.github/
+
+# Documentation
+docs/
+
+# Development config files
+.git/
+.env
+.env.*
+**/.env
+**/.env.*
+*.log
+*.tmp
+
+# Mobile apps
+apps/android/
+apps/ios/
+
+# IDE config
+.idea/
+.vscode/
+*.iml
+
+# OS artefacts
+.DS_Store
+Thumbs.db
