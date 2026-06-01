@@ -27,7 +27,10 @@ spec:
     spec:
       containers:
         - name: postgresql
-          image: "postgres:16-alpine"
+          # pgvector/pgvector:pg16 = official postgres 16 image + pgvector pre-installed.
+          # Drop-in replacement for postgres:16-alpine — same entrypoint, same PGDATA.
+          # Fixes: ai-platform "extension vector does not exist" on pod restart.
+          image: "pgvector/pgvector:pg16"
           imagePullPolicy: IfNotPresent
           ports:
             - name: tcp-postgresql

@@ -127,8 +127,8 @@ jobs:
 
       - name: Configure git
         run: |
-          git config user.name  "aegispay-ci[bot]"
-          git config user.email "aegispay-ci@users.noreply.github.com"
+          git config user.name  "shreyasshelar"
+          git config user.email "shreyasshelarrr@gmail.com"
 
       - name: Install yq
         run: |

@@ -1,14 +1,22 @@
 name: CD — Deploy to Dev (dev branch)
 
-# Triggers when CI passes on the dev branch.
-# Builds Docker images → pushes to GHCR → patches image tags in values-dev.yaml
-# → commits → ArgoCD detects the change and rolls out the new version.
+# Triggers when "CI — Java (Smart)" completes successfully on the dev branch.
+# Flow: Build Docker images for all Java services + web → push to GHCR →
+#       patch values-dev.yaml with new SHA tags → commit → ArgoCD auto-syncs.
+#
+# Git identity: shreyasshelar / shreyasshelarrr@gmail.com (no bots)
+# Requires: GIT_DEPLOY_TOKEN secret (PAT with repo write scope)
 
 on:
   workflow_run:
-    workflows: ["CI — Build & Test"]
+    workflows: ["CI — Java (Smart)"]
     types: [completed]
     branches: [dev]
+
+# Cancel previous run on same branch
+concurrency:
+  group: cd-dev-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   REGISTRY: ghcr.io
@@ -16,8 +24,9 @@ env:
   HELM_VALUES_FILE: infra/helm/aegispay/values-dev.yaml
 
 jobs:
+  # ── Build & push each Java service ─────────────────────────────────────────
   build-and-push:
-    name: Build & push ${{ matrix.service }}
+    name: Docker — ${{ matrix.service }}
     runs-on: ubuntu-latest
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
@@ -52,15 +61,21 @@ jobs:
           distribution: temurin
           cache: maven
 
+      # Install parent POMs first so service builds can resolve deps
+      - name: Install root + libs parent POMs
+        run: |
+          mvn --batch-mode --no-transfer-progress install -N
+          mvn --batch-mode --no-transfer-progress install -N -f libs/pom.xml
+
       - name: Build JAR (shared libs + service)
         run: |
-          ./mvnw --batch-mode --no-transfer-progress clean package \
-            -pl libs/common-domain,libs/common-security,libs/common-kafka,libs/common-observability,services/${{ matrix.service }} \
+          mvn --batch-mode --no-transfer-progress clean package \
+            -pl libs/common-domain,libs/common-events,libs/common-security,libs/common-kafka,libs/common-observability,services/${{ matrix.service }} \
             --also-make \
             -DskipTests
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -70,21 +85,20 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: services/${{ matrix.service }}
+          file: services/${{ matrix.service }}/Dockerfile
           push: true
           tags: |
             ${{ env.IMAGE_PREFIX }}/${{ matrix.service }}:dev-latest
             ${{ env.IMAGE_PREFIX }}/${{ matrix.service }}:dev-${{ github.event.workflow_run.head_sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          build-args: |
-            JAR_FILE=target/${{ matrix.service }}-*.jar
 
-  # Build Next.js web app image
+  # ── Build & push Next.js web app ──────────────────────────────────────────
   build-web:
-    name: Build & push web
+    name: Docker — web
     runs-on: ubuntu-latest
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
@@ -97,6 +111,13 @@ jobs:
         with:
           ref: dev
 
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
@@ -104,20 +125,27 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
       - name: Build and push web image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: apps/web
+          file: apps/web/Dockerfile
           push: true
           tags: |
             ${{ env.IMAGE_PREFIX }}/web:dev-latest
             ${{ env.IMAGE_PREFIX }}/web:dev-${{ github.event.workflow_run.head_sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: |
+            NEXT_PUBLIC_API_BASE_URL=https://aegispay-api.shreyasshelar.uk
+            NEXT_PUBLIC_WS_BASE_URL=wss://aegispay-ws.shreyasshelar.uk
 
-  # Patch image tags in values-dev.yaml → commit → ArgoCD picks up the change
+  # ── Patch image tags in values-dev.yaml and commit ────────────────────────
   update-image-tags:
-    name: Patch values-dev.yaml
+    name: Patch values-dev.yaml → commit
     runs-on: ubuntu-latest
     needs: [build-and-push, build-web]
 
@@ -133,8 +161,8 @@ jobs:
 
       - name: Configure git
         run: |
-          git config user.name  "aegispay-ci[bot]"
-          git config user.email "aegispay-ci@users.noreply.github.com"
+          git config user.name  "shreyasshelar"
+          git config user.email "shreyasshelarrr@gmail.com"
 
       - name: Install yq
         run: |
@@ -142,31 +170,42 @@ jobs:
             https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
           sudo chmod +x /usr/local/bin/yq
 
-      - name: Patch image tags
+      - name: Patch image tags in values-dev.yaml
         env:
           SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
-          SERVICES=(api_gateway user_service transaction_service ledger_service \
-                    payment_orchestrator risk_engine notification_service ai_platform \
-                    data_pipeline reconciliation_service web)
-          IMAGES=(api-gateway user-service transaction-service ledger-service \
-                  payment-orchestrator risk-engine notification-service ai-platform \
-                  data-pipeline reconciliation-service web)
+          # Key map: Helm values key (underscore) → Docker image name (hyphen)
+          declare -A SERVICE_MAP=(
+            [api_gateway]="api-gateway"
+            [user_service]="user-service"
+            [transaction_service]="transaction-service"
+            [ledger_service]="ledger-service"
+            [payment_orchestrator]="payment-orchestrator"
+            [risk_engine]="risk-engine"
+            [notification_service]="notification-service"
+            [ai_platform]="ai-platform"
+            [data_pipeline]="data-pipeline"
+            [reconciliation_service]="reconciliation-service"
+            [web]="web"
+          )
 
-          for i in "${!SERVICES[@]}"; do
-            svc="${SERVICES[$i]}"
-            img="${IMAGES[$i]}"
-            yq e ".services.${svc}.image.tag = \"dev-${SHA}\"" -i "${{ env.HELM_VALUES_FILE }}"
+          for svc_key in "${!SERVICE_MAP[@]}"; do
+            TAG="dev-${SHA}"
+            yq e ".services.${svc_key}.image.tag = \"${TAG}\"" -i "${{ env.HELM_VALUES_FILE }}"
+            echo "  ✓ services.${svc_key}.image.tag = ${TAG}"
           done
 
-      - name: Commit and push
+      - name: Commit and push [skip ci]
         env:
           SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
           git add "${{ env.HELM_VALUES_FILE }}"
-          git diff --staged --quiet && echo "No tag changes" && exit 0
-          git commit -m "chore(cd-dev): deploy sha=${SHA:0:12} to dev"
+          if git diff --staged --quiet; then
+            echo "No tag changes — already up to date"
+            exit 0
+          fi
+          git commit -m "chore(cd/dev): deploy dev-${SHA:0:12} [skip ci]"
           git push origin dev
 
-      # ArgoCD watches dev branch and auto-syncs when values-dev.yaml changes.
-      # The app-dev.yaml Application has automated syncPolicy, so no manual trigger needed.
+      # ArgoCD watches dev branch (app-gcp.yaml targetRevision: dev) and
+      # auto-syncs when values-dev.yaml changes — no manual trigger needed.

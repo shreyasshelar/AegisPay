@@ -15,8 +15,8 @@ spec:
 
   source:
     repoURL: https://github.com/shreyasshelar/AegisPay.git
-    # Watches main branch — GCP is the live/portfolio deployment
-    targetRevision: main
+    # GCP K3s is the dev environment — tracks dev branch
+    targetRevision: dev
     path: infra/helm/aegispay
     helm:
       valueFiles:
@@ -38,6 +38,7 @@ spec:
       - PrunePropagationPolicy=foreground
       - PruneLast=true
       - ServerSideApply=true
+      - ApplyOutOfSyncOnly=true   # only touch resources that actually drifted
     retry:
       limit: 5
       backoff:
@@ -52,3 +53,9 @@ spec:
       kind: Deployment
       jsonPointers:
         - /spec/replicas
+    # Ingress on k3s+Cloudflare never gets an ADDRESS (no LB) — don't let it
+    # block sync from completing
+    - group: networking.k8s.io
+      kind: Ingress
+      jsonPointers:
+        - /status/loadBalancer

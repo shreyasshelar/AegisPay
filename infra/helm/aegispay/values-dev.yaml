@@ -34,8 +34,9 @@ global:
     issuerUri: "http://keycloak.aegispay-infra.svc.cluster.local:8080/realms/aegispay"
 # ─── Secrets backend ──────────────────────────────────────────────────────────
 secrets:
-  # Vault running in the same cluster (aegispay-vault namespace)
-  useVault: true
+  # GCP Secret Manager via External Secrets Operator (ESO) — Vault not deployed on dev
+  useVault: false
+  useGcpSecretManager: true
   vault:
     address: "http://vault.aegispay-vault.svc.cluster.local:8200"
     path: "secret"
@@ -317,6 +318,9 @@ services:
 # ─── Grafana (ClickHouse analytics) ──────────────────────────────────────────
 grafana:
   enabled: true
+  # Cloudflare tunnel routes aegispay-grafana.shreyasshelar.uk → :3000
+  # GF_SERVER_HTTP_PORT and K8s Service port both set to 3000 via this value.
+  port: 3000
   persistence:
     enabled: true
     storageClassName: local-path

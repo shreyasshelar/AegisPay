@@ -403,7 +403,11 @@ jobs:
       - uses: azure/setup-helm@v4
         with: { version: v3.15.0 }
       - name: Lint Helm chart
-        run: helm lint infra/helm/aegispay
+        run: |
+          helm lint infra/helm/aegispay \
+            -f infra/helm/aegispay/values.yaml \
+            -f infra/helm/aegispay/values-dev.yaml \
+            --set global.namespace=aegispay
 
   # ── Step 4: Docker build & push (prod branch push only) ─────────────────────
   # Skipped entirely on PRs and dev branch.

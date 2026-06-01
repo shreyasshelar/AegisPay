@@ -1,0 +1,59 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# AegisPay — GHCR Package Pruning
+#
+# Runs weekly (Monday 03:00 UTC) and on demand.
+# Deletes untagged image versions and versions older than 30 days that are
+# NOT tagged "latest" or "dev-latest". Keeps the last 5 tagged versions per
+# package so rollbacks remain possible.
+#
+# Free tier GHCR limit: 500 MB for private repos.
+# Public repos: unlimited but pruning keeps things tidy.
+# ─────────────────────────────────────────────────────────────────────────────
+name: Prune GHCR packages
+
+on:
+  schedule:
+    - cron: "0 3 * * 1"   # Every Monday at 03:00 UTC
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (list what would be deleted, no actual deletion)"
+        required: false
+        default: "true"
+        type: boolean
+
+jobs:
+  prune:
+    name: Prune old package versions
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - aegispay/api-gateway
+          - aegispay/user-service
+          - aegispay/transaction-service
+          - aegispay/ledger-service
+          - aegispay/payment-orchestrator
+          - aegispay/risk-engine
+          - aegispay/notification-service
+          - aegispay/ai-platform
+          - aegispay/data-pipeline
+          - aegispay/reconciliation-service
+          - aegispay/web
+
+    steps:
+      - name: Delete old/untagged versions of ${{ matrix.package }}
+        uses: actions/delete-package-versions@v5
+        with:
+          package-name: ${{ matrix.package }}
+          package-type: container
+          # Keep latest + dev-latest + last 5 SHA-tagged versions
+          min-versions-to-keep: 7
+          # Delete versions older than 30 days (except those with kept tags)
+          delete-only-untagged-versions: false
+          ignore-versions: "^(latest|dev-latest)$"
+        continue-on-error: true   # don't fail whole job if one package has no versions

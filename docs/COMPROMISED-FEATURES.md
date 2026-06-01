@@ -1,105 +1,271 @@
-# AegisPay — Compromised Features (Need Future Fix)
+# AegisPay — Platform Status & Fix Backlog
 
-This document tracks features that were disabled, simplified, or deferred during the
-initial GCP K3s deployment. Each item must be revisited before the platform is
-considered production-grade.
-
----
-
-## 🚨 Critical — Fix Before Production
-
-### 1. Grafana Alert Rules Removed
-**Status**: Disabled  
-**Files**: `infra/grafana/provisioning/alerting/aegispay-rules.yaml`  
-**Why disabled**: ClickHouse-based alert queries using `{From:0s To:0s}` time-range syntax
-caused Grafana 10.4 to crash on startup (CrashLoopBackOff).  
-**Fix needed**: Rewrite alert rules using valid Grafana unified alerting query syntax.
-Re-add via Grafana UI (Alerting → Alert rules) or fix YAML time-range format.  
-**Impact**: No automated alerts for SagaTimeout, DlqDepth, BalanceNegative, etc.
-
-### 2. Grafana Slack Alerting Disabled
-**Status**: Disabled  
-**Files**: `infra/grafana/provisioning/alerting/aegispay-rules.yaml`  
-**Why disabled**: Grafana 10.4 rejects `${ENV_VAR}` syntax in webhook URLs at parse
-time (before env substitution occurs). Using a hardcoded URL would expose the webhook.  
-**Fix needed**: Inject the Slack webhook URL as a Kubernetes secret and mount as env var
-inside the Grafana pod, then configure via Grafana API/UI rather than provisioning YAML.  
-Alternatively upgrade to Grafana 11 which supports secret refs in alerting provisioning.  
-**Impact**: No Slack notifications on payment failures or infrastructure alerts.
-
-### 3. CI Integration Tests Skipped
-**Status**: All services built with `-DskipTests`  
-**Files**: `.github/workflows/ci-java.yml`  
-**Why disabled**: Integration tests require live Postgres, Kafka, Redis (via Testcontainers).
-GitHub Actions runners don't have Docker-in-Docker configured for Testcontainers.  
-**Fix needed**: Add `services:` block in CI for postgres/kafka/redis, or configure
-Testcontainers Cloud, or use `@SpringBootTest` with `@DirtiesContext` and H2/embedded.  
-**Impact**: Zero test coverage on CI. Regressions in DB queries, Kafka consumers,
-and Saga flows will only be caught in production.
+> **Goal**: GCP K3s cluster = dev environment, live at `*.shreyasshelar.uk`.
+> All items below must reach **P0-done** before the app is considered live.
+> After go-live, work through P1 → P2 → P3 in order.
+>
+> **Git rule**: every commit → `shreyasshelar` / `shreyasshelarrr@gmail.com`
+> **Config rule**: all project emails → `aegispay.dev@gmail.com`
 
 ---
 
-## ⚠️ Medium — Fix Within 2 Weeks
+## Current State (as of 2026-06-02)
 
-### 4. Helm Lint Failures in CI (Non-Blocking)
-**Status**: Helm lint step fails but doesn't block image builds  
-**Files**: `.github/workflows/ci-java.yml`, `infra/helm/aegispay/`  
-**Why**: Helm chart has lint warnings (likely missing required values, unused templates).  
-**Fix needed**: Run `helm lint infra/helm/aegispay -f values.yaml -f values-dev.yaml`
-locally, fix all warnings, and make the lint step a blocking gate in CI.
+| Component | Status | Notes |
+|-----------|--------|-------|
+| api-gateway | ✅ Running, accessible via Cloudflare | `aegispay-api.shreyasshelar.uk` → 401 (correct) |
+| user-service | ✅ Running | |
+| transaction-service | ✅ Running | |
+| ledger-service | ✅ Running | |
+| payment-orchestrator | ✅ Running | Stripe test mode |
+| risk-engine | ✅ Running | |
+| notification-service | ✅ Running | |
+| data-pipeline | ✅ Running | |
+| reconciliation-service | ✅ Running | |
+| ai-platform | ✅ Running | pgvector manually installed (ephemeral — see P0-3) |
+| grafana | ✅ Running | **502 via Cloudflare** (port mismatch — see P0-4) |
+| cloudflared | ✅ Running | 4 QUIC connections |
+| keycloak | ✅ Running in infra ns | **502 via Cloudflare** (port mismatch — see P0-5) |
+| web (Next.js) | ❌ Not deployed | No Docker image built for dev yet |
+| ArgoCD | ⚠️ OutOfSync/Running | Watches `main`, should watch `dev` — see P0-1 |
+| CI/CD | ❌ Broken | cd-dev.yml triggers wrong workflow name — see P0-2 |
 
-### 5. Keycloak Secret Rotation — Manual GCP Update Required
-**Status**: Partial — rotation job removed Vault write, now logs only  
-**Files**: `infra/helm/infra/templates/keycloak-secret-rotation-job.yaml`  
-**Why**: The rotation job regenerates the Keycloak client secret but cannot write it back
-to GCP Secret Manager without a Workload Identity + IAM binding for the rotation SA.  
+---
+
+## P0 — Must fix to go live (in order)
+
+### P0-1 · ArgoCD watches wrong branch (main instead of dev)
+**File**: `infra/argocd/app-gcp.yaml`
+**Problem**: `targetRevision: main` but GCP K3s is the dev environment. All our
+deployment fixes live on `main` and need to be on `dev` too.
+**Steps**:
+1. Merge `main` → `dev` (33 commits of fixes currently only on main)
+2. Change `app-gcp.yaml` `targetRevision: main` → `dev`
+3. Add `ApplyOutOfSyncOnly=true` syncOption so ArgoCD only touches changed resources
+4. Add `ignoreDifferences` for Ingress (no ADDRESS = forever unhealthy on k3s+Cloudflare)
+**Impact without fix**: ArgoCD syncs wrong branch; dev deploys go nowhere.
+
+### P0-2 · cd-dev.yml broken — wrong CI workflow name + wrong git author
+**File**: `.github/workflows/cd-dev.yml`
+**Problem**:
+- `workflow_run: workflows: ["CI — Build & Test"]` → wrong name, CI is `CI — Java (Smart)`
+  → CD never triggers; dev Docker images never get built/pushed
+- Git config `aegispay-ci[bot]` / `aegispay-ci@users.noreply.github.com` → must be
+  `shreyasshelar` / `shreyasshelarrr@gmail.com`
+- Image tag format in yq command uses `services.<key>` but `web` key not in values-dev.yaml
+**Impact without fix**: No automated CI/CD to dev. Images only `latest` (manually built).
+
+### P0-3 · pgvector ephemeral — lost on pod restart
+**File**: `infra/helm/infra/templates/postgresql/statefulset.yaml`
+**Problem**: Using `postgres:16-alpine` which has no pgvector. pgvector was manually
+compiled and installed inside the running pod — it disappears on any pod restart or
+VM stop/start.
+**Fix**: Change image to `pgvector/pgvector:pg16` (official, DockerHub, free).
+**Risk**: Changing the StatefulSet image tag causes a rolling restart of PostgreSQL.
+PVC data is preserved; Flyway migrations are idempotent (won't re-run).
+**Impact without fix**: ai-platform fails with "extension vector does not exist" on restart.
+
+### P0-4 · Grafana 502 via Cloudflare (port mismatch)
+**Cloudflare tunnel config**: routes to `grafana.aegispay.svc.cluster.local:3000`
+**Kubernetes Service port**: 3100
+**Fix**: Update Cloudflare tunnel config to use port 3100 (in Cloudflare Zero Trust dashboard),
+OR change Grafana Kubernetes Service port to 3000 in Helm chart.
+**Impact without fix**: `aegispay-grafana.shreyasshelar.uk` → 502.
+
+### P0-5 · Keycloak 502 via Cloudflare (port mismatch)
+**Cloudflare tunnel config**: routes to `keycloak.aegispay-infra.svc.cluster.local:8080`
+**Actual service**: `aegispay-infra-keycloak` in `aegispay-infra` namespace on port `80`
+**Fix**: Update Cloudflare tunnel to `aegispay-infra-keycloak.aegispay-infra.svc.cluster.local:80`
+**Impact without fix**: `aegispay-keycloak.shreyasshelar.uk` → 502; no OAuth2 login possible.
+
+### P0-6 · CI GitHub Actions failing (hard failures)
+**Files**: `.github/workflows/ci-java.yml`, `ci-web.yml`
+**Known failures**:
+- `helm-lint` fails because `helm lint` is run without value files
+  → Fix: `helm lint infra/helm/aegispay -f values.yaml -f values-dev.yaml`
+- `ci-web.yml` unit-tests fail because no `test` script defined in web workspace
+  → Fix: add or skip gracefully
+- `ci-web.yml` Docker push only on `main` — dev never gets web images
+  → Fix: add dev branch Docker push to ci-web.yml
+- `security-scan.yml` `codeql` runs on all pushes to main including `[skip ci]` commits
+  → Fix: add `[skip ci]` filter
+**Impact without fix**: Every push shows red CI. Blocks PR merges. No dev images built.
+
+### ~~P0-7~~ ✅ `main` branch upstream tracking — FIXED
+`git branch --set-upstream-to=origin/main main` applied. Both main and origin/main
+at same SHA. CI pushes will resolve correctly.
+
+---
+
+## P1 — Fix within 1 week (stability)
+
+### P1-1 · web (Next.js) not deployed
+**Status**: No Docker image exists for dev; no Helm template for web service.
 **Fix needed**:
-1. Create `keycloak-rotation-sa` GCP Service Account with `secretmanager.versions.add` IAM role.
-2. Bind via Workload Identity: `iam.gke.io/gcp-service-account` annotation on K8s SA.
-3. Update rotation script to use `gcloud secrets versions add` instead of Vault write.
+1. Add `apps/web/Dockerfile` (multi-stage Next.js build)
+2. Add `infra/helm/aegispay/templates/web/` deployment + service + networkpolicy
+3. Add `services.web` to `values.yaml` and `values-dev.yaml`
+4. Fix `ci-web.yml` to push `web:dev-latest` on dev branch
+5. Fix `cd-dev.yml` to include `web` in image tag update loop
+**Impact**: `aegispay.shreyasshelar.uk` returns 502 (no pod).
 
-### 6. ArgoCD Per-Service ApplicationSet (Optional Enhancement)
-**Status**: Single monolithic `aegispay-gcp` ArgoCD Application  
-**Current behaviour**: ArgoCD already does smart resource-level sync — only changed
-Deployments are updated. Other pods are NOT restarted.  
-**Enhancement**: Create an ApplicationSet that generates one ArgoCD Application per
-service so each service has independent sync history, rollback, and health status.  
-**Fix**: Create `infra/argocd/applicationset-per-service.yaml` using list generator
-with one entry per service pointing to `infra/helm/aegispay/templates/<service>/`.
+### P1-2 · ArgoCD stuck in Running/OutOfSync (Ingress health)
+**Problem**: ArgoCD waits for ALL resources healthy. Ingress resources never get
+an `ADDRESS` on k3s + Cloudflare (no LoadBalancer, traffic comes from cloudflared pod).
+ArgoCD marks Ingress as `Progressing` indefinitely → entire sync stays `Running`.
+**Fix**: Add to `app-gcp.yaml`:
+```yaml
+ignoreDifferences:
+  - group: networking.k8s.io
+    kind: Ingress
+    jsonPointers:
+      - /status
+```
+And add `syncOptions: - RespectIgnoreDifferences=true` + `ApplyOutOfSyncOnly=true`
+
+### P1-3 · GitHub contributor pollution (@claude, @sshelar110ss3-ship-it)
+**Problem**: Two bot identities appear in GitHub contributors:
+- `claude/` branches (worktrees created by Claude Code) may have been pushed to remote
+- `sshelar110ss3-ship-it` is a GitHub Actions bot from old CD commits
+**Fix**:
+1. Delete remote `claude/` branches: `git push origin --delete claude/tender-wozniak-205b4d claude/zen-gauss-cfbbed`
+2. Fix cd-dev.yml and cd-prod.yml git config to use `shreyasshelar`/`shreyasshelarrr@gmail.com`
+   (GitHub attributes commits to the email, not the display name)
+3. For `sshelar110ss3-ship-it`: find the commit(s) with that author and rewrite history
+   on dev/main using git-filter-repo if needed.
+**Impact**: GitHub shows wrong contributors; looks unprofessional on portfolio.
+
+### P1-4 · GHCR package bloat — old tags accumulate
+**Problem**: Every CI run pushes a new SHA-tagged image. GHCR free tier has 500MB limit.
+Hundreds of old tags waste storage.
+**Fix**: Add `.github/workflows/ghcr-prune.yml` that runs weekly and deletes all
+non-`latest` / non-`dev-latest` package versions older than 30 days using
+`gh api` or `actions/delete-package-versions`.
+
+### P1-5 · Keycloak realm re-imported on every restart (data loss risk)
+**Problem**: Keycloak starts with `--import-realm` flag. This re-imports the realm
+from ConfigMap on EVERY pod restart. Any changes made via Keycloak UI (new clients,
+user attributes, etc.) are overwritten.
+**Fix**: Remove `--import-realm` from args after first successful start, OR use
+`KC_IMPORT_STRATEGY=IGNORE_EXISTING` env var to make import idempotent.
+
+### P1-6 · `secrets.useVault: true` stale flag in values-dev.yaml
+**File**: `infra/helm/aegispay/values-dev.yaml`
+**Problem**: Vault is not deployed. This flag misleads future maintainers.
+**Fix**: `useVault: false`, add `useGcpSecretManager: true`.
+
+### P1-7 · SMTP from address not configured
+**File**: `infra/helm/aegispay/values-dev.yaml` — `smtp.fromAddress: ""`
+**Fix**: Set to `aegispay.dev@gmail.com`; wire username from ESO secret `aegispay-smtp-secret`.
 
 ---
 
-## 🔵 Low — Nice to Have
+## P2 — After stable go-live (maturity)
 
-### 7. SMTP From Address Not Configured
-**Files**: `infra/helm/aegispay/values-dev.yaml` (smtp.fromAddress = "")  
-**Fix needed**: Set `smtp.fromAddress` to `aegispay.dev@gmail.com` and populate
-username from ESO secret `aegispay-smtp-secret`.
+### P2-1 · CI integration tests completely skipped (-DskipTests)
+**Problem**: Zero test coverage on CI. All services built with `-DskipTests`.
+**Fix**: Add `services:` block in CI workflow for postgres + kafka + redis, or
+use Testcontainers Cloud. Run `mvn test` instead of `package -DskipTests`.
+**Note**: Do NOT add tests until app is stable and deployed — fixing CI is P0 but
+enabling tests is P2 since Testcontainers requires Docker-in-Docker setup.
 
-### 8. api-gateway Docker Image May Need Retrigger
-**Status**: Transient 504 from GHCR during CI run  
-**Fix**: Verify `ghcr.io/shreyasshelar/aegispay/api-gateway:latest` exists.
-If not, manually trigger CI via `workflow_dispatch` with `force_all: true`.
+### P2-2 · Grafana alert rules disabled (ClickHouse query format)
+**Problem**: Alert rules removed because Grafana 10.4 rejected `{From:0s To:0s}` time range.
+**Fix**: Rewrite rules using valid Grafana unified alerting syntax with proper `for:` duration.
+Re-add via Grafana UI → Export as JSON → store in `infra/grafana/dashboards/`.
+**Alerts needed**: SagaTimeoutRateHigh, DlqDepthNonZero, BalanceNegative,
+NotificationDeliveryFailureHigh, ReconciliationBreakCountHigh.
 
-### 9. values-dev.yaml `secrets.useVault: true` Stale Flag
-**Files**: `infra/helm/aegispay/values-dev.yaml`  
-**Issue**: `secrets.useVault: true` still set, but Vault is not deployed. ESO
-reads directly from GCP Secret Manager. This flag may confuse future maintainers.  
-**Fix**: Set `useVault: false`, add `useGcpSecretManager: true`.
+### P2-3 · Grafana Slack alerting disabled
+**Problem**: `${SLACK_WEBHOOK_URL}` env var syntax rejected at parse time by Grafana 10.4.
+**Fix**: Upgrade to Grafana 11+ which supports secret refs, OR configure contact
+point via Grafana API (not provisioning YAML), OR inject pre-expanded URL from ESO secret.
+
+### P2-4 · ArgoCD per-service ApplicationSet
+**Current**: Single monolithic `aegispay-gcp` ArgoCD Application syncs all 10+ services.
+ArgoCD IS smart enough to only restart changed Deployments — but all services share
+one sync history, one rollback point, one health status.
+**Enhancement**: Create `infra/argocd/applicationset-per-service.yaml` using list
+generator. Each service gets own Application: independent rollback, independent health,
+independent sync trigger.
+
+### P2-5 · Keycloak secret rotation requires Workload Identity
+**Current**: Rotation job only reads the secret, cannot write new version back to GCP SM.
+**Fix**:
+1. Create `keycloak-rotation-sa@<project>.iam.gserviceaccount.com` with `secretmanager.versions.add`
+2. Bind via Workload Identity to `aegispay-infra/keycloak-rotation-sa` K8s SA
+3. Update rotation script: `gcloud secrets versions add aegispay-keycloak-secret --data-file=-`
+
+### P2-6 · Dependabot PRs accumulating (80+ open)
+**Problem**: Dependabot has opened 80+ PRs across services. Most are safe minor/patch bumps.
+**Fix**: Configure `dependabot.yml` with `auto-merge: true` for patch-level updates.
+Enable GitHub's auto-merge on PRs that pass CI. Group related dependabot PRs together.
 
 ---
 
-## ✅ Already Fixed (Context)
+## P3 — Future / Nice-to-have
 
-| Issue | Fix Applied |
-|-------|------------|
-| Vault annotations in keycloak-secret-rotation-job | Removed — ESO secret used directly |
-| Grafana ops email was sshelar110.ss3 | Fixed to aegispay.dev@gmail.com |
-| ai-platform OPENROUTER_API_KEY wrong key | Fixed in values.yaml |
-| payment-orchestrator stripe webhook secret ref | Fixed in values.yaml |
-| Tomcat /tmp read-only crash | emptyDir at /tmp added to all pods |
-| Liveness probe killing during slow startup | TCP socket probe, 180s initial delay |
-| Spring Boot config crash (optional file) | `optional:` prefix on config location |
-| CI service builds failing (missing parent POMs) | Added `mvn install -N` steps |
-| Docker build context wrong for services | Fixed to `context: services/<name>` |
-| Co-Authored-By lines in git history | Stripped via git-filter-repo |
+### P3-1 · Security scan (OWASP, Trivy, CodeQL) on every PR
+**Current**: `security-scan.yml` runs on push to main only.
+**Fix**: Add PR trigger. Add SARIF upload to GitHub Security tab.
+Enable Dependabot security alerts + auto-dismiss low-severity.
+
+### P3-2 · Horizontal Pod Autoscaler (HPA) for gateway + risk-engine
+**Current**: All services run at fixed 1 replica.
+**Fix**: Add HPA to api-gateway (CPU 70%) and risk-engine (CPU 80%).
+Requires metrics-server (already present in k3s).
+
+### P3-3 · PodDisruptionBudget for critical services
+**Fix**: Add PDB (`minAvailable: 1`) to api-gateway, ledger-service, transaction-service.
+
+### P3-4 · Network policies for remaining services
+**Current**: Only api-gateway has a NetworkPolicy. Other services are open.
+**Fix**: Add egress-only NetworkPolicy per service limiting traffic to declared dependencies.
+
+### P3-5 · Vault for production secret management
+**Current**: GCP Secret Manager + ESO for dev. Vault stubs still in codebase.
+**Fix**: For prod (main branch), decide: keep GCP SM or deploy Vault in prod cluster.
+Remove all Vault stub code that currently misleads readers.
+
+---
+
+## Disabled Features Tracker
+
+| Feature | Status | Disabled in | Re-enable in |
+|---------|--------|------------|-------------|
+| Grafana alert rules | ❌ Disabled | `files/alerting/aegispay-rules.yaml` | P2-2 |
+| Grafana Slack contact point | ❌ Disabled | Same file | P2-3 |
+| Integration tests | ❌ Skipped | `ci-java.yml` (-DskipTests) | P2-1 |
+| Web frontend | ❌ Not deployed | No image / no Helm template | P1-1 |
+| Keycloak secret rotation write | ⚠️ Read-only | `keycloak-secret-rotation-job.yaml` | P2-5 |
+| SMTP / email notifications | ⚠️ Unconfigured | `values-dev.yaml` smtp section | P1-7 |
+| Security scanning on PRs | ⚠️ Main-only | `security-scan.yml` | P3-1 |
+| Dependabot auto-merge | ⚠️ Manual | GitHub settings | P2-6 |
+| HPA / autoscaling | ❌ Not configured | Helm chart | P3-2 |
+| PodDisruptionBudget | ❌ Not configured | Helm chart | P3-3 |
+| Vault integration | 🗑️ Removed (correct) | All Helm templates | P3-5 |
+
+---
+
+## ✅ Fixed (historical)
+
+| Issue | Fix Applied | Commit |
+|-------|------------|--------|
+| pgvector missing (ephemeral install) | TODO: change to pgvector/pgvector:pg16 image | P0-3 |
+| Vault in keycloak-secret-rotation-job | Removed; ESO secret used directly | c58ef47 |
+| Grafana ops email sshelar110.ss3 | Fixed to aegispay.dev@gmail.com | 3e8bd07 |
+| Grafana Slack receiver CrashLoop | Removed Slack receiver from provisioning YAML | bca9bbc |
+| ai-platform DeploymentHistoryTool NPE | null-safe projectRoot + SPRING_APPLICATION_JSON | 2f00a25 |
+| payment-orchestrator wrong DB name | configmap uses values db.name | 373ba1f |
+| reconciliation init container stuck | wget --spider on /readiness endpoint | 6001143 |
+| reconciliation OOMKilled | Increased to 512Mi limit | ff0d778 |
+| api-gateway Service port 80 vs 8080 | Changed to use .Values port (8080) | e9f750a |
+| api-gateway NetworkPolicy blocking cloudflared | Added cloudflared + kube-system ingress rules | e9f750a |
+| MongoDB "Database name empty" | Fixed duplicate global block + auth URI | 373ba1f |
+| Tomcat /tmp read-only crash | emptyDir at /tmp for all pods | 6fb9075 |
+| Liveness probe killing slow startup | TCP socket probe, 180s initialDelay | 539dd7b |
+| Spring Boot optional config crash | `optional:` prefix on config location | d33646d |
+| CI missing parent POM install | `mvn install -N` step added | cb525cb |
+| Docker build context wrong | Fixed to `context: services/<name>` | 2beb517 |
+| All images ImagePullBackOff after filter-repo | Changed all tags to `latest` | 373ba1f |
+| Co-Authored-By Claude in git history | Stripped via git-filter-repo | (history rewrite) |
