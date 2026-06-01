@@ -289,44 +289,14 @@ services:
     jvmOpts: "-XX:MaxRAMPercentage=50.0 -XX:+UseG1GC -XX:+UseContainerSupport"
     db:
       name: aegispay_ai
-  # ── Web (Next.js) ─────────────────────────────────────────────────────────
-  web:
-    enabled: true
-    image:
-      repository: web
-      tag: 7afe5b5
-    replicas: 1
-    port: 3000
-    resources:
-      requests:
-        cpu: 100m
-        memory: 256Mi
-      limits:
-        cpu: 500m
-        memory: 512Mi
-    ingress:
-      enabled: true
-      className: traefik
-      annotations:
-        traefik.ingress.kubernetes.io/router.entrypoints: websecure
-        traefik.ingress.kubernetes.io/router.tls: "true"
-        cert-manager.io/cluster-issuer: letsencrypt-prod
-      hosts:
-        - host: aegispay.shreyasshelar.uk
-          paths:
-            - path: /
-              pathType: Prefix
-      tls:
-        - secretName: aegispay-web-tls
-          hosts:
-            - aegispay.shreyasshelar.uk
-# ─── Web (Next.js frontend) ──────────────────────────────────────────────────
+  # ── Web (Next.js) — routed via Cloudflare tunnel, no Traefik Ingress needed
   web:
     enabled: true
     image:
       repository: web
       tag: dev-latest
     replicas: 1
+    port: 3000
     resources:
       requests:
         cpu: 50m
