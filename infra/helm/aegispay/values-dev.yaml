@@ -315,12 +315,31 @@ services:
         - secretName: aegispay-web-tls
           hosts:
             - aegispay.shreyasshelar.uk
+# ─── Web (Next.js frontend) ──────────────────────────────────────────────────
+  web:
+    enabled: true
+    image:
+      repository: web
+      tag: dev-latest
+    replicas: 1
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    env:
+      apiBaseUrl: "https://aegispay-api.shreyasshelar.uk"
+      wsBaseUrl: "wss://aegispay-ws.shreyasshelar.uk"
+      nextauthUrl: "https://aegispay.shreyasshelar.uk"
+      keycloakClientId: "aegispay-web"
 # ─── Grafana (ClickHouse analytics) ──────────────────────────────────────────
 grafana:
   enabled: true
-  # Cloudflare tunnel routes aegispay-grafana.shreyasshelar.uk → :3000
-  # GF_SERVER_HTTP_PORT and K8s Service port both set to 3000 via this value.
-  port: 3000
+  # Cloudflare tunnel routes aegispay-grafana.shreyasshelar.uk → :3100
+  # GF_SERVER_HTTP_PORT and K8s Service port match Cloudflare config.
+  port: 3100
   persistence:
     enabled: true
     storageClassName: local-path

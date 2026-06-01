@@ -329,6 +329,26 @@ services:
             name: aegispay-clickhouse-secret
             key: password
 
+# ─── Web (Next.js frontend) ──────────────────────────────────────────────────
+  web:
+    enabled: true
+    image:
+      repository: web
+      tag: latest
+    replicas: 1
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    env:
+      apiBaseUrl: "https://aegispay-api.shreyasshelar.uk"
+      wsBaseUrl: "wss://aegispay-ws.shreyasshelar.uk"
+      nextauthUrl: "https://aegispay.shreyasshelar.uk"
+      keycloakClientId: "aegispay-web"
+
 # ─── Ingress (api-gateway only) ───────────────────────────────────────────────
 ingress:
   enabled: false

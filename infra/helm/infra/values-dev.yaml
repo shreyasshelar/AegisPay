@@ -147,3 +147,16 @@ vault:
 # ── ClickHouse ────────────────────────────────────────────────────────────────
 clickhouse:
   enabled: false
+
+
+# ── Kafka-UI ──────────────────────────────────────────────────────────────────
+kafkaUi:
+  enabled: true
+  bootstrapServers: "kafka.aegispay-infra.svc.cluster.local:9092"
+  resources:
+    requests:
+      cpu: 50m
+      memory: 256Mi
+    limits:
+      cpu: 200m
+      memory: 512Mi

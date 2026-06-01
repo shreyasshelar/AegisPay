@@ -1,0 +1,17 @@
+{{- if .Values.services.web.enabled }}
+# Web configmap — trigger deployment rollout via checksum annotation when config changes
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: web-config
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "aegispay.labels" . | nindent 4 }}
+    app.kubernetes.io/name: web
+data:
+  NEXT_PUBLIC_API_BASE_URL: {{ .Values.services.web.env.apiBaseUrl | default "https://aegispay-api.shreyasshelar.uk" | quote }}
+  NEXT_PUBLIC_WS_BASE_URL: {{ .Values.services.web.env.wsBaseUrl | default "wss://aegispay-ws.shreyasshelar.uk" | quote }}
+  NEXTAUTH_URL: {{ .Values.services.web.env.nextauthUrl | default "https://aegispay.shreyasshelar.uk" | quote }}
+  KEYCLOAK_ID: {{ .Values.services.web.env.keycloakClientId | default "aegispay-web" | quote }}
+  KEYCLOAK_ISSUER: {{ .Values.global.oauth2.issuerUri | default "http://keycloak.aegispay-infra.svc.cluster.local:8080/realms/aegispay" | quote }}
+{{- end }}

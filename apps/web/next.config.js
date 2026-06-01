@@ -87,6 +87,10 @@ const nextConfig = {
     ]
   },
 
+  // standalone output required for Docker containerisation
+  // Creates .next/standalone with minimal server + all deps bundled
+  output: 'standalone',
+
   reactStrictMode: true,
 
   // Allow Next.js dev server to accept requests from LAN IP without
