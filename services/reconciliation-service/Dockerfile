@@ -1,47 +1,32 @@
-# ── Stage 1: Build ────────────────────────────────────────────────────────────
-FROM maven:3.9-eclipse-temurin-21 AS builder
+# Stage 1: extract Spring Boot layers
+FROM eclipse-temurin:21-jre-jammy AS builder
+WORKDIR /app
+COPY target/*.jar app.jar
+RUN java -Djarmode=layertools -jar app.jar extract
 
-WORKDIR /workspace
+# Stage 2: production image
+FROM eclipse-temurin:21-jre-jammy
+LABEL org.opencontainers.image.title="AegisPay Reconciliation Service"
+LABEL org.opencontainers.image.vendor="AegisPay"
 
-# Copy root POM and shared lib POMs first for layer caching
-COPY pom.xml .
-COPY libs/common-domain/pom.xml      libs/common-domain/pom.xml
-COPY libs/common-security/pom.xml    libs/common-security/pom.xml
-COPY libs/common-kafka/pom.xml       libs/common-kafka/pom.xml
-COPY libs/common-observability/pom.xml libs/common-observability/pom.xml
-COPY services/reconciliation-service/pom.xml services/reconciliation-service/pom.xml
-
-# Resolve dependencies without source (cache layer)
-RUN mvn dependency:go-offline -pl services/reconciliation-service --also-make -q 2>/dev/null || true
-
-# Copy source
-COPY libs/                           libs/
-COPY services/reconciliation-service/ services/reconciliation-service/
-
-# Build only the reconciliation-service and its lib dependencies
-RUN mvn clean package -pl services/reconciliation-service --also-make \
-    -DskipTests -q
-
-# ── Stage 2: Runtime ──────────────────────────────────────────────────────────
-FROM eclipse-temurin:21-jre-alpine
-
-# Non-root user
-RUN addgroup -S aegispay && adduser -S aegispay -G aegispay
+RUN groupadd --gid 1001 aegispay \
+ && useradd --uid 1001 --gid aegispay --no-create-home aegispay
 
 WORKDIR /app
 
-COPY --from=builder /workspace/services/reconciliation-service/target/*.jar app.jar
+COPY --from=builder /app/dependencies/ ./
+COPY --from=builder /app/spring-boot-loader/ ./
+COPY --from=builder /app/snapshot-dependencies/ ./
+COPY --from=builder /app/application/ ./
 
-RUN chown aegispay:aegispay app.jar
+RUN chown -R aegispay:aegispay /app
 USER aegispay
 
 EXPOSE 8087
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-    CMD wget -qO- http://localhost:8087/actuator/health || exit 1
+ENV JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError -Djava.security.egd=file:/dev/./urandom"
 
-ENTRYPOINT ["java", \
-    "-XX:+UseContainerSupport", \
-    "-XX:MaxRAMPercentage=75.0", \
-    "-Djava.security.egd=file:/dev/./urandom", \
-    "-jar", "app.jar"]
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS org.springframework.boot.loader.launch.JarLauncher"]
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+  CMD curl -f http://localhost:8087/actuator/health || exit 1
