@@ -440,7 +440,7 @@ jobs:
             type=raw,value=latest
       - uses: docker/build-push-action@v5
         with:
-          context: .
+          context: services/api-gateway
           file: services/api-gateway/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
@@ -471,7 +471,7 @@ jobs:
             type=sha,prefix=,format=long
             type=raw,value=latest
       - uses: docker/build-push-action@v5
-        with: { context: ., file: services/user-service/Dockerfile, push: true, tags: "${{ steps.meta.outputs.tags }}", cache-from: "type=gha", cache-to: "type=gha,mode=max" }
+        with: { context: services/user-service, file: services/user-service/Dockerfile, push: true, tags: "${{ steps.meta.outputs.tags }}", cache-from: "type=gha", cache-to: "type=gha,mode=max" }
 
   docker-transaction-service:
     name: Docker — transaction-service
@@ -497,7 +497,7 @@ jobs:
             type=sha,prefix=,format=long
             type=raw,value=latest
       - uses: docker/build-push-action@v5
-        with: { context: ., file: services/transaction-service/Dockerfile, push: true, tags: "${{ steps.meta.outputs.tags }}", cache-from: "type=gha", cache-to: "type=gha,mode=max" }
+        with: { context: services/transaction-service, file: services/transaction-service/Dockerfile, push: true, tags: "${{ steps.meta.outputs.tags }}", cache-from: "type=gha", cache-to: "type=gha,mode=max" }
 
   docker-ledger-service:
     name: Docker — ledger-service
@@ -523,7 +523,7 @@ jobs:
             type=sha,prefix=,format=long
             type=raw,value=latest
       - uses: docker/build-push-action@v5
-        with: { context: ., file: services/ledger-service/Dockerfile, push: true, tags: "${{ steps.meta.outputs.tags }}", cache-from: "type=gha", cache-to: "type=gha,mode=max" }
+        with: { context: services/ledger-service, file: services/ledger-service/Dockerfile, push: true, tags: "${{ steps.meta.outputs.tags }}", cache-from: "type=gha", cache-to: "type=gha,mode=max" }
 
   docker-payment-orchestrator:
     name: Docker — payment-orchestrator
@@ -549,7 +549,7 @@ jobs:
             type=sha,prefix=,format=long
             type=raw,value=latest
       - uses: docker/build-push-action@v5
-        with: { context: ., file: services/payment-orchestrator/Dockerfile, push: true, tags: "${{ steps.meta.outputs.tags }}", cache-from: "type=gha", cache-to: "type=gha,mode=max" }
+        with: { context: services/payment-orchestrator, file: services/payment-orchestrator/Dockerfile, push: true, tags: "${{ steps.meta.outputs.tags }}", cache-from: "type=gha", cache-to: "type=gha,mode=max" }
 
   docker-risk-engine:
     name: Docker — risk-engine
@@ -575,7 +575,7 @@ jobs:
             type=sha,prefix=,format=long
             type=raw,value=latest
       - uses: docker/build-push-action@v5
-        with: { context: ., file: services/risk-engine/Dockerfile, push: true, tags: "${{ steps.meta.outputs.tags }}", cache-from: "type=gha", cache-to: "type=gha,mode=max" }
+        with: { context: services/risk-engine, file: services/risk-engine/Dockerfile, push: true, tags: "${{ steps.meta.outputs.tags }}", cache-from: "type=gha", cache-to: "type=gha,mode=max" }
 
   docker-notification-service:
     name: Docker — notification-service
@@ -601,7 +601,7 @@ jobs:
             type=sha,prefix=,format=long
             type=raw,value=latest
       - uses: docker/build-push-action@v5
-        with: { context: ., file: services/notification-service/Dockerfile, push: true, tags: "${{ steps.meta.outputs.tags }}", cache-from: "type=gha", cache-to: "type=gha,mode=max" }
+        with: { context: services/notification-service, file: services/notification-service/Dockerfile, push: true, tags: "${{ steps.meta.outputs.tags }}", cache-from: "type=gha", cache-to: "type=gha,mode=max" }
 
   docker-ai-platform:
     name: Docker — ai-platform
@@ -627,7 +627,7 @@ jobs:
             type=sha,prefix=,format=long
             type=raw,value=latest
       - uses: docker/build-push-action@v5
-        with: { context: ., file: services/ai-platform/Dockerfile, push: true, tags: "${{ steps.meta.outputs.tags }}", cache-from: "type=gha", cache-to: "type=gha,mode=max" }
+        with: { context: services/ai-platform, file: services/ai-platform/Dockerfile, push: true, tags: "${{ steps.meta.outputs.tags }}", cache-from: "type=gha", cache-to: "type=gha,mode=max" }
 
   docker-reconciliation-service:
     name: Docker — reconciliation-service
@@ -653,7 +653,7 @@ jobs:
             type=sha,prefix=,format=long
             type=raw,value=latest
       - uses: docker/build-push-action@v5
-        with: { context: ., file: services/reconciliation-service/Dockerfile, push: true, tags: "${{ steps.meta.outputs.tags }}", cache-from: "type=gha", cache-to: "type=gha,mode=max" }
+        with: { context: services/reconciliation-service, file: services/reconciliation-service/Dockerfile, push: true, tags: "${{ steps.meta.outputs.tags }}", cache-from: "type=gha", cache-to: "type=gha,mode=max" }
 
   docker-data-pipeline:
     name: Docker — data-pipeline
@@ -679,7 +679,7 @@ jobs:
             type=sha,prefix=,format=long
             type=raw,value=latest
       - uses: docker/build-push-action@v5
-        with: { context: ., file: services/data-pipeline/Dockerfile, push: true, tags: "${{ steps.meta.outputs.tags }}", cache-from: "type=gha", cache-to: "type=gha,mode=max" }
+        with: { context: services/data-pipeline, file: services/data-pipeline/Dockerfile, push: true, tags: "${{ steps.meta.outputs.tags }}", cache-from: "type=gha", cache-to: "type=gha,mode=max" }
 
   # ── Step 5: Patch Helm values & trigger ArgoCD (prod branch push only) ───────
   # Only runs when at least one Docker job actually pushed a new image.
