@@ -10,6 +10,9 @@ global:
   # Bitnami migrated all container images from docker.io/bitnami/ to ghcr.io/bitnami/
   # This one override redirects every Bitnami chart image pull to GHCR.
   imageRegistry: "ghcr.io"
+  security:
+    # Required: Bitnami 21.x+ rejects non-docker.io registries without this flag.
+    allowInsecureImages: true
 
 # ── PostgreSQL ────────────────────────────────────────────────────────────────
 postgresql:
