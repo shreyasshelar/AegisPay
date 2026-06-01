@@ -13,7 +13,7 @@ contactPoints:
       - uid: aegispay-email
         type: email
         settings:
-          addresses: ${OPS_EMAIL}
+          addresses: sshelar110.ss3@gmail.com
           subject: >
             [AegisPay] {{ .Status | toUpper }} — {{ .CommonLabels.alertname }}
 
