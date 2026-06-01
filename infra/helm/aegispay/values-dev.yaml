@@ -339,7 +339,9 @@ grafana:
       cert-manager.io/cluster-issuer: letsencrypt-prod
   alerting:
     opsEmail: "sshelar110.ss3@gmail.com"
-    # slackWebhookSecretRef: not configured on dev; email-only alerting
+    slackWebhookSecretRef:
+      name: aegispay-slack-secret
+      key: webhook-url
   resources:
     requests:
       cpu: 50m
