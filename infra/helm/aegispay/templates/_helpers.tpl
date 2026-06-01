@@ -126,6 +126,9 @@ spec:
             - name: config
               mountPath: /config
               readOnly: true
+            # Tomcat / Spring Boot need a writable /tmp even with readOnlyRootFilesystem
+            - name: tmp
+              mountPath: /tmp
           resources:
             {{- toYaml $svc.resources | nindent 12 }}
           livenessProbe:
@@ -158,6 +161,8 @@ spec:
         - name: config
           configMap:
             name: {{ $name }}-config
+        - name: tmp
+          emptyDir: {}
       terminationGracePeriodSeconds: 40  # ② 5s preStop + 30s Spring graceful + 5s JVM buffer
       topologySpreadConstraints:
         - maxSkew: 1
