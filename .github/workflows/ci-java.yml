@@ -147,11 +147,16 @@ jobs:
 
       - name: Build & install shared libs
         run: |
+          # Install parent POMs first (non-recursive) so service jobs can resolve
+          # the dependency chain: common-domain → aegispay-libs → aegispay-parent
+          mvn --batch-mode --no-transfer-progress install -N
+          mvn --batch-mode --no-transfer-progress install -N -f libs/pom.xml
+          # Now build and install all lib modules
           mvn --batch-mode --no-transfer-progress clean install \
             -pl libs/common-domain,libs/common-security,libs/common-kafka,libs/common-observability \
             -DskipTests
 
-      # Save the installed aegispay JARs so service jobs don't recompile them
+      # Save installed aegispay JARs + parent POMs so service jobs don't recompile them
       - name: Save libs cache
         uses: actions/cache/save@v4
         with:
