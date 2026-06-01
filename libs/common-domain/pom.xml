@@ -15,6 +15,31 @@
   <name>AegisPay :: Libs :: Common Domain</name>
   <description>Shared Kafka event contracts, enums, exceptions, and base DTOs</description>
 
+  <build>
+    <plugins>
+      <!-- Override root-pom annotationProcessorPaths that reference common-domain/common-kafka.
+           Those paths create a circular dependency when building the libs themselves —
+           the artifacts don't exist yet at annotation-processing time.
+           The libs only use Lombok, so Lombok alone is sufficient here. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <configuration>
+          <source>21</source>
+          <target>21</target>
+          <parameters>true</parameters>
+          <annotationProcessorPaths>
+            <path>
+              <groupId>org.projectlombok</groupId>
+              <artifactId>lombok</artifactId>
+              <version>${lombok.version}</version>
+            </path>
+          </annotationProcessorPaths>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+
   <dependencies>
     <dependency>
       <groupId>com.fasterxml.jackson.core</groupId>
