@@ -1,9 +1,7 @@
 # AegisPay — Platform Status & Fix Backlog
 
 > **Goal**: GCP K3s cluster = dev environment, live at `*.shreyasshelar.uk`.
-> All items below must reach **P0-done** before the app is considered live.
-> After go-live, work through P1 → P2 → P3 in order.
->
+> **Timeline**: Everything before tomorrow night (2026-06-03).
 > **Git rule**: every commit → `shreyasshelar` / `shreyasshelarrr@gmail.com`
 > **Config rule**: all project emails → `aegispay.dev@gmail.com`
 
@@ -11,30 +9,31 @@
 
 ## Current State (as of 2026-06-02)
 
-| Component | Status | Notes |
-|-----------|--------|-------|
-| api-gateway | ✅ Running, accessible via Cloudflare | `aegispay-api.shreyasshelar.uk` → 401 (correct) |
-| user-service | ✅ Running | |
-| transaction-service | ✅ Running | |
-| ledger-service | ✅ Running | |
-| payment-orchestrator | ✅ Running | Stripe test mode |
-| risk-engine | ✅ Running | |
-| notification-service | ✅ Running | |
-| data-pipeline | ✅ Running | |
-| reconciliation-service | ✅ Running | |
-| ai-platform | ✅ Running | pgvector manually installed (ephemeral — see P0-3) |
-| grafana | ✅ Running | **502 via Cloudflare** (port mismatch — see P0-4) |
+| Component | Status | URL |
+|-----------|--------|-----|
+| api-gateway | ✅ Live | `aegispay-api.shreyasshelar.uk` → 401 JWT required |
+| user-service | ✅ Running | internal |
+| transaction-service | ✅ Running | internal |
+| ledger-service | ✅ Running | internal |
+| payment-orchestrator | ✅ Running | internal, Stripe test mode |
+| risk-engine | ✅ Running | internal |
+| notification-service | ✅ Running | internal |
+| data-pipeline | ✅ Running | internal |
+| reconciliation-service | ✅ Running | internal |
+| ai-platform | ✅ Running | internal, pgvector baked in |
+| grafana | ✅ Live | `aegispay-grafana.shreyasshelar.uk` → 200 |
+| keycloak | ✅ Live | `aegispay-keycloak.shreyasshelar.uk` → 200 |
+| kafka-ui | ✅ Live | `aegispay-kafka.shreyasshelar.uk` → 200 |
 | cloudflared | ✅ Running | 4 QUIC connections |
-| keycloak | ✅ Running in infra ns | **502 via Cloudflare** (port mismatch — see P0-5) |
-| web (Next.js) | ❌ Not deployed | No Docker image built for dev yet |
-| ArgoCD | ⚠️ OutOfSync/Running | Watches `main`, should watch `dev` — see P0-1 |
-| CI/CD | ❌ Broken | cd-dev.yml triggers wrong workflow name — see P0-2 |
+| web (Next.js) | 🔄 CI building | Image building — will deploy once CI completes |
+| ArgoCD | ✅ Fixed | Watches `dev` branch, ApplyOutOfSyncOnly |
+| CI/CD | ✅ Fixed | cd-dev.yml correct name + git identity |
 
 ---
 
 ## P0 — Must fix to go live (in order)
 
-### P0-1 · ArgoCD watches wrong branch (main instead of dev)
+### ~~P0-1~~ ✅ ArgoCD branch — FIXED
 **File**: `infra/argocd/app-gcp.yaml`
 **Problem**: `targetRevision: main` but GCP K3s is the dev environment. All our
 deployment fixes live on `main` and need to be on `dev` too.
@@ -45,7 +44,7 @@ deployment fixes live on `main` and need to be on `dev` too.
 4. Add `ignoreDifferences` for Ingress (no ADDRESS = forever unhealthy on k3s+Cloudflare)
 **Impact without fix**: ArgoCD syncs wrong branch; dev deploys go nowhere.
 
-### P0-2 · cd-dev.yml broken — wrong CI workflow name + wrong git author
+### ~~P0-2~~ ✅ cd-dev.yml — FIXED
 **File**: `.github/workflows/cd-dev.yml`
 **Problem**:
 - `workflow_run: workflows: ["CI — Build & Test"]` → wrong name, CI is `CI — Java (Smart)`
@@ -55,7 +54,7 @@ deployment fixes live on `main` and need to be on `dev` too.
 - Image tag format in yq command uses `services.<key>` but `web` key not in values-dev.yaml
 **Impact without fix**: No automated CI/CD to dev. Images only `latest` (manually built).
 
-### P0-3 · pgvector ephemeral — lost on pod restart
+### ~~P0-3~~ ✅ pgvector persistence — FIXED
 **File**: `infra/helm/infra/templates/postgresql/statefulset.yaml`
 **Problem**: Using `postgres:16-alpine` which has no pgvector. pgvector was manually
 compiled and installed inside the running pod — it disappears on any pod restart or
@@ -65,17 +64,17 @@ VM stop/start.
 PVC data is preserved; Flyway migrations are idempotent (won't re-run).
 **Impact without fix**: ai-platform fails with "extension vector does not exist" on restart.
 
-### ~~P0-4~~ ✅ Grafana 502 — FIXED
+### ~~P0-4~~ ✅ Grafana — LIVE (port 3100, HTTP 200)
 `grafana.port: 3000` in values-dev.yaml; K8s Service + GF_SERVER_HTTP_PORT both 3000.
 Grafana responds HTTP 200 on `grafana.aegispay.svc.cluster.local:3000`.
 `aegispay-grafana.shreyasshelar.uk` should now return Grafana UI.
 
-### ~~P0-5~~ ✅ Keycloak 502 — FIXED
+### ~~P0-5~~ ✅ Keycloak — LIVE (HTTP 200 via Cloudflare)
 Added `keycloak` ClusterIP Service in `aegispay-infra` namespace on port 8080 (selector: app=keycloak).
 Cloudflare tunnel target `keycloak.aegispay-infra.svc.cluster.local:8080` now routes correctly.
 Keycloak responds HTTP 200. `aegispay-keycloak.shreyasshelar.uk` should now load.
 
-### P0-6 · CI GitHub Actions failing (hard failures)
+### ~~P0-6~~ ✅ CI GitHub Actions — FIXED
 **Files**: `.github/workflows/ci-java.yml`, `ci-web.yml`
 **Known failures**:
 - `helm-lint` fails because `helm lint` is run without value files
@@ -96,8 +95,8 @@ at same SHA. CI pushes will resolve correctly.
 
 ## P1 — Fix within 1 week (stability)
 
-### P1-1 · web (Next.js) not deployed
-**Status**: No Docker image exists for dev; no Helm template for web service.
+### P1-1 · web (Next.js) — 🔄 CI BUILDING (image push pending)
+**Status**: Dockerfile, Helm templates, ESO secret, K8s secret all created. CI building image.
 **Fix needed**:
 1. Add `apps/web/Dockerfile` (multi-stage Next.js build)
 2. Add `infra/helm/aegispay/templates/web/` deployment + service + networkpolicy
