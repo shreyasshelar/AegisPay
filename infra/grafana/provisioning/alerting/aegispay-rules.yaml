@@ -8,20 +8,8 @@ contactPoints:
   - orgId: 1
     name: aegispay-ops
     receivers:
-      - uid: aegispay-slack
-        type: slack
-        settings:
-          url: ${SLACK_WEBHOOK_URL}
-          recipient: "#aegispay-alerts"   # required by Grafana 10.4+ even when using webhook URL
-          title: |
-            {{ if eq .Status "firing" }}🔴{{ else }}✅{{ end }} AegisPay — {{ .CommonLabels.alertname }}
-          text: |
-            *Severity:* {{ .CommonLabels.severity }}
-            *Summary:* {{ .CommonAnnotations.summary }}
-            *Description:* {{ .CommonAnnotations.description }}
-            {{ range .Alerts }}• {{ .Labels.service }} — {{ .Annotations.description }}{{ end }}
-          username: Grafana Alerting
-          iconEmoji: ":rotating_light:"
+      # Slack disabled — Grafana 10.4 rejects ${ENV_VAR} webhook URLs at parse time.
+      # Re-enable via Grafana UI: Alerting → Contact points → aegispay-ops → Add Slack.
       - uid: aegispay-email
         type: email
         settings:
