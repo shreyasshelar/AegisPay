@@ -1,5 +1,5 @@
 import { initializeApp, getApps } from 'firebase/app'
-import { getAuth, initializeRecaptchaConfig } from 'firebase/auth'
+import { getAuth } from 'firebase/auth'
 
 /**
  * Firebase is used for phone-number OTP verification ONLY.
@@ -13,16 +13,24 @@ import { getAuth, initializeRecaptchaConfig } from 'firebase/auth'
  * Older SDKs always used reCAPTCHA v2 for phone auth and received INVALID_APP_CREDENTIAL
  * when the project had PHONE_PROVIDER Enterprise enforcement enabled.
  *
+ * reCAPTCHA is SDK-managed through RecaptchaVerifier/signInWithPhoneNumber.
+ * The app must not manually mint Enterprise tokens for Firebase Phone Auth.
+ *
  * Required env vars (add to .env.local and inject in CI):
  *   NEXT_PUBLIC_FIREBASE_API_KEY
  *   NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
  *   NEXT_PUBLIC_FIREBASE_PROJECT_ID
  *   NEXT_PUBLIC_FIREBASE_APP_ID
+ *
+ * Firebase/GCP prerequisites for real-number OTP:
+ *   Firebase Console → Authentication → Settings → Authorized domains
+ *   → add localhost (dev) + aegispay.shreyasshelar.uk (prod).
+ *   Firebase Auth/Identity Platform owns the reCAPTCHA Enterprise key selection.
  */
-const apiKey      = process.env.NEXT_PUBLIC_FIREBASE_API_KEY
-const authDomain  = process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
-const projectId   = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID
-const appId       = process.env.NEXT_PUBLIC_FIREBASE_APP_ID
+const apiKey         = process.env.NEXT_PUBLIC_FIREBASE_API_KEY
+const authDomain     = process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+const projectId      = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID
+const appId          = process.env.NEXT_PUBLIC_FIREBASE_APP_ID
 
 /**
  * firebaseAuth is null when Firebase env vars are not configured.
@@ -50,14 +58,6 @@ if (apiKey && authDomain && projectId && appId) {
       firebaseAuth.settings.appVerificationDisabledForTesting = true
       console.info('[firebase] ⚠ appVerificationDisabledForTesting=true — use test phone numbers only')
     }
-
-    // Pre-warm reCAPTCHA Enterprise config on module load.
-    // signInWithPhoneNumber auto-initialises if this is not called first, but calling
-    // it eagerly here avoids a round-trip delay when the user clicks "Send OTP".
-    // Requires firebase >= 11 / @firebase/auth >= 1.8.0.
-    initializeRecaptchaConfig(firebaseAuth).catch(e => {
-      console.warn('[firebase] reCAPTCHA Enterprise pre-warm failed (non-fatal):', e.message)
-    })
   } catch (e) {
     console.warn('[firebase] Init failed — phone OTP disabled:', e)
   }
