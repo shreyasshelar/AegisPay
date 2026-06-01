@@ -16,6 +16,7 @@ set -euo pipefail
 
 : "${GCP_PROJECT:?Set GCP_PROJECT}"
 : "${GITHUB_REPO:=https://github.com/shreyasshelar/AegisPay.git}"
+: "${GHCR_TOKEN:?Set GHCR_TOKEN=<github-pat-with-read:packages>}"
 
 DOMAIN="aegispay.shreyasshelar.uk"
 
@@ -31,6 +32,17 @@ section "Creating namespaces"
 for ns in aegispay aegispay-infra monitoring argocd external-secrets; do
   kubectl create namespace "$ns" --dry-run=client -o yaml | kubectl apply -f -
 done
+
+# ── 1b. GHCR imagePullSecret — images are private, K3s needs credentials ──────
+section "Creating GHCR imagePullSecret"
+kubectl create secret docker-registry ghcr-pull-secret \
+  --docker-server=ghcr.io \
+  --docker-username=shreyasshelar \
+  --docker-password="${GHCR_TOKEN}" \
+  --docker-email=sshelar110.ss3@gmail.com \
+  --namespace=aegispay \
+  --dry-run=client -o yaml | kubectl apply -f -
+info "ghcr-pull-secret created in aegispay namespace"
 
 # ── 2. ArgoCD ─────────────────────────────────────────────────────────────────
 section "Installing ArgoCD"

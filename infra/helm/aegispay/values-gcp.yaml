@@ -13,6 +13,10 @@
 global:
   # IfNotPresent avoids re-pulling on every pod restart when using SHA tags
   imagePullPolicy: IfNotPresent
+  # GHCR pull secret — images at ghcr.io/shreyasshelar/aegispay/* are private
+  # The secret is created by setup-cluster-gcp.sh using the GHCR_TOKEN variable
+  imagePullSecrets:
+    - name: ghcr-pull-secret
 
 # ─── Secrets: GCP Secret Manager via External Secrets Operator ───────────────
 # ESO authenticates using the GCE VM's attached service account (ADC).
