@@ -85,28 +85,20 @@ spec:
             {{- toYaml .Values.kafka.resources | nindent 12 }}
 
           readinessProbe:
-            exec:
-              command:
-                - /opt/kafka/bin/kafka-topics.sh
-                - --bootstrap-server
-                - localhost:9092
-                - --list
+            tcpSocket:
+              port: 9092
             initialDelaySeconds: 30
             periodSeconds: 10
-            timeoutSeconds: 10
+            timeoutSeconds: 5
             failureThreshold: 6
 
           livenessProbe:
-            exec:
-              command:
-                - /opt/kafka/bin/kafka-topics.sh
-                - --bootstrap-server
-                - localhost:9092
-                - --list
+            tcpSocket:
+              port: 9092
             initialDelaySeconds: 60
             periodSeconds: 30
-            timeoutSeconds: 10
-            failureThreshold: 3
+            timeoutSeconds: 5
+            failureThreshold: 5
 
           volumeMounts:
             - name: kafka-data

@@ -84,9 +84,7 @@ mongodb:
       memory: 512Mi
 
   metrics:
-    enabled: true
-    serviceMonitor:
-      enabled: true
+    enabled: false
 
 # ── Redis ─────────────────────────────────────────────────────────────────────
 redis:
@@ -114,9 +112,7 @@ redis:
         memory: 128Mi
 
   metrics:
-    enabled: true
-    serviceMonitor:
-      enabled: true
+    enabled: false
 
 # ── Kafka ─────────────────────────────────────────────────────────────────────
 # Uses custom templates (templates/kafka/) with apache/kafka:3.7.0 (free, ASF).
