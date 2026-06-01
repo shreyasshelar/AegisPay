@@ -132,13 +132,16 @@ spec:
           resources:
             {{- toYaml $svc.resources | nindent 12 }}
           livenessProbe:
-            httpGet:
-              path: /actuator/health/liveness
+            # TCP socket — passes as soon as Tomcat opens the port (~50s),
+            # not waiting for all beans/JPA/Flyway to initialize (~150-200s).
+            # Prevents the liveness probe from killing the container during
+            # slow startup on a loaded single-node VM.
+            tcpSocket:
               port: http
-            initialDelaySeconds: 120
-            periodSeconds: 15
+            initialDelaySeconds: 60
+            periodSeconds: 30
             timeoutSeconds: 5
-            failureThreshold: 3
+            failureThreshold: 5
           readinessProbe:
             httpGet:
               path: /actuator/health/readiness
