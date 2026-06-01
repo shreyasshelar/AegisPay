@@ -106,6 +106,14 @@ services:
       minReplicas: 3
       maxReplicas: 12
       targetCPUUtilizationPercentage: 65
+    extraEnv:
+      - name: MONGO_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: aegispay-mongodb-secret
+            key: password
+      - name: MONGODB_URI
+        value: "mongodb://aegispay:$(MONGO_PASSWORD)@mongodb.aegispay-infra.svc.cluster.local:27017/aegispay?authSource=admin"
 
   ledger_service:
     enabled: true
@@ -215,6 +223,13 @@ services:
             name: aegispay-fast2sms-secret
             key: api-key
             optional: true   # SMS is optional — service starts without it
+      - name: MONGO_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: aegispay-mongodb-secret
+            key: password
+      - name: MONGODB_URI
+        value: "mongodb://aegispay:$(MONGO_PASSWORD)@mongodb.aegispay-infra.svc.cluster.local:27017/aegispay?authSource=admin"
 
   ai_platform:
     enabled: true
@@ -241,6 +256,14 @@ services:
           secretKeyRef:
             name: aegispay-ai-secret
             key: openrouter-api-key   # we use OpenRouter, not Anthropic direct
+      - name: MONGO_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: aegispay-mongodb-secret
+            key: password
+            optional: true
+      - name: MONGODB_URI
+        value: "mongodb://aegispay:$(MONGO_PASSWORD)@mongodb.aegispay-infra.svc.cluster.local:27017/aegispay_ai?authSource=admin"
 
   data_pipeline:
     enabled: true

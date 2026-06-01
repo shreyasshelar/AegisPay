@@ -11,7 +11,7 @@ data:
   DB_HOST: {{ .Values.global.postgresql.host | quote }}
   DB_PORT: {{ .Values.global.postgresql.port | quote }}
   DB_USERNAME: {{ .Values.global.postgresql.username | quote }}
-  DB_NAME: "aegispay_orchestrator"
+  DB_NAME: {{ .Values.services.payment_orchestrator.db.name | default "aegispay_sagas" | quote }}
   KAFKA_BOOTSTRAP_SERVERS: {{ .Values.global.kafka.brokers | quote }}
   REDIS_HOST: {{ .Values.global.redis.host | quote }}
   REDIS_PORT: {{ .Values.global.redis.port | quote }}
