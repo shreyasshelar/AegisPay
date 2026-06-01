@@ -118,7 +118,7 @@ spec:
             - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
               value: {{ $ctx.Values.global.kafka.brokers | quote }}
             - name: JAVA_OPTS
-              value: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError -Dspring.config.location=classpath:/application.yml,/config/application.yml"
+              value: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError -Dspring.config.location=classpath:/application.yml,optional:/config/application.yml"
             {{- if $svc.extraEnv }}
             {{- toYaml $svc.extraEnv | nindent 12 }}
             {{- end }}

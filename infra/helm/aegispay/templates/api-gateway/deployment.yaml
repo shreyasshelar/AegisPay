@@ -75,7 +75,7 @@ spec:
             - name: OAUTH2_PRIMARY_ISSUER_URI
               value: {{ .Values.global.oauth2.issuerUri | quote }}
             - name: JAVA_OPTS
-              value: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError -Dspring.config.location=classpath:/application.yml,/config/application.yml"
+              value: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError -Dspring.config.location=classpath:/application.yml,optional:/config/application.yml"
           volumeMounts:
             - name: config
               mountPath: /config
