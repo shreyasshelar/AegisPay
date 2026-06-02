@@ -1,13 +1,8 @@
 version: 2
 updates:
-  # ── Java / Maven (all 10 services + common library) ─────────────────────────
-  - package-ecosystem: maven
-    directory: /services/common
-    schedule:
-      interval: weekly
-      day: monday
-    open-pull-requests-limit: 5
-    labels: [dependencies, java]
+  # ── Java / Maven — all services get the same grouping strategy ───────────────
+  # Groups reduce 80+ individual PRs to ~3 per service (spring, test, other).
+  # Auto-merge workflow handles patch/minor merges automatically.
 
   - package-ecosystem: maven
     directory: /services/api-gateway
@@ -16,14 +11,12 @@ updates:
       day: monday
     open-pull-requests-limit: 5
     labels: [dependencies, java]
-
-  - package-ecosystem: maven
-    directory: /services/transaction-service
-    schedule:
-      interval: weekly
-      day: monday
-    open-pull-requests-limit: 5
-    labels: [dependencies, java]
+    groups:
+      spring:
+        patterns: ["org.springframework*", "io.micrometer*", "io.github.resilience4j*"]
+        update-types: [minor, patch]
+      deps:
+        update-types: [patch]
 
   - package-ecosystem: maven
     directory: /services/user-service
@@ -32,22 +25,26 @@ updates:
       day: monday
     open-pull-requests-limit: 5
     labels: [dependencies, java]
+    groups:
+      spring:
+        patterns: ["org.springframework*", "io.micrometer*"]
+        update-types: [minor, patch]
+      deps:
+        update-types: [patch]
 
   - package-ecosystem: maven
-    directory: /services/payment-orchestrator
+    directory: /services/transaction-service
     schedule:
       interval: weekly
       day: monday
     open-pull-requests-limit: 5
     labels: [dependencies, java]
-
-  - package-ecosystem: maven
-    directory: /services/risk-engine
-    schedule:
-      interval: weekly
-      day: monday
-    open-pull-requests-limit: 5
-    labels: [dependencies, java]
+    groups:
+      spring:
+        patterns: ["org.springframework*", "io.micrometer*"]
+        update-types: [minor, patch]
+      deps:
+        update-types: [patch]
 
   - package-ecosystem: maven
     directory: /services/ledger-service
@@ -56,6 +53,40 @@ updates:
       day: monday
     open-pull-requests-limit: 5
     labels: [dependencies, java]
+    groups:
+      spring:
+        patterns: ["org.springframework*", "io.micrometer*"]
+        update-types: [minor, patch]
+      deps:
+        update-types: [patch]
+
+  - package-ecosystem: maven
+    directory: /services/payment-orchestrator
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels: [dependencies, java]
+    groups:
+      spring:
+        patterns: ["org.springframework*", "io.micrometer*", "io.github.resilience4j*"]
+        update-types: [minor, patch]
+      deps:
+        update-types: [patch]
+
+  - package-ecosystem: maven
+    directory: /services/risk-engine
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels: [dependencies, java]
+    groups:
+      spring:
+        patterns: ["org.springframework*", "io.micrometer*"]
+        update-types: [minor, patch]
+      deps:
+        update-types: [patch]
 
   - package-ecosystem: maven
     directory: /services/notification-service
@@ -64,6 +95,12 @@ updates:
       day: monday
     open-pull-requests-limit: 5
     labels: [dependencies, java]
+    groups:
+      spring:
+        patterns: ["org.springframework*", "io.micrometer*"]
+        update-types: [minor, patch]
+      deps:
+        update-types: [patch]
 
   - package-ecosystem: maven
     directory: /services/reconciliation-service
@@ -72,6 +109,12 @@ updates:
       day: monday
     open-pull-requests-limit: 5
     labels: [dependencies, java]
+    groups:
+      spring:
+        patterns: ["org.springframework*", "io.micrometer*"]
+        update-types: [minor, patch]
+      deps:
+        update-types: [patch]
 
   - package-ecosystem: maven
     directory: /services/ai-platform
@@ -80,6 +123,12 @@ updates:
       day: monday
     open-pull-requests-limit: 5
     labels: [dependencies, java]
+    groups:
+      spring:
+        patterns: ["org.springframework*", "io.micrometer*"]
+        update-types: [minor, patch]
+      deps:
+        update-types: [patch]
 
   - package-ecosystem: maven
     directory: /services/data-pipeline
@@ -88,10 +137,16 @@ updates:
       day: monday
     open-pull-requests-limit: 5
     labels: [dependencies, java]
+    groups:
+      spring:
+        patterns: ["org.springframework*", "io.micrometer*"]
+        update-types: [minor, patch]
+      deps:
+        update-types: [patch]
 
-  # ── npm (Next.js web app) ────────────────────────────────────────────────────
+  # ── npm (Next.js web app + monorepo packages) ────────────────────────────────
   - package-ecosystem: npm
-    directory: /apps/web
+    directory: /
     schedule:
       interval: weekly
       day: monday
@@ -99,20 +154,13 @@ updates:
     labels: [dependencies, javascript]
     groups:
       next-ecosystem:
-        patterns:
-          - next
-          - react
-          - react-dom
-          - "@types/react*"
-          - "@types/node"
+        patterns: ["next", "react", "react-dom", "@types/react*", "@types/node"]
       radix-ui:
-        patterns:
-          - "@radix-ui/*"
+        patterns: ["@radix-ui/*"]
       testing:
-        patterns:
-          - vitest
-          - playwright
-          - "@testing-library/*"
+        patterns: ["vitest", "playwright", "@testing-library/*", "@playwright/*"]
+      turbo-typescript:
+        patterns: ["turbo", "typescript", "@typescript-eslint/*"]
 
   # ── Docker base images ───────────────────────────────────────────────────────
   - package-ecosystem: docker
@@ -183,3 +231,6 @@ updates:
       day: monday
     open-pull-requests-limit: 5
     labels: [dependencies, github-actions]
+    groups:
+      actions:
+        update-types: [minor, patch]
