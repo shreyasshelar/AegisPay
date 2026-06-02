@@ -1,6 +1,16 @@
 name: Security Scan
 
 on:
+  # Run on every PR to dev so vulnerabilities are caught before merge
+  pull_request:
+    branches: [dev]
+    paths:
+      - 'services/**'
+      - 'libs/**'
+      - 'pom.xml'
+      - '.github/workflows/security-scan.yml'
+  workflow_dispatch:
+  # Weekly full scan
   schedule:
     - cron: "0 2 * * 1"   # Every Monday at 02:00 UTC
 
@@ -35,7 +45,7 @@ jobs:
   trivy-scan:
     name: Trivy Image Scan — ${{ matrix.service }}
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     strategy:
       matrix:
         service:

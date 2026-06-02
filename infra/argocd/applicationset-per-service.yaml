@@ -1,0 +1,181 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# AegisPay — Per-Service ApplicationSet  (GCP K3s / dev)
+#
+# Generates one ArgoCD Application per microservice + one shared "infra" app.
+# Each service Application has its own:
+#   • Sync history and rollback point
+#   • Health status
+#   • Sync trigger (only fires when that service's values change)
+#
+# Deployment order:
+#   1. Apply this file: kubectl apply -f infra/argocd/applicationset-per-service.yaml
+#   2. Delete the monolithic app once all service apps are healthy:
+#      kubectl delete app aegispay-gcp -n argocd
+#
+# IMPORTANT: Keep aegispay-gcp running until all per-service apps are Healthy
+# to avoid downtime during the transition.
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: aegispay-services
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: aegispay
+    environment: gcp
+spec:
+  # Prevent cascading deletes — deleting the ApplicationSet should not delete
+  # running Applications (and their live resources) automatically.
+  syncPolicy:
+    preserveResourcesOnDeletion: true
+
+  generators:
+    - list:
+        elements:
+          # ── Shared infrastructure resources ───────────────────────────────
+          # ExternalSecrets, RBAC, namespace-level ConfigMaps
+          - service: infra
+            helmKey: ""
+            description: "Shared secrets, RBAC, namespace"
+
+          # ── Application services ──────────────────────────────────────────
+          - service: api-gateway
+            helmKey: api_gateway
+            description: "JWT auth, rate limiting, circuit breaker"
+
+          - service: user-service
+            helmKey: user_service
+            description: "User registration, profiles, Keycloak sync"
+
+          - service: transaction-service
+            helmKey: transaction_service
+            description: "Payment initiation, Outbox, CQRS"
+
+          - service: ledger-service
+            helmKey: ledger_service
+            description: "Double-entry bookkeeping, balance reserve"
+
+          - service: payment-orchestrator
+            helmKey: payment_orchestrator
+            description: "Saga orchestration, Stripe integration"
+
+          - service: risk-engine
+            helmKey: risk_engine
+            description: "Rule engine + AI RAG fraud detection"
+
+          - service: notification-service
+            helmKey: notification_service
+            description: "WebSocket, Email, SMS, Slack notifications"
+
+          - service: data-pipeline
+            helmKey: data_pipeline
+            description: "Kafka → ClickHouse analytics sink"
+
+          - service: reconciliation-service
+            helmKey: reconciliation_service
+            description: "Ledger reconciliation, break detection"
+
+          - service: ai-platform
+            helmKey: ai_platform
+            description: "RAG error explanation, fraud copilot"
+
+          - service: web
+            helmKey: web
+            description: "Next.js frontend, NextAuth + Keycloak"
+
+  template:
+    metadata:
+      # aegispay-api-gateway, aegispay-web, aegispay-infra, etc.
+      name: "aegispay-{{service}}"
+      namespace: argocd
+      labels:
+        environment: gcp
+        service: "{{service}}"
+        app.kubernetes.io/part-of: aegispay
+      annotations:
+        # Human-readable description shown in ArgoCD UI
+        argocd.argoproj.io/description: "{{description}}"
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+
+    spec:
+      project: aegispay
+
+      source:
+        repoURL: https://github.com/shreyasshelar/AegisPay.git
+        targetRevision: dev
+        path: infra/helm/aegispay
+        helm:
+          valueFiles:
+            - values.yaml
+            - values-dev.yaml
+            - values-gcp.yaml
+          parameters:
+            # ── For shared infra app: disable ALL services ─────────────────
+            # ExternalSecrets, RBAC, and namespace resources will still render.
+            # Services are disabled so they don't duplicate deployments.
+            - name: "services.api_gateway.enabled"
+              value: '{{ if eq .service "api-gateway" }}true{{ else }}false{{ end }}'
+            - name: "services.user_service.enabled"
+              value: '{{ if eq .service "user-service" }}true{{ else }}false{{ end }}'
+            - name: "services.transaction_service.enabled"
+              value: '{{ if eq .service "transaction-service" }}true{{ else }}false{{ end }}'
+            - name: "services.ledger_service.enabled"
+              value: '{{ if eq .service "ledger-service" }}true{{ else }}false{{ end }}'
+            - name: "services.payment_orchestrator.enabled"
+              value: '{{ if eq .service "payment-orchestrator" }}true{{ else }}false{{ end }}'
+            - name: "services.risk_engine.enabled"
+              value: '{{ if eq .service "risk-engine" }}true{{ else }}false{{ end }}'
+            - name: "services.notification_service.enabled"
+              value: '{{ if eq .service "notification-service" }}true{{ else }}false{{ end }}'
+            - name: "services.data_pipeline.enabled"
+              value: '{{ if eq .service "data-pipeline" }}true{{ else }}false{{ end }}'
+            - name: "services.reconciliation_service.enabled"
+              value: '{{ if eq .service "reconciliation-service" }}true{{ else }}false{{ end }}'
+            - name: "services.ai_platform.enabled"
+              value: '{{ if eq .service "ai-platform" }}true{{ else }}false{{ end }}'
+            - name: "services.web.enabled"
+              value: '{{ if eq .service "web" }}true{{ else }}false{{ end }}'
+
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: aegispay
+
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+          allowEmpty: false
+        syncOptions:
+          - CreateNamespace=true
+          - PrunePropagationPolicy=foreground
+          - PruneLast=true
+          - ServerSideApply=true
+          - ApplyOutOfSyncOnly=true
+          - RespectIgnoreDifferences=true
+        retry:
+          limit: 5
+          backoff:
+            duration: 30s
+            factor: 2
+            maxDuration: 5m
+
+      revisionHistoryLimit: 10
+
+      ignoreDifferences:
+        - group: apps
+          kind: Deployment
+          jsonPointers:
+            - /spec/replicas
+        - group: networking.k8s.io
+          kind: Ingress
+          jsonPointers:
+            - /status/loadBalancer
+        - group: external-secrets.io
+          kind: ExternalSecret
+          managedFieldsManagers:
+            - external-secrets
+          jqPathExpressions:
+            - .metadata.finalizers
+            - .metadata.annotations
+            - .status
