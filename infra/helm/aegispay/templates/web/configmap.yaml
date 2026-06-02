@@ -13,5 +13,11 @@ data:
   NEXT_PUBLIC_WS_BASE_URL: {{ .Values.services.web.env.wsBaseUrl | default "wss://aegispay-ws.shreyasshelar.uk" | quote }}
   NEXTAUTH_URL: {{ .Values.services.web.env.nextauthUrl | default "https://aegispay.shreyasshelar.uk" | quote }}
   KEYCLOAK_ID: {{ .Values.services.web.env.keycloakClientId | default "aegispay-web" | quote }}
+  # Public URL — used for JWT `iss` validation and browser authorization redirect
   KEYCLOAK_ISSUER: {{ .Values.global.oauth2.issuerUri | quote }}
+  # Internal cluster URL — used for server-side OIDC discovery + token exchange.
+  # Avoids hairpin routing through Cloudflare on every NextAuth server-side call.
+  # Keycloak returns public hostname in discovery responses (KC_HOSTNAME), so the
+  # openid-client issuer check still passes against KEYCLOAK_ISSUER above.
+  KEYCLOAK_INTERNAL_URL: {{ .Values.global.oauth2.keycloakInternalUrl | default "" | quote }}
 {{- end }}
