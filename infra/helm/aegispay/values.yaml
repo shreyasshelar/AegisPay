@@ -5,35 +5,45 @@
 
 global:
   namespace: aegispay
+  # ── Single source of truth for the backing-services namespace ─────────────────
+  # All cluster-internal FQDNs (kafka, postgres, redis, mongo, keycloak, clickhouse)
+  # are derived from this ONE value by named helpers in _helpers.tpl.
+  # Change infraNamespace here → every service ConfigMap updates automatically.
+  # Override per-env in values-{env}.yaml only if the infra namespace differs.
+  infraNamespace: "aegispay-infra"
   imageRegistry: ghcr.io
   imageRepositoryPrefix: ghcr.io/shreyasshelar/aegispay
   imagePullPolicy: IfNotPresent
   imagePullSecrets: []
 
-  # Shared infrastructure endpoints (overridden per env)
+  # Shared infrastructure endpoints
+  # ── Leave blank ("") to auto-construct from global.infraNamespace ─────────────
+  # Set explicitly ONLY to override for non-standard deployments (e.g. external broker).
+  # Constructors live in _helpers.tpl — grep "aegispay.pgHost" etc.
   kafka:
-    brokers: "kafka-headless.aegispay-infra.svc.cluster.local:9092"
+    brokers: ""     # aegispay.kafkaBroker  → kafka.<infraNs>.svc.cluster.local:9092
   postgresql:
-    host: "postgresql.aegispay-infra.svc.cluster.local"
+    host: ""        # aegispay.pgHost       → postgresql.<infraNs>.svc.cluster.local
     port: "5432"
     username: "aegispay"
   redis:
-    host: "redis-master.aegispay-infra.svc.cluster.local"
+    host: ""        # aegispay.redisHost    → redis-master.<infraNs>.svc.cluster.local
     port: "6379"
   mongodb:
-    uri: "mongodb://mongodb.aegispay-infra.svc.cluster.local:27017"
+    uri: ""         # aegispay.mongoUri     → mongodb://mongodb.<infraNs>.svc.cluster.local:27017
   oauth2:
-    # Public issuer URL — KC_HOSTNAME on Keycloak ensures iss claim always matches.
+    # Public issuer URL — set per-env (values-dev.yaml / values-prod.yaml).
+    # KC_HOSTNAME on Keycloak ensures JWT iss always matches this URL.
     # Used by: web (KEYCLOAK_ISSUER), api-gateway (issuer-uri + trusted-issuers).
-    issuerUri: "http://keycloak.aegispay-infra.svc.cluster.local:8080/realms/aegispay"
-    # Internal JWK set URL — used by all Spring services for signature validation.
-    # Stays on cluster-internal DNS to avoid Cloudflare hairpin on every JWT check.
-    jwkSetUri: "http://keycloak.aegispay-infra.svc.cluster.local:8080/realms/aegispay/protocol/openid-connect/certs"
-    # Internal Keycloak base URL — used by the web pod (NextAuth) for server-side
-    # OIDC discovery and token exchange. Empty string = fall back to public issuerUri.
-    keycloakInternalUrl: "http://keycloak.aegispay-infra.svc.cluster.local:8080/realms/aegispay"
+    issuerUri: ""
+    # aegispay.jwkSetUri → http://keycloak.<infraNs>.svc.cluster.local:8080/realms/aegispay/...certs
+    jwkSetUri: ""
+    # aegispay.keycloakInternalUrl → http://keycloak.<infraNs>.svc.cluster.local:8080/realms/aegispay
+    # Used by the web pod (NextAuth) for server-side OIDC discovery + token exchange.
+    # Avoids Cloudflare hairpin on every NextAuth server-side call.
+    keycloakInternalUrl: ""
   clickhouse:
-    url: "jdbc:clickhouse://clickhouse.aegispay-infra.svc.cluster.local:8123/aegispay_analytics"
+    url: ""         # aegispay.clickhouseJdbcUrl → jdbc:clickhouse://clickhouse.<infraNs>.svc.cluster.local:8123/aegispay_analytics
     username: "default"
   smtp:
     host: "smtp.gmail.com"
@@ -121,6 +131,8 @@ services:
             name: aegispay-mongodb-secret
             key: password
       - name: MONGODB_URI
+        # TODO(infraNamespace): hostname should be derived from global.infraNamespace.
+        # Cannot use Helm templates in values.yaml — stays static until moved to _helpers.tpl deployment template.
         value: "mongodb://aegispay:$(MONGO_PASSWORD)@mongodb.aegispay-infra.svc.cluster.local:27017/aegispay?authSource=admin"
 
   ledger_service:
@@ -237,6 +249,8 @@ services:
             name: aegispay-mongodb-secret
             key: password
       - name: MONGODB_URI
+        # TODO(infraNamespace): hostname should be derived from global.infraNamespace.
+        # Cannot use Helm templates in values.yaml — stays static until moved to _helpers.tpl deployment template.
         value: "mongodb://aegispay:$(MONGO_PASSWORD)@mongodb.aegispay-infra.svc.cluster.local:27017/aegispay?authSource=admin"
 
   ai_platform:
@@ -271,6 +285,8 @@ services:
             key: password
             optional: true
       - name: MONGODB_URI
+        # TODO(infraNamespace): hostname should be derived from global.infraNamespace.
+        # Cannot use Helm templates in values.yaml — stays static until moved to _helpers.tpl deployment template.
         value: "mongodb://aegispay:$(MONGO_PASSWORD)@mongodb.aegispay-infra.svc.cluster.local:27017/aegispay_ai?authSource=admin"
 
   data_pipeline:
@@ -386,7 +402,7 @@ secrets:
   gcpSm:
     projectId: ""          # overridden per-env (values-gcp.yaml)
   vault:
-    address: "https://vault.aegispay-infra.svc.cluster.local:8200"
+    address: ""    # placeholder — Vault removed (P3-5); kept for future prod option
     path: "aegispay"
     role: "aegispay-app"
   aws:
@@ -429,7 +445,7 @@ secrets:
 
 # ─── ClickHouse ──────────────────────────────────────────────────────────────
 clickhouse:
-  host: "clickhouse.aegispay-infra.svc.cluster.local"
+  host: ""    # derived: aegispay.clickhouseHost → clickhouse.<infraNs>.svc.cluster.local
   port: 9000
   user: default
   initJob:
@@ -475,8 +491,9 @@ grafana:
   plugins:
     - grafana-clickhouse-datasource
   # ClickHouse datasource — points at the in-cluster ClickHouse
+  # host is derived from global.infraNamespace via aegispay.clickhouseHost helper
   clickhouseDatasource:
-    host: "clickhouse.aegispay-infra.svc.cluster.local"
+    host: ""    # derived
     port: 9000
     username: "default"
     database: "aegispay_analytics"

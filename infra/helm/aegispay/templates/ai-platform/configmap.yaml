@@ -8,15 +8,15 @@ metadata:
     {{- include "aegispay.labels" . | nindent 4 }}
     app.kubernetes.io/name: ai-platform
 data:
-  DB_HOST: {{ .Values.global.postgresql.host | quote }}
+  DB_HOST: {{ include "aegispay.pgHost" . | quote }}
   DB_PORT: {{ .Values.global.postgresql.port | quote }}
   DB_USERNAME: {{ .Values.global.postgresql.username | quote }}
   DB_NAME: "aegispay_ai"
-  KAFKA_BOOTSTRAP_SERVERS: {{ .Values.global.kafka.brokers | quote }}
-  REDIS_HOST: {{ .Values.global.redis.host | quote }}
+  KAFKA_BOOTSTRAP_SERVERS: {{ include "aegispay.kafkaBroker" . | quote }}
+  REDIS_HOST: {{ include "aegispay.redisHost" . | quote }}
   REDIS_PORT: {{ .Values.global.redis.port | quote }}
-  MONGODB_URI: {{ .Values.global.mongodb.uri | quote }}
-  OAUTH2_JWK_SET_URI: {{ .Values.global.oauth2.jwkSetUri | quote }}
+  MONGODB_URI: {{ include "aegispay.mongoUri" . | quote }}
+  OAUTH2_JWK_SET_URI: {{ include "aegispay.jwkSetUri" . | quote }}
   SERVER_PORT: "8088"
   # Override via SPRING_APPLICATION_JSON to ensure correct Spring property binding
   SPRING_APPLICATION_JSON: '{"aegispay":{"triage":{"project-root":"/app"}}}'

@@ -11,37 +11,20 @@
 
 global:
   namespace: aegispay
+  # Backing-services namespace — all cluster-internal FQDNs are derived from this.
+  # Helpers in _helpers.tpl construct kafka/postgres/redis/mongo/keycloak/clickhouse URLs.
+  infraNamespace: "aegispay-infra"
   imageRegistry: ghcr.io
   # Repository name matches the GitHub repo owner/repo-name pattern.
-  # Update this to match your GitHub username.
   imageRepositoryPrefix: ghcr.io/shreyasshelar/aegispay
   imagePullPolicy: Always
   imagePullSecrets: [] # GHCR public repo → no pull secret needed
-  # ── Infra endpoints (backing services in aegispay-infra namespace) ──────────
-  kafka:
-    brokers: "kafka.aegispay-infra.svc.cluster.local:9092"
-  postgresql:
-    host: "postgresql.aegispay-infra.svc.cluster.local"
-    port: "5432"
-    username: "aegispay"
-  redis:
-    host: "redis-master.aegispay-infra.svc.cluster.local"
-    port: "6379"
-  mongodb:
-    uri: "mongodb://mongodb.aegispay-infra.svc.cluster.local:27017/aegispay"
-    # Full authenticated URI injected via extraEnv (MONGO_PASSWORD from aegispay-mongodb-secret)
   oauth2:
     # Public URL — used by: web (KEYCLOAK_ISSUER), api-gateway (issuer-uri, trusted-issuers).
     # KC_HOSTNAME on Keycloak ensures JWT iss claim always matches this public URL.
     issuerUri: "https://aegispay-keycloak.shreyasshelar.uk/realms/aegispay"
-    # Internal JWK set URL — used by all Spring services for JWT signature validation.
-    # Avoids Cloudflare hairpin on every token verification (JWKS cached after first fetch).
-    jwkSetUri: "http://keycloak.aegispay-infra.svc.cluster.local:8080/realms/aegispay/protocol/openid-connect/certs"
-    # Internal Keycloak base URL — used by the Next.js web pod for server-side OIDC
-    # discovery and token exchange (NextAuth). Avoids hairpin routing through Cloudflare.
-    # Keycloak's discovery response always returns the public hostname (KC_HOSTNAME),
-    # so the openid-client issuer check passes against the public issuerUri.
-    keycloakInternalUrl: "http://keycloak.aegispay-infra.svc.cluster.local:8080/realms/aegispay"
+    # All internal URLs (jwkSetUri, keycloakInternalUrl) are derived from infraNamespace.
+    # No need to list them here — _helpers.tpl constructs them automatically.
   smtp:
     host: "smtp.gmail.com"
     port: "587"
@@ -355,7 +338,7 @@ grafana:
       cpu: 200m
       memory: 256Mi
   clickhouseDatasource:
-    host: "clickhouse.aegispay-infra.svc.cluster.local"
+    # host derived from global.infraNamespace via aegispay.clickhouseHost helper
     port: 9000
     username: "default"
     database: "aegispay_analytics"

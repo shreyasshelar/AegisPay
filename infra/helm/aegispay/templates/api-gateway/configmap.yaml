@@ -23,7 +23,7 @@ data:
             response-timeout: 30000
       data:
         redis:
-          host: {{ .Values.global.redis.host }}
+          host: {{ include "aegispay.redisHost" . }}
           port: {{ .Values.global.redis.port }}
 
     server:

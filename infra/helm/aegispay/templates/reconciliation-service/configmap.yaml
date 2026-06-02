@@ -9,12 +9,12 @@ metadata:
     app.kubernetes.io/name: reconciliation-service
 data:
   # PostgreSQL (read-only, points to ledger-service DB)
-  DB_HOST: {{ .Values.global.postgresql.host | quote }}
+  DB_HOST: {{ include "aegispay.pgHost" . | quote }}
   DB_PORT: {{ .Values.global.postgresql.port | quote }}
   DB_USERNAME: {{ .Values.global.postgresql.username | quote }}
   DB_NAME: "aegispay_ledger"
   # ClickHouse — write-side for breaks
-  CLICKHOUSE_URL: {{ .Values.global.clickhouse.url | quote }}
+  CLICKHOUSE_URL: {{ include "aegispay.clickhouseJdbcUrl" . | quote }}
   CLICKHOUSE_USERNAME: {{ .Values.global.clickhouse.username | quote }}
   # Reconciliation tuning
   RECONCILIATION_CHUNK_SIZE: "500"

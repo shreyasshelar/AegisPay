@@ -67,7 +67,7 @@ spec:
     - to:
         - namespaceSelector:
             matchLabels:
-              kubernetes.io/metadata.name: aegispay-infra
+              kubernetes.io/metadata.name: {{ .Values.global.infraNamespace | default "aegispay-infra" }}
       ports:
         - protocol: TCP
           port: 8080
