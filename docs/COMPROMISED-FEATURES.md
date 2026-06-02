@@ -185,7 +185,9 @@ delete `aegispay-gcp` once all per-service apps are Healthy.
 Added grouping (Spring/patch groups per service) and `dependabot-auto-merge.yml`
 workflow that auto-approves+squash-merges patch/minor PRs, labels major bumps
 `needs-review`. npm moved to root directory to cover all workspaces.
-**Action needed**: Enable "Allow auto-merge" in repo Settings → General. (commit d2399fa)
+`needs-review` label created idempotently inside the workflow step (`gh label create || true`)
+so it never fails on first run.
+**Action needed**: Enable "Allow auto-merge" in repo Settings → General.
 
 ---
 
@@ -213,6 +215,18 @@ Requires metrics-server (already present in k3s).
 **Current**: GCP Secret Manager + ESO for dev. Vault stubs still in codebase.
 **Fix**: For prod (main branch), decide: keep GCP SM or deploy Vault in prod cluster.
 Remove all Vault stub code that currently misleads readers.
+
+### P3-6 · No image-build CI for main branch (prod pipeline prerequisite)
+**Current**: Only `cd-dev.yml` builds Docker images, always tagged `dev-<sha>`.
+`cd-prod.yml` (manual-only, disabled) expects images tagged `prod-<sha>` in GHCR.
+No workflow on `main` builds `prod-<sha>` images — prod deploys cannot happen yet.
+**Fix**: Create `.github/workflows/ci-java-prod.yml` that triggers on push to `main`
+(or on a release tag), builds all services, pushes `prod-<sha>` images to GHCR.
+Only then uncomment the `workflow_run` trigger in `cd-prod.yml`.
+**Isolation guarantee already in place**: `cd-dev.yml` → `dev-<sha>` → `values-dev.yaml`;
+`cd-prod.yml` → `prod-<sha>` → `values-prod.yaml`. Tags and value files never overlap.
+**Note**: `cd-gcp.yml` deleted — it was checking out `main` and writing to `values-dev.yaml`
+(exact dev→prod contamination vector). `cd-dev.yml` is now the sole GCP deploy pipeline.
 
 ---
 
@@ -263,3 +277,6 @@ Remove all Vault stub code that currently misleads readers.
 | Docker build context wrong | Fixed to `context: services/<name>` | 2beb517 |
 | All images ImagePullBackOff after filter-repo | Changed all tags to `latest` | 373ba1f |
 | Co-Authored-By Claude in git history | Stripped via git-filter-repo | (history rewrite) |
+| Dependabot label crash (`needs-review` missing) | `gh label create \|\| true` added to workflow step | — |
+| `cd-gcp.yml` cross-contamination (checkout main, write values-dev.yaml) | Deleted — `cd-dev.yml` is sole dev deploy pipeline | — |
+| `cd-prod.yml` image tag collision (bare `${SHA}` shared with dev) | Prod images now explicitly tagged `prod-<sha>`; dev uses `dev-<sha>` | — |

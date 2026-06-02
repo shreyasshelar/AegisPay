@@ -1,40 +1,70 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # AegisPay — CD: Production  [DISABLED — not yet active]
 #
-# dev is the current active deployment branch (GCP K3s via cd-dev.yml).
-# This workflow is for future production promotion only.
+# ┌─────────────────────────────────────────────────────────────────────────┐
+# │  DEV vs PROD ISOLATION — CRITICAL                                       │
+# │                                                                         │
+# │  dev branch  → cd-dev.yml   → builds ghcr.io/.../svc:dev-<sha>         │
+# │                             → patches values-dev.yaml on dev branch     │
+# │                             → ArgoCD syncs GCP K3s (dev cluster)        │
+# │                                                                         │
+# │  main branch → cd-prod.yml  → validates ghcr.io/.../svc:prod-<sha>     │
+# │             (this file)     → patches values-prod.yaml on main branch   │
+# │                             → ArgoCD syncs prod cluster                 │
+# │                                                                         │
+# │  Image tags NEVER overlap: dev-* and prod-* are strictly separate.      │
+# │  values-dev.yaml and values-prod.yaml are strictly separate.            │
+# │  A dev image can NEVER reach the prod cluster.                          │
+# └─────────────────────────────────────────────────────────────────────────┘
 #
-# Auto-trigger from main has been removed — manual dispatch only.
+# PREREQUISITE (before enabling this workflow):
+#   A separate "CI — Java (Prod)" workflow must run on main, building and
+#   pushing images tagged prod-<sha>. See COMPROMISED-FEATURES.md P3-6.
+#   Until that workflow exists, do NOT enable the auto-trigger below.
+#
+# To enable:
+#   1. Merge or create ci-java-prod.yml on main (builds prod-<sha> images)
+#   2. Uncomment the workflow_run trigger below
+#   3. Create infra/helm/aegispay/values-prod.yaml
+#   4. Create infra/argocd/app-prod.yaml
+#   5. Set ARGOCD_SERVER repo variable + ARGOCD_TOKEN secret
 # ─────────────────────────────────────────────────────────────────────────────
-name: CD — Production (manual only)
+name: CD — Production (main branch, manual only)
 
 on:
-  # Auto-trigger DISABLED: production pipeline not yet active.
-  # Uncomment workflow_run below when ready to enable prod deploys from main.
+  # Auto-trigger DISABLED: ci-java-prod.yml does not exist yet (see COMPROMISED P3-6).
+  # Uncomment ONLY after prod image-build CI is in place on main:
   # workflow_run:
-  #   workflows: ["CI — Java (Smart)"]
+  #   workflows: ["CI — Java (Prod)"]
   #   types: [completed]
   #   branches: [main]
 
-  # Manual: promote a specific git tag to production
+  # Manual: promote a specific git tag to production.
+  # release_tag must match a prod-<sha> image that already exists in GHCR.
   workflow_dispatch:
     inputs:
       release_tag:
-        description: "Git SHA or tag to deploy (e.g. abc1234 or v1.2.3)"
+        description: "Git SHA to deploy (e.g. abc1234) — must have prod-<sha> images in GHCR"
         required: true
         type: string
       dry_run:
-        description: "Dry run — update files but do not push"
+        description: "Dry run — update files but do not push to main"
         required: false
         type: boolean
         default: false
 
+# Prevent two prod deploys running in parallel
+concurrency:
+  group: cd-prod
+  cancel-in-progress: false   # queue, never cancel a running prod deploy
+
 env:
   REGISTRY: ghcr.io
   IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/aegispay
+  # Prod images are tagged prod-<sha> — never dev-<sha>
+  IMAGE_TAG_PREFIX: prod
   HELM_VALUES_FILE: infra/helm/aegispay/values-prod.yaml
   ARGOCD_APP_FILE: infra/argocd/app-prod.yaml
-  # All backend services managed by the Java CI
   JAVA_SERVICES: >-
     api-gateway
     user-service
@@ -48,30 +78,34 @@ env:
     reconciliation-service
 
 jobs:
-  # ── Guard: only proceed if workflow_run was successful ──────────────────────
+  # ── Guard: resolve SHA, validate trigger ────────────────────────────────────
   guard:
-    name: Guard — check triggering workflow result
+    name: Guard — resolve SHA
     runs-on: ubuntu-latest
-    # For workflow_run trigger: bail if CI failed.
-    # For workflow_dispatch: always proceed.
     if: |
       github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
     outputs:
       deploy_sha: ${{ steps.resolve-sha.outputs.sha }}
+      image_tag:  ${{ steps.resolve-sha.outputs.image_tag }}
     steps:
-      - name: Resolve deploy SHA / tag
+      - name: Resolve deploy SHA
         id: resolve-sha
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "sha=${{ inputs.release_tag }}" >> "$GITHUB_OUTPUT"
+            SHA="${{ inputs.release_tag }}"
           else
-            echo "sha=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
+            SHA="${{ github.event.workflow_run.head_sha }}"
           fi
+          echo "sha=${SHA}"                             >> "$GITHUB_OUTPUT"
+          # Prod images are always tagged with the prod- prefix
+          echo "image_tag=${IMAGE_TAG_PREFIX}-${SHA}"  >> "$GITHUB_OUTPUT"
+        env:
+          IMAGE_TAG_PREFIX: ${{ env.IMAGE_TAG_PREFIX }}
 
-  # ── Validate all images exist in GHCR ──────────────────────────────────────
+  # ── Validate all prod images exist in GHCR ──────────────────────────────────
   validate-images:
-    name: Validate images in GHCR
+    name: Validate prod images in GHCR
     needs: guard
     runs-on: ubuntu-latest
     steps:
@@ -81,29 +115,39 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Check all service images exist
+      - name: Check all prod images exist
         env:
-          SHA: ${{ needs.guard.outputs.deploy_sha }}
+          IMAGE_TAG: ${{ needs.guard.outputs.image_tag }}
         run: |
           FAILED=0
           for svc in ${{ env.JAVA_SERVICES }}; do
-            IMAGE="${{ env.IMAGE_PREFIX }}/$svc:${SHA}"
-            echo "Checking $IMAGE ..."
-            if ! docker manifest inspect "$IMAGE" > /dev/null 2>&1; then
-              echo "::error::Image NOT found: $IMAGE"
+            IMAGE="${{ env.IMAGE_PREFIX }}/${svc}:${IMAGE_TAG}"
+            echo "Checking ${IMAGE} ..."
+            if ! docker manifest inspect "${IMAGE}" > /dev/null 2>&1; then
+              echo "::error::Image NOT found: ${IMAGE}"
+              echo "::error::Prod CI (ci-java-prod.yml) must build prod-<sha> images before deploying."
               FAILED=1
             else
-              echo "✅ $IMAGE"
+              echo "✅ ${IMAGE}"
             fi
           done
+          # Check web image too
+          WEB_IMAGE="${{ env.IMAGE_PREFIX }}/web:${IMAGE_TAG}"
+          if ! docker manifest inspect "${WEB_IMAGE}" > /dev/null 2>&1; then
+            echo "::error::Web image NOT found: ${WEB_IMAGE}"
+            FAILED=1
+          else
+            echo "✅ ${WEB_IMAGE}"
+          fi
+
           if [ "$FAILED" = "1" ]; then
-            echo "::error::One or more images missing. Aborting deployment."
+            echo "::error::One or more prod images missing. Aborting deployment."
             exit 1
           fi
 
-  # ── Update Helm values + ArgoCD app file ───────────────────────────────────
+  # ── Update values-prod.yaml with prod-<sha> image tags ─────────────────────
   deploy:
-    name: Update values-prod.yaml & trigger ArgoCD
+    name: Update values-prod.yaml → push to main
     needs: [guard, validate-images]
     runs-on: ubuntu-latest
     permissions:
@@ -132,14 +176,21 @@ jobs:
 
       - name: Update image tags in values-prod.yaml
         env:
-          SHA: ${{ needs.guard.outputs.deploy_sha }}
+          IMAGE_TAG: ${{ needs.guard.outputs.image_tag }}
         run: |
+          if [ ! -f "${{ env.HELM_VALUES_FILE }}" ]; then
+            echo "::error::${{ env.HELM_VALUES_FILE }} does not exist."
+            echo "::error::Create it before enabling this workflow (see COMPROMISED P3-6)."
+            exit 1
+          fi
+
           for svc in ${{ env.JAVA_SERVICES }}; do
-            # YAML key uses underscores: api-gateway → api_gateway
             KEY=$(echo "$svc" | tr '-' '_')
-            yq e ".services.${KEY}.image.tag = \"${SHA}\"" -i ${{ env.HELM_VALUES_FILE }}
+            yq e ".services.${KEY}.image.tag = \"${IMAGE_TAG}\"" -i "${{ env.HELM_VALUES_FILE }}"
+            echo "  ✓ services.${KEY}.image.tag = ${IMAGE_TAG}"
           done
-          echo "Updated ${{ env.HELM_VALUES_FILE }} with SHA=${SHA}"
+          yq e ".services.web.image.tag = \"${IMAGE_TAG}\"" -i "${{ env.HELM_VALUES_FILE }}"
+          echo "  ✓ services.web.image.tag = ${IMAGE_TAG}"
 
       - name: Show diff
         run: git diff
@@ -147,25 +198,26 @@ jobs:
       - name: Commit and push [skip ci]
         if: ${{ github.event_name != 'workflow_dispatch' || !inputs.dry_run }}
         env:
-          SHA: ${{ needs.guard.outputs.deploy_sha }}
+          IMAGE_TAG: ${{ needs.guard.outputs.image_tag }}
         run: |
-          git add ${{ env.HELM_VALUES_FILE }}
-          git diff --staged --quiet && echo "Nothing changed — already deployed" && exit 0
-          git commit -m "chore(cd/prod): deploy ${SHA:0:12} to production [skip ci]"
+          git add "${{ env.HELM_VALUES_FILE }}"
+          if git diff --staged --quiet; then
+            echo "Nothing changed — already at ${IMAGE_TAG}"
+            exit 0
+          fi
+          git commit -m "chore(cd/prod): deploy ${IMAGE_TAG} to production [skip ci]"
           git push origin main
 
       - name: Dry-run summary
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
         run: |
-          echo "::notice::Dry run complete — files updated locally but NOT pushed."
-          echo "::notice::Re-run with dry_run=false to deploy."
+          echo "::notice::Dry run complete — files updated locally but NOT pushed to main."
 
-  # ── Force ArgoCD sync (optional, requires ArgoCD CLI secret) ───────────────
+  # ── Force ArgoCD prod sync ──────────────────────────────────────────────────
   argocd-sync:
-    name: Trigger ArgoCD sync
+    name: Trigger ArgoCD prod sync
     needs: deploy
     runs-on: ubuntu-latest
-    # Only attempt ArgoCD CLI sync if the secret is configured
     if: ${{ vars.ARGOCD_SERVER != '' }}
     steps:
       - name: Install ArgoCD CLI
@@ -174,19 +226,19 @@ jobs:
             https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
           chmod +x /usr/local/bin/argocd
 
-      - name: Sync aegispay-prod application
+      - name: Sync aegispay-prod
         env:
           ARGOCD_SERVER: ${{ vars.ARGOCD_SERVER }}
           ARGOCD_TOKEN:  ${{ secrets.ARGOCD_TOKEN }}
         run: |
           argocd app sync aegispay-prod \
             --auth-token "$ARGOCD_TOKEN" \
-            --server "$ARGOCD_SERVER" \
+            --server     "$ARGOCD_SERVER" \
             --grpc-web \
             --timeout 300
           argocd app wait aegispay-prod \
             --auth-token "$ARGOCD_TOKEN" \
-            --server "$ARGOCD_SERVER" \
+            --server     "$ARGOCD_SERVER" \
             --grpc-web \
             --health \
             --timeout 300

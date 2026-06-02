@@ -46,10 +46,18 @@ jobs:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Label major updates for manual review
+      # Label major updates for manual review.
+      # gh label create is idempotent via || true — safe to run every time.
+      # The label must exist before gh pr edit can apply it; GitHub does not
+      # auto-create labels from workflow steps.
       - name: Label major update for review
         if: steps.meta.outputs.update-type == 'version-update:semver-major'
-        run: gh pr edit "$PR_URL" --add-label "needs-review"
+        run: |
+          gh label create "needs-review" \
+            --color "e4e669" \
+            --description "Major dependency bump — requires manual review before merge" \
+            2>/dev/null || true
+          gh pr edit "$PR_URL" --add-label "needs-review"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
