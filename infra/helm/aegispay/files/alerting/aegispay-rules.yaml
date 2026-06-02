@@ -1,32 +1,66 @@
 apiVersion: 1
 
 # ── Contact points ─────────────────────────────────────────────────────────────
-# Alert rules are managed via Grafana UI (Alerting → Alert rules) because
-# Grafana 10.x provisioning requires explicit timeRange fields that differ
-# per datasource query type. Add rules in the UI — they persist in the PVC.
+# Alert rules are managed via Grafana UI (Alerting → Alert rules) — they
+# persist in the Grafana PVC. Provisioning here covers contact points and
+# notification routing only.
+#
+# SLACK_WEBHOOK_URL is injected as an env var from aegispay-slack-secret
+# (ESO-synced from GCP SM). Grafana 10.4 supports ${ENV_VAR} interpolation
+# in provisioning files.
 
 contactPoints:
+  # Email — all alerts
   - orgId: 1
-    name: aegispay-ops
+    name: aegispay-email
     receivers:
       - uid: aegispay-email
         type: email
         settings:
           addresses: aegispay.dev@gmail.com
-          subject: >
-            [AegisPay] {{ .Status | toUpper }} — {{ .CommonLabels.alertname }}
+          subject: "[AegisPay] {{ .Status | toUpper }} — {{ .CommonLabels.alertname }}"
+
+  # Slack — critical/high severity only
+  - orgId: 1
+    name: aegispay-slack
+    receivers:
+      - uid: aegispay-slack
+        type: slack
+        disableResolveMessage: false
+        settings:
+          # Grafana 10.4 env var interpolation: SLACK_WEBHOOK_URL injected
+          # from aegispay-slack-secret K8s secret (ESO → GCP SM).
+          url: ${SLACK_WEBHOOK_URL}
+          username: AegisPay Alerts
+          icon_emoji: ":rotating_light:"
+          title: "[AegisPay {{ .Status | toUpper }}] {{ .CommonLabels.alertname }}"
+          text: |
+            *Severity*: {{ .CommonLabels.severity }}
+            *Team*: {{ .CommonLabels.team }}
+            {{ range .Alerts }}• {{ .Annotations.summary }}
+            {{ end }}
 
 # ── Notification policy ────────────────────────────────────────────────────────
 policies:
   - orgId: 1
-    receiver: aegispay-ops
+    # Default: email for everything
+    receiver: aegispay-email
     group_by: [alertname, service]
     group_wait: 30s
     group_interval: 5m
     repeat_interval: 4h
     routes:
-      - receiver: aegispay-ops
+      # Critical/high → also ping Slack for immediate attention
+      - receiver: aegispay-slack
         matchers:
-          - severity =~ "critical|high"
+          - severity =~ "critical"
         group_wait: 10s
         repeat_interval: 1h
+        continue: true   # also send to default (email)
+
+      # Finance alerts always go to email immediately
+      - receiver: aegispay-email
+        matchers:
+          - team = finance
+        group_wait: 0s
+        repeat_interval: 30m
