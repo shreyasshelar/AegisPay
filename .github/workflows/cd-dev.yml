@@ -12,6 +12,16 @@ on:
     workflows: ["CI — Java (Smart)"]
     types: [completed]
     branches: [dev]
+  # Manual trigger for testing or one-off deploys.
+  # NOTE: workflow_run.branches filter only applies to push/PR-triggered parent
+  # workflows, not workflow_dispatch — so manual CI runs don't auto-chain.
+  # Use this dispatch to trigger CD manually after a manual CI run.
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: "Git SHA to deploy (defaults to HEAD of dev)"
+        required: false
+        default: ""
 
 # Cancel previous run on same branch
 concurrency:
@@ -28,7 +38,10 @@ jobs:
   build-and-push:
     name: Docker — ${{ matrix.service }}
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    # Run when triggered by successful CI OR by manual workflow_dispatch
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
 
     strategy:
       fail-fast: false
@@ -92,7 +105,7 @@ jobs:
           push: true
           tags: |
             ${{ env.IMAGE_PREFIX }}/${{ matrix.service }}:dev-latest
-            ${{ env.IMAGE_PREFIX }}/${{ matrix.service }}:dev-${{ github.event.workflow_run.head_sha }}
+            ${{ env.IMAGE_PREFIX }}/${{ matrix.service }}:dev-${{ github.event.workflow_run.head_sha || github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -100,7 +113,9 @@ jobs:
   build-web:
     name: Docker — web
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
 
     permissions:
       contents: read
@@ -129,12 +144,9 @@ jobs:
           push: true
           tags: |
             ${{ env.IMAGE_PREFIX }}/web:dev-latest
-            ${{ env.IMAGE_PREFIX }}/web:dev-${{ github.event.workflow_run.head_sha }}
+            ${{ env.IMAGE_PREFIX }}/web:dev-${{ github.event.workflow_run.head_sha || github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          build-args: |
-            NEXT_PUBLIC_API_BASE_URL=https://aegispay-api.shreyasshelar.uk
-            NEXT_PUBLIC_WS_BASE_URL=wss://aegispay-ws.shreyasshelar.uk
           build-args: |
             NEXT_PUBLIC_API_BASE_URL=https://aegispay-api.shreyasshelar.uk
             NEXT_PUBLIC_WS_BASE_URL=wss://aegispay-ws.shreyasshelar.uk
@@ -168,7 +180,7 @@ jobs:
 
       - name: Patch image tags in values-dev.yaml
         env:
-          SHA: ${{ github.event.workflow_run.head_sha }}
+          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
         run: |
           # Key map: Helm values key (underscore) → Docker image name (hyphen)
           declare -A SERVICE_MAP=(
@@ -193,7 +205,7 @@ jobs:
 
       - name: Commit and push [skip ci]
         env:
-          SHA: ${{ github.event.workflow_run.head_sha }}
+          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
         run: |
           git add "${{ env.HELM_VALUES_FILE }}"
           if git diff --staged --quiet; then
