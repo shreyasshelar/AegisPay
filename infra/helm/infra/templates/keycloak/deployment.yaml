@@ -86,7 +86,7 @@ spec:
             # Without this Keycloak uses the incoming request hostname, which is the
             # internal cluster DNS when accessed from within K8s → browser can't resolve.
             - name: KC_HOSTNAME
-              value: {{ .Values.keycloak.hostname | default "keycloak.shreyasshelar.uk" | quote }}
+              value: {{ .Values.keycloak.hostname | default "aegispay-keycloak.shreyasshelar.uk" | quote }}
             - name: KC_HOSTNAME_STRICT
               value: "false"
             - name: KC_HOSTNAME_STRICT_HTTPS

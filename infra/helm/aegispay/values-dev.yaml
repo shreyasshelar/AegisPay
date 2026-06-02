@@ -33,7 +33,7 @@ global:
   oauth2:
     # Public URL — used by: web (KEYCLOAK_ISSUER), api-gateway (issuer-uri, trusted-issuers).
     # KC_HOSTNAME on Keycloak ensures JWT iss claim always matches this public URL.
-    issuerUri: "https://keycloak.shreyasshelar.uk/realms/aegispay"
+    issuerUri: "https://aegispay-keycloak.shreyasshelar.uk/realms/aegispay"
     # Internal JWK set URL — used by all Spring services for JWT signature validation.
     # Avoids Cloudflare hairpin on every token verification (JWKS cached after first fetch).
     jwkSetUri: "http://keycloak.aegispay-infra.svc.cluster.local:8080/realms/aegispay/protocol/openid-connect/certs"
