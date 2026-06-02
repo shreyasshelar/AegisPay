@@ -71,7 +71,7 @@ jobs:
       data-pipeline:          ${{ steps.force.outputs.data-pipeline || steps.filter.outputs.data-pipeline }}
       helm:                   ${{ steps.force.outputs.helm || steps.filter.outputs.helm }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -138,7 +138,7 @@ jobs:
       needs.detect-changes.outputs['reconciliation-service'] == 'true' ||
       needs.detect-changes.outputs['data-pipeline'] == 'true'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: actions/setup-java@v4
         with:
@@ -179,7 +179,7 @@ jobs:
       needs.detect-changes.outputs['api-gateway'] == 'true' ||
       needs.detect-changes.outputs.libs == 'true'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-java@v4
         with: { java-version: "${{ env.JAVA_VERSION }}", distribution: temurin, cache: maven }
       - uses: actions/cache/restore@v4
@@ -201,7 +201,7 @@ jobs:
       needs.detect-changes.outputs['user-service'] == 'true' ||
       needs.detect-changes.outputs.libs == 'true'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-java@v4
         with: { java-version: "${{ env.JAVA_VERSION }}", distribution: temurin, cache: maven }
       - uses: actions/cache/restore@v4
@@ -223,7 +223,7 @@ jobs:
       needs.detect-changes.outputs['transaction-service'] == 'true' ||
       needs.detect-changes.outputs.libs == 'true'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-java@v4
         with: { java-version: "${{ env.JAVA_VERSION }}", distribution: temurin, cache: maven }
       - uses: actions/cache/restore@v4
@@ -245,7 +245,7 @@ jobs:
       needs.detect-changes.outputs['ledger-service'] == 'true' ||
       needs.detect-changes.outputs.libs == 'true'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-java@v4
         with: { java-version: "${{ env.JAVA_VERSION }}", distribution: temurin, cache: maven }
       - uses: actions/cache/restore@v4
@@ -267,7 +267,7 @@ jobs:
       needs.detect-changes.outputs['payment-orchestrator'] == 'true' ||
       needs.detect-changes.outputs.libs == 'true'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-java@v4
         with: { java-version: "${{ env.JAVA_VERSION }}", distribution: temurin, cache: maven }
       - uses: actions/cache/restore@v4
@@ -289,7 +289,7 @@ jobs:
       needs.detect-changes.outputs['risk-engine'] == 'true' ||
       needs.detect-changes.outputs.libs == 'true'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-java@v4
         with: { java-version: "${{ env.JAVA_VERSION }}", distribution: temurin, cache: maven }
       - uses: actions/cache/restore@v4
@@ -311,7 +311,7 @@ jobs:
       needs.detect-changes.outputs['notification-service'] == 'true' ||
       needs.detect-changes.outputs.libs == 'true'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-java@v4
         with: { java-version: "${{ env.JAVA_VERSION }}", distribution: temurin, cache: maven }
       - uses: actions/cache/restore@v4
@@ -333,7 +333,7 @@ jobs:
       needs.detect-changes.outputs['ai-platform'] == 'true' ||
       needs.detect-changes.outputs.libs == 'true'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-java@v4
         with: { java-version: "${{ env.JAVA_VERSION }}", distribution: temurin, cache: maven }
       - uses: actions/cache/restore@v4
@@ -357,7 +357,7 @@ jobs:
       needs.detect-changes.outputs['reconciliation-service'] == 'true' ||
       needs.detect-changes.outputs.libs == 'true'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-java@v4
         with: { java-version: "${{ env.JAVA_VERSION }}", distribution: temurin, cache: maven }
       - uses: actions/cache/restore@v4
@@ -379,7 +379,7 @@ jobs:
       needs.detect-changes.outputs['data-pipeline'] == 'true' ||
       needs.detect-changes.outputs.libs == 'true'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-java@v4
         with: { java-version: "${{ env.JAVA_VERSION }}", distribution: temurin, cache: maven }
       - uses: actions/cache/restore@v4
@@ -400,7 +400,7 @@ jobs:
     needs: detect-changes
     if: needs.detect-changes.outputs.helm == 'true'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: azure/setup-helm@v4
         with: { version: v3.15.0 }
       - name: Lint Helm chart

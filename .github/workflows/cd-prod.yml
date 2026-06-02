@@ -113,7 +113,7 @@ jobs:
       url: https://argocd.aegispay.io/applications/aegispay-prod
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: main
           token: ${{ secrets.GIT_DEPLOY_TOKEN }}

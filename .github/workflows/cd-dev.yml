@@ -57,7 +57,7 @@ jobs:
       any-changed: ${{ steps.diff.outputs.any-changed }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: dev
           fetch-depth: 2   # need HEAD and HEAD~1 for diff
@@ -155,7 +155,7 @@ jobs:
       packages: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: dev
 
@@ -213,7 +213,7 @@ jobs:
       packages: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: dev
 
@@ -261,7 +261,7 @@ jobs:
       contents: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: dev
           token: ${{ secrets.GIT_DEPLOY_TOKEN }}
