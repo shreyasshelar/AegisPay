@@ -54,9 +54,14 @@ spec:
       kind: Deployment
       jsonPointers:
         - /spec/replicas
-    # Ingress on k3s+Cloudflare never gets an ADDRESS (no LB) — don't let it
-    # block sync from completing
+    # Ingress on k3s+Cloudflare never gets an ADDRESS (no LB)
     - group: networking.k8s.io
       kind: Ingress
       jsonPointers:
         - /status/loadBalancer
+    # ESO annotates ExternalSecrets with sync timestamps — ignore to stop drift loop
+    - group: external-secrets.io
+      kind: ExternalSecret
+      jqPathExpressions:
+        - .metadata.annotations
+        - .status
