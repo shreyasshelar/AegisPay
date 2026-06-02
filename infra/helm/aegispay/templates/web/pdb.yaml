@@ -1,0 +1,3 @@
+{{- if .Values.services.web.enabled }}
+{{ include "aegispay.servicePdb" (dict "name" "web" "context" .) }}
+{{- end }}

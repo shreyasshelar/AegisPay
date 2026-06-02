@@ -140,9 +140,12 @@ keycloak:
   clientId: "aegispay-backend"
   realm: "aegispay"
 
-# ── Vault (addr used by secret-rotation CronJob) ──────────────────────────────
-vault:
-  addr: "http://vault:8200"
+  # GCP Secret Manager write-back (used by the rotation CronJob).
+  # The GCE VM's attached service account must have
+  # roles/secretmanager.secretVersionManager on gcpClientSecretName.
+  # One-time setup — see comment in keycloak-secret-rotation-job.yaml.
+  gcpProject: "aegispay"
+  gcpClientSecretName: "aegispay-keycloak-web-client-secret"
 
 # ── ClickHouse ────────────────────────────────────────────────────────────────
 clickhouse:

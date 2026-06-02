@@ -1,0 +1,86 @@
+{{- if .Values.services.web.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: web
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "aegispay.labels" . | nindent 4 }}
+    app.kubernetes.io/name: web
+    app.kubernetes.io/component: web
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "aegispay.selectorLabels" (dict "name" "web" "context" .) | nindent 6 }}
+
+  policyTypes:
+    - Ingress
+    - Egress
+
+  ingress:
+    # Allow traffic from Cloudflare Tunnel (same namespace)
+    - from:
+        - podSelector:
+            matchLabels:
+              app: cloudflared
+      ports:
+        - protocol: TCP
+          port: {{ .Values.services.web.port }}
+    # Allow traffic from Traefik ingress controller (k3s kube-system)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: TCP
+          port: {{ .Values.services.web.port }}
+    # Allow traffic from nginx ingress controller
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: {{ .Values.services.web.port }}
+    # Allow Prometheus scraping (Next.js metrics, if exposed)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: {{ .Values.services.web.port }}
+
+  egress:
+    # Call api-gateway for all backend API requests (server-side fetching)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.global.namespace }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: api-gateway
+      ports:
+        - protocol: TCP
+          port: 8080
+    # Keycloak — NextAuth OAuth2 token exchange (internal cluster DNS)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: aegispay-infra
+      ports:
+        - protocol: TCP
+          port: 8080
+    # External HTTPS: Keycloak public URL callbacks, OAuth2 discovery endpoints
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 443
+    # DNS resolution
+    - to: []
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+{{- end }}

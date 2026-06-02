@@ -174,12 +174,21 @@ service + 1 shared infra app). Each uses Helm `parameters` to enable only that s
 **To activate**: `kubectl apply -f infra/argocd/applicationset-per-service.yaml` then
 delete `aegispay-gcp` once all per-service apps are Healthy.
 
-### P2-5 · Keycloak secret rotation requires Workload Identity
-**Current**: Rotation job only reads the secret, cannot write new version back to GCP SM.
-**Fix**:
-1. Create `keycloak-rotation-sa@<project>.iam.gserviceaccount.com` with `secretmanager.versions.add`
-2. Bind via Workload Identity to `aegispay-infra/keycloak-rotation-sa` K8s SA
-3. Update rotation script: `gcloud secrets versions add aegispay-keycloak-secret --data-file=-`
+### ~~P2-5~~ ✅ Keycloak secret rotation write-back — FIXED
+Rotation CronJob now uses the **GCE instance metadata server** (no gcloud CLI, no key file)
+to get an access token, then calls the GCP Secret Manager REST API to add a new secret version.
+No Workload Identity or GKE-specific setup required — works on any GCE VM.
+**One-time manual step (run once on the VM):**
+```bash
+VM_SA=$(gcloud compute instances describe aegispay-k3s \
+  --zone=us-central1-a --project=aegispay \
+  --format="value(serviceAccounts[0].email)")
+gcloud secrets add-iam-policy-binding aegispay-keycloak-web-client-secret \
+  --member="serviceAccount:${VM_SA}" \
+  --role="roles/secretmanager.secretVersionManager" \
+  --project=aegispay
+```
+After the CronJob rotates the secret, ESO picks up the new version within 1h (its `refreshInterval`).
 
 ### ~~P2-6~~ ✅ Dependabot auto-merge — FIXED
 Added grouping (Spring/patch groups per service) and `dependabot-auto-merge.yml`
@@ -199,17 +208,26 @@ addition to the weekly schedule. Trivy image scan changed from main-only to
 schedule/dispatch. OWASP + CodeQL run on every PR. Trivy SARIF uploaded to GitHub
 Security tab on scheduled/manual runs.
 
-### P3-2 · Horizontal Pod Autoscaler (HPA) for gateway + risk-engine
-**Current**: All services run at fixed 1 replica.
-**Fix**: Add HPA to api-gateway (CPU 70%) and risk-engine (CPU 80%).
-Requires metrics-server (already present in k3s).
+### ~~P3-2~~ ✅ HPA templates — IN PLACE (intentionally disabled on single-node dev)
+HPA templates exist for all 11 services (including `web`) using `aegispay.serviceHpa` helper.
+All `autoscaling.enabled: false` in `values-dev.yaml` — correct for single GCE VM
+(HPA can't improve availability when all pods land on the same node).
+Templates are ready: enable per-service by setting `autoscaling.enabled: true` when
+running on multi-node prod. metrics-server already present in k3s.
 
-### P3-3 · PodDisruptionBudget for critical services
-**Fix**: Add PDB (`minAvailable: 1`) to api-gateway, ledger-service, transaction-service.
+### ~~P3-3~~ ✅ PodDisruptionBudget — ALREADY IN PLACE
+PDB templates exist for all 11 services (including `web`, added now) using `aegispay.servicePdb`
+helper (`minAvailable: 1`). Always rendered when the service is enabled.
+Note: On single-node k3s, PDB protects against accidental deletion but cannot prevent
+node-level failures (only one node to schedule on).
 
-### P3-4 · Network policies for remaining services
-**Current**: Only api-gateway has a NetworkPolicy. Other services are open.
-**Fix**: Add egress-only NetworkPolicy per service limiting traffic to declared dependencies.
+### ~~P3-4~~ ✅ Network policies — COMPLETE (all 11 services)
+NetworkPolicy exists for all 11 services. 9 services use the `aegispay.serviceNetworkPolicy`
+helper (ingress from api-gateway + same namespace; allow-all egress for dev).
+api-gateway has its own custom policy (cloudflared, kube-system, monitoring ingress; explicit
+egress ports to each downstream service + Redis + Keycloak).
+`web` NetworkPolicy added now: ingress from cloudflared/kube-system/monitoring;
+egress to api-gateway (8080), Keycloak (8080 infra), HTTPS (443), DNS (53).
 
 ### P3-5 · Vault for production secret management
 **Current**: GCP Secret Manager + ESO for dev. Vault stubs still in codebase.
@@ -238,12 +256,12 @@ Only then uncomment the `workflow_run` trigger in `cd-prod.yml`.
 | Grafana Slack contact point | ❌ Disabled | Same file | P2-3 |
 | Integration tests | ❌ Skipped | `ci-java.yml` (-DskipTests) | P2-1 |
 | Web frontend | 🔄 CI building | Dockerfile + Helm done; image building | P1-1 |
-| Keycloak secret rotation write | ⚠️ Read-only | `keycloak-secret-rotation-job.yaml` | P2-5 |
+| Keycloak secret rotation write | ✅ Fixed — GCE metadata token + SM REST API | `keycloak-secret-rotation-job.yaml` | P2-5 |
 | SMTP / email notifications | ⚠️ Address set, password needed | `values-dev.yaml` smtp section fixed | P1-7 → P2 |
 | Security scanning on PRs | ⚠️ Main-only | `security-scan.yml` | P3-1 |
 | Dependabot auto-merge | ⚠️ Manual | GitHub settings | P2-6 |
-| HPA / autoscaling | ❌ Not configured | Helm chart | P3-2 |
-| PodDisruptionBudget | ❌ Not configured | Helm chart | P3-3 |
+| HPA / autoscaling | ✅ Templates ready, disabled on single-node dev | `values-dev.yaml` (autoscaling.enabled: false) | P3-2 |
+| PodDisruptionBudget | ✅ All 11 services have PDB (minAvailable: 1) | Helm templates | P3-3 |
 | Vault integration | 🗑️ Removed (correct) | All Helm templates | P3-5 |
 
 ---
@@ -280,3 +298,5 @@ Only then uncomment the `workflow_run` trigger in `cd-prod.yml`.
 | Dependabot label crash (`needs-review` missing) | `gh label create \|\| true` added to workflow step | — |
 | `cd-gcp.yml` cross-contamination (checkout main, write values-dev.yaml) | Deleted — `cd-dev.yml` is sole dev deploy pipeline | — |
 | `cd-prod.yml` image tag collision (bare `${SHA}` shared with dev) | Prod images now explicitly tagged `prod-<sha>`; dev uses `dev-<sha>` | — |
+| Keycloak rotation no write-back | GCE metadata token + SM REST API in rotation script | — |
+| web service missing NetworkPolicy / PDB / HPA | Added all three templates for web service | — |

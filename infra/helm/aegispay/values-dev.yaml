@@ -309,6 +309,11 @@ services:
       limits:
         cpu: 500m
         memory: 512Mi
+    autoscaling:
+      enabled: false          # single node — HPA not useful on dev
+      minReplicas: 1
+      maxReplicas: 3
+      targetCPUUtilizationPercentage: 70
     env:
       apiBaseUrl: "https://aegispay-api.shreyasshelar.uk"
       wsBaseUrl: "wss://aegispay-ws.shreyasshelar.uk"
