@@ -19,5 +19,6 @@ data:
   # Avoids hairpin routing through Cloudflare on every NextAuth server-side call.
   # Keycloak returns public hostname in discovery responses (KC_HOSTNAME), so the
   # openid-client issuer check still passes against KEYCLOAK_ISSUER above.
-  KEYCLOAK_INTERNAL_URL: {{ .Values.global.oauth2.keycloakInternalUrl | default "" | quote }}
+  # Derived from global.infraNamespace via _helpers.tpl; override with explicit value if needed.
+  KEYCLOAK_INTERNAL_URL: {{ include "aegispay.keycloakInternalUrl" . | quote }}
 {{- end }}
