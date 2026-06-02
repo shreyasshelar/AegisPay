@@ -52,7 +52,7 @@
     <testcontainers.version>1.19.8</testcontainers.version>
     <flyway.version>10.15.0</flyway.version>
     <jjwt.version>0.12.6</jjwt.version>
-    <resilience4j.version>2.2.0</resilience4j.version>
+    <resilience4j.version>2.4.0</resilience4j.version>
   </properties>
 
   <dependencyManagement>
