@@ -22,11 +22,18 @@ if (process.env.NODE_ENV === 'production') {
 // pod). This adds ~100ms latency per call and fails if Cloudflare is unreachable.
 // With KEYCLOAK_INTERNAL_URL, server-side calls stay in-cluster; the browser still
 // redirects to the public Keycloak URL for the login form.
-const keycloakInternalBase = process.env.KEYCLOAK_INTERNAL_URL?.replace(/\/$/, '') ?? null
+// Use || null so an empty string (env var set but blank) is treated the same as unset.
+const keycloakInternalBase = process.env.KEYCLOAK_INTERNAL_URL?.replace(/\/$/, '') || null
 const keycloakPublicBase   = (process.env.KEYCLOAK_ISSUER ?? '').replace(/\/$/, '')
 
 // Force IPv4 for openid-client — Next.js 14 native fetch (undici) resolves
 // localhost → ::1 on macOS; Keycloak only listens on 127.0.0.1 → 3.5s timeout.
+//
+// IMPORTANT: http.Agent must NOT be passed for https:// URLs — Node throws
+// "Protocol 'https:' not supported. Expected 'http:'".  Only attach the agent
+// when the effective Keycloak URL is http:// (in-cluster internal URL).
+// For https:// (public external URL) omit the agent and let openid-client use
+// its default https.Agent.
 const ipv4Agent = new http.Agent({ family: 4 })
 
 /**
@@ -147,7 +154,11 @@ export const authOptions: NextAuthOptions = {
         userinfo: `${keycloakInternalBase}/protocol/openid-connect/userinfo`,
       } : {}),
       authorization: { params: { scope: 'openid email profile offline_access' } },
-      httpOptions: { agent: ipv4Agent, timeout: 10000 },
+      // Only attach the IPv4 http.Agent when the effective Keycloak base is http://.
+      // Passing an http.Agent to an https:// request throws ERR_INVALID_PROTOCOL.
+      httpOptions: keycloakInternalBase?.startsWith('http://')
+        ? { agent: ipv4Agent, timeout: 10000 }
+        : { timeout: 10000 },
       profile(profile) {
         const p = profile as Record<string, unknown>
         const aegisUserId = p.aegispay_user_id as string | undefined

@@ -69,8 +69,9 @@ spec:
               value: {{ .Values.global.oauth2.issuerUri | quote }}
             # Internal Keycloak URL — server-side OIDC discovery + token exchange stay
             # in-cluster, avoiding Cloudflare hairpin on every NextAuth server-side call.
+            # Derived from global.infraNamespace via _helpers.tpl.
             - name: KEYCLOAK_INTERNAL_URL
-              value: {{ .Values.global.oauth2.keycloakInternalUrl | default "" | quote }}
+              value: {{ include "aegispay.keycloakInternalUrl" . | quote }}
             # Internal API URL (server-side only — goes directly to api-gateway, not via Cloudflare)
             - name: API_BASE_URL
               value: "http://api-gateway.{{ .Values.global.namespace }}.svc.cluster.local:{{ .Values.services.api_gateway.port | default 8080 }}"
