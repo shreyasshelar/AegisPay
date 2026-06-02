@@ -6,7 +6,7 @@
 #
 # Gradle wrapper fix:
 #   The gradlew script is not committed. We install Gradle via
-#   gradle/actions/setup-gradle@v4 with an explicit gradle-version,
+#   gradle/actions/setup-gradle@v6 with an explicit gradle-version,
 #   then generate the wrapper before any ./gradlew invocation.
 # ─────────────────────────────────────────────────────────────────────────────
 name: CI — Android
@@ -44,7 +44,7 @@ jobs:
 
       # Install Gradle and generate wrapper so ./gradlew is available
       - name: Set up Gradle ${{ env.GRADLE_VERSION }}
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
         with:
           gradle-version: ${{ env.GRADLE_VERSION }}
           cache-read-only: false
@@ -83,7 +83,7 @@ jobs:
           distribution: temurin
 
       - name: Set up Gradle ${{ env.GRADLE_VERSION }}
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
         with:
           gradle-version: ${{ env.GRADLE_VERSION }}
           cache-read-only: false
@@ -123,7 +123,7 @@ jobs:
           distribution: temurin
 
       - name: Set up Gradle ${{ env.GRADLE_VERSION }}
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
         with:
           gradle-version: ${{ env.GRADLE_VERSION }}
           cache-read-only: false
@@ -163,7 +163,7 @@ jobs:
           distribution: temurin
 
       - name: Set up Gradle ${{ env.GRADLE_VERSION }}
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
         with:
           gradle-version: ${{ env.GRADLE_VERSION }}
 
