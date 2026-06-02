@@ -59,9 +59,14 @@ spec:
       kind: Ingress
       jsonPointers:
         - /status/loadBalancer
-    # ESO annotates ExternalSecrets with sync timestamps — ignore to stop drift loop
+    # ESO mutates ExternalSecrets after creation (adds finalizer, sets spec defaults
+    # like deletionPolicy/conversionStrategy, writes status). Ignore all fields owned
+    # by the ESO controller so only Helm-managed fields count toward OutOfSync.
     - group: external-secrets.io
       kind: ExternalSecret
+      managedFieldsManagers:
+        - external-secrets
       jqPathExpressions:
+        - .metadata.finalizers
         - .metadata.annotations
         - .status
