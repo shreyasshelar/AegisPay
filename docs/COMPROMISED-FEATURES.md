@@ -95,13 +95,10 @@ at same SHA. CI pushes will resolve correctly.
 
 ## P1 — Fix within 1 week (stability)
 
-### P1-1 · web (Next.js) — 🔄 CI BUILDING (3rd attempt — turbo env fix)
-**Status**: All code done. Blocking issues fixed in order:
-- ✅ `packageManager` field added to root `package.json` (turbo v2 workspace resolution)
-- ✅ turbo `globalPassThroughEnv` for `NEXTAUTH_SECRET`/`KEYCLOAK_*` (turbo v2 strict mode)
-- 🔄 Docker image `web:dev-latest` building — ArgoCD will auto-deploy once pushed
-**Remaining**: CI completes → cd-dev.yml updates image tag → ArgoCD deploys web pod
-**Impact**: `aegispay.shreyasshelar.uk` returns 502 until pod is running.
+### ~~P1-1~~ ✅ web (Next.js) — LIVE
+`aegispay.shreyasshelar.uk` → 200. Web pod `1/1 Running`.
+KC_HOSTNAME + KEYCLOAK_ISSUER fixed to use public URL `aegispay-keycloak.shreyasshelar.uk`.
+OAUTH2_JWK_SET_URI aligned in all 7 Spring service configmaps (was using wrong env var name).
 
 ### ~~P1-2~~ ✅ ArgoCD stuck in Running/OutOfSync — FIXED
 `RespectIgnoreDifferences=true` added to syncOptions in `infra/argocd/app-gcp.yaml`.
@@ -160,25 +157,22 @@ use Testcontainers Cloud. Run `mvn test` instead of `package -DskipTests`.
 **Note**: Do NOT add tests until app is stable and deployed — fixing CI is P0 but
 enabling tests is P2 since Testcontainers requires Docker-in-Docker setup.
 
-### P2-2 · Grafana alert rules disabled (ClickHouse query format)
-**Problem**: Alert rules removed because Grafana 10.4 rejected `{From:0s To:0s}` time range.
-**Fix**: Rewrite rules using valid Grafana unified alerting syntax with proper `for:` duration.
-Re-add via Grafana UI → Export as JSON → store in `infra/grafana/dashboards/`.
-**Alerts needed**: SagaTimeoutRateHigh, DlqDepthNonZero, BalanceNegative,
-NotificationDeliveryFailureHigh, ReconciliationBreakCountHigh.
+### ~~P2-2~~ ✅ Grafana alert rules — ACTIVE
+PrometheusRules `aegispay-alerts` live in `aegispay` namespace. kube-prometheus-stack
+Prometheus picks them up (`ruleNamespaceSelector: {}`). 9 rule groups active:
+saga, kafka, ledger, risk, ai, notification, datapipeline, reconciliation, service.
+ClickHouse-based Grafana unified alerting deferred until ClickHouse deployed on dev.
 
-### P2-3 · Grafana Slack alerting disabled
-**Problem**: `${SLACK_WEBHOOK_URL}` env var syntax rejected at parse time by Grafana 10.4.
-**Fix**: Upgrade to Grafana 11+ which supports secret refs, OR configure contact
-point via Grafana API (not provisioning YAML), OR inject pre-expanded URL from ESO secret.
+### ~~P2-3~~ ✅ Grafana Slack alerting — RESTORED
+Re-added Slack contact point in `files/alerting/aegispay-rules.yaml`. `${SLACK_WEBHOOK_URL}`
+injected from `aegispay-slack-secret` (ESO → GCP SM). Routing: `severity=critical` → Slack
++ email; `team=finance` → email (30m repeat); all others → email (4h repeat).
 
-### P2-4 · ArgoCD per-service ApplicationSet
-**Current**: Single monolithic `aegispay-gcp` ArgoCD Application syncs all 10+ services.
-ArgoCD IS smart enough to only restart changed Deployments — but all services share
-one sync history, one rollback point, one health status.
-**Enhancement**: Create `infra/argocd/applicationset-per-service.yaml` using list
-generator. Each service gets own Application: independent rollback, independent health,
-independent sync trigger.
+### ~~P2-4~~ ✅ ArgoCD per-service ApplicationSet — CREATED
+`infra/argocd/applicationset-per-service.yaml` created. Generates 12 Applications (1 per
+service + 1 shared infra app). Each uses Helm `parameters` to enable only that service.
+**To activate**: `kubectl apply -f infra/argocd/applicationset-per-service.yaml` then
+delete `aegispay-gcp` once all per-service apps are Healthy.
 
 ### P2-5 · Keycloak secret rotation requires Workload Identity
 **Current**: Rotation job only reads the secret, cannot write new version back to GCP SM.
@@ -197,10 +191,11 @@ workflow that auto-approves+squash-merges patch/minor PRs, labels major bumps
 
 ## P3 — Future / Nice-to-have
 
-### P3-1 · Security scan (OWASP, Trivy, CodeQL) on every PR
-**Current**: `security-scan.yml` runs on push to main only.
-**Fix**: Add PR trigger. Add SARIF upload to GitHub Security tab.
-Enable Dependabot security alerts + auto-dismiss low-severity.
+### ~~P3-1~~ ✅ Security scan on PRs — FIXED
+`security-scan.yml` now triggers on PRs targeting `dev` (for Java/lib changes) in
+addition to the weekly schedule. Trivy image scan changed from main-only to
+schedule/dispatch. OWASP + CodeQL run on every PR. Trivy SARIF uploaded to GitHub
+Security tab on scheduled/manual runs.
 
 ### P3-2 · Horizontal Pod Autoscaler (HPA) for gateway + risk-engine
 **Current**: All services run at fixed 1 replica.
