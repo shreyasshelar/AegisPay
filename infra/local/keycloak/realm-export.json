@@ -614,9 +614,15 @@
       "email": "admin@aegispay.local",
       "emailVerified": true,
       "attributes": {
-        "aegispay_user_id":   ["97de22d4-9b21-411d-a52c-014e9710a103"],
-        "aegispay_tenant_id": ["default"],
-        "aegispay_role":      ["ADMIN"]
+        "aegispay_user_id": [
+          "97de22d4-9b21-411d-a52c-014e9710a103"
+        ],
+        "aegispay_tenant_id": [
+          "default"
+        ],
+        "aegispay_role": [
+          "ADMIN"
+        ]
       },
       "createdTimestamp": 1779035640000,
       "enabled": true,
@@ -645,9 +651,15 @@
       "email": "backoffice@aegispay.local",
       "emailVerified": true,
       "attributes": {
-        "aegispay_user_id":   ["c3d4e5f6-a7b8-4012-cd03-123456789012"],
-        "aegispay_tenant_id": ["default"],
-        "aegispay_role":      ["BACK_OFFICE"]
+        "aegispay_user_id": [
+          "c3d4e5f6-a7b8-4012-cd03-123456789012"
+        ],
+        "aegispay_tenant_id": [
+          "default"
+        ],
+        "aegispay_role": [
+          "BACK_OFFICE"
+        ]
       },
       "createdTimestamp": 1779035640100,
       "enabled": true,
@@ -1023,11 +1035,14 @@
       "clientAuthenticatorType": "client-secret",
       "redirectUris": [
         "http://localhost:3000/*",
-        "http://192.168.29.34:3000/*"
+        "http://192.168.29.34:3000/*",
+        "https://aegispay.shreyasshelar.uk/*",
+        "https://aegispay.shreyasshelar.uk/api/auth/callback/keycloak"
       ],
       "webOrigins": [
         "http://192.168.29.34:3000",
-        "http://localhost:3000"
+        "http://localhost:3000",
+        "https://aegispay.shreyasshelar.uk"
       ],
       "notBefore": 0,
       "bearerOnly": false,
@@ -1953,7 +1968,7 @@
     {
       "id": "1984fc87-73a5-4acf-ae3f-b2f4dd6844a7",
       "alias": "aegispay-social-first-login",
-      "description": "First-broker-login for social IdPs ÃƒÂ¢Ã‚â‚¬Ã‚â€ skips profile review, auto-links on email match",
+      "description": "First-broker-login for social IdPs \u00c3\u0192\u00c2\u00a2\u00c3\u201a\u00e2\u201a\u00ac\u00c3\u201a\u00e2\u20ac\u009d skips profile review, auto-links on email match",
       "providerId": "basic-flow",
       "topLevel": true,
       "builtIn": false,

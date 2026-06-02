@@ -37,6 +37,11 @@ global:
     # Internal JWK set URL — used by all Spring services for JWT signature validation.
     # Avoids Cloudflare hairpin on every token verification (JWKS cached after first fetch).
     jwkSetUri: "http://keycloak.aegispay-infra.svc.cluster.local:8080/realms/aegispay/protocol/openid-connect/certs"
+    # Internal Keycloak base URL — used by the Next.js web pod for server-side OIDC
+    # discovery and token exchange (NextAuth). Avoids hairpin routing through Cloudflare.
+    # Keycloak's discovery response always returns the public hostname (KC_HOSTNAME),
+    # so the openid-client issuer check passes against the public issuerUri.
+    keycloakInternalUrl: "http://keycloak.aegispay-infra.svc.cluster.local:8080/realms/aegispay"
   smtp:
     host: "smtp.gmail.com"
     port: "587"

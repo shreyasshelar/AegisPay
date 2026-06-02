@@ -11,6 +11,20 @@ if (process.env.NODE_ENV === 'production') {
   if (!process.env.KEYCLOAK_ISSUER) throw new Error('KEYCLOAK_ISSUER is not set')
 }
 
+// ── Internal vs external Keycloak URL ────────────────────────────────────────
+// KEYCLOAK_ISSUER   = public URL (https://aegispay-keycloak.shreyasshelar.uk/...)
+//                     Used for: JWT `iss` validation, browser authorization redirect
+// KEYCLOAK_INTERNAL_URL = cluster-internal URL (http://keycloak.aegispay-infra.svc...)
+//                     Used for: server-side OIDC discovery, token exchange, userinfo
+//
+// Without KEYCLOAK_INTERNAL_URL the web pod would hairpin all server-side Keycloak
+// calls through Cloudflare (public URL → GCE NAT → internet → Cloudflare → back to
+// pod). This adds ~100ms latency per call and fails if Cloudflare is unreachable.
+// With KEYCLOAK_INTERNAL_URL, server-side calls stay in-cluster; the browser still
+// redirects to the public Keycloak URL for the login form.
+const keycloakInternalBase = process.env.KEYCLOAK_INTERNAL_URL?.replace(/\/$/, '') ?? null
+const keycloakPublicBase   = (process.env.KEYCLOAK_ISSUER ?? '').replace(/\/$/, '')
+
 // Force IPv4 for openid-client — Next.js 14 native fetch (undici) resolves
 // localhost → ::1 on macOS; Keycloak only listens on 127.0.0.1 → 3.5s timeout.
 const ipv4Agent = new http.Agent({ family: 4 })
@@ -31,7 +45,9 @@ export function extractRole(realmRoles: string[]): string {
 
 async function refreshAccessToken(token: JWT): Promise<JWT> {
   try {
-    const url = `${process.env.KEYCLOAK_ISSUER}/protocol/openid-connect/token`
+    // Prefer internal URL to avoid hairpin routing through Cloudflare
+    const base = keycloakInternalBase ?? keycloakPublicBase
+    const url = `${base}/protocol/openid-connect/token`
 
     // Public PKCE clients have no secret — sending client_secret="" causes
     // Keycloak to return 401 "client not found or invalid client credentials".
@@ -115,7 +131,21 @@ export const authOptions: NextAuthOptions = {
     KeycloakProvider({
       clientId:     process.env.KEYCLOAK_ID!,
       clientSecret: process.env.KEYCLOAK_SECRET ?? '',
-      issuer:       process.env.KEYCLOAK_ISSUER!,
+      // issuer is always the PUBLIC URL — openid-client validates the `iss` claim
+      // in returned JWTs against this value. Must match KC_HOSTNAME on Keycloak.
+      issuer: process.env.KEYCLOAK_ISSUER!,
+      // When KEYCLOAK_INTERNAL_URL is set, fetch the OIDC discovery document from
+      // the in-cluster address. Keycloak responds with the public hostname in all
+      // endpoint URLs (due to KC_HOSTNAME), so the issuer check still passes and
+      // the browser authorization redirect still uses the public URL. Only the
+      // wellKnown fetch itself goes internal, avoiding Cloudflare hairpin on startup.
+      ...(keycloakInternalBase ? {
+        wellKnown: `${keycloakInternalBase}/.well-known/openid-configuration`,
+        // Override token + userinfo endpoints to in-cluster URL so every token
+        // exchange and refresh stays within the cluster network.
+        token:    `${keycloakInternalBase}/protocol/openid-connect/token`,
+        userinfo: `${keycloakInternalBase}/protocol/openid-connect/userinfo`,
+      } : {}),
       authorization: { params: { scope: 'openid email profile offline_access' } },
       httpOptions: { agent: ipv4Agent, timeout: 10000 },
       profile(profile) {
@@ -226,7 +256,9 @@ export const authOptions: NextAuthOptions = {
                   // refresh so the new token carries aegispay_user_id.
                   try {
                     await new Promise<void>(r => setTimeout(r, 1200))
-                    const kcTokenUrl = `${process.env.KEYCLOAK_ISSUER}/protocol/openid-connect/token`
+                    // Prefer internal URL to avoid hairpin routing
+                    const kcBase     = keycloakInternalBase ?? keycloakPublicBase
+                    const kcTokenUrl = `${kcBase}/protocol/openid-connect/token`
                     const refreshParams: Record<string, string> = {
                       grant_type:    'refresh_token',
                       client_id:     process.env.KEYCLOAK_ID!,
