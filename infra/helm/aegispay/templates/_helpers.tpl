@@ -1,4 +1,65 @@
 {{/*
+─────────────────────────────────────────────────────────────────────────────
+Infra namespace + cluster-internal URL constructors
+─────────────────────────────────────────────────────────────────────────────
+All helpers use coalesce so an explicit values override still wins:
+  "" (empty)   → constructed from global.infraNamespace
+  non-empty    → used verbatim (escape hatch for non-standard deployments)
+─────────────────────────────────────────────────────────────────────────────
+*/}}
+
+{{/* Infra namespace shorthand — used by all constructors below */}}
+{{- define "aegispay.infraNs" -}}
+{{- .Values.global.infraNamespace | default "aegispay-infra" -}}
+{{- end }}
+
+{{/* PostgreSQL host */}}
+{{- define "aegispay.pgHost" -}}
+{{- coalesce .Values.global.postgresql.host (printf "postgresql.%s.svc.cluster.local" (include "aegispay.infraNs" .)) -}}
+{{- end }}
+
+{{/* Kafka bootstrap brokers */}}
+{{- define "aegispay.kafkaBroker" -}}
+{{- coalesce .Values.global.kafka.brokers (printf "kafka.%s.svc.cluster.local:9092" (include "aegispay.infraNs" .)) -}}
+{{- end }}
+
+{{/* Redis host */}}
+{{- define "aegispay.redisHost" -}}
+{{- coalesce .Values.global.redis.host (printf "redis-master.%s.svc.cluster.local" (include "aegispay.infraNs" .)) -}}
+{{- end }}
+
+{{/* MongoDB base URI (no auth — auth version is in service extraEnv via secret-sourced MONGO_PASSWORD) */}}
+{{- define "aegispay.mongoUri" -}}
+{{- coalesce .Values.global.mongodb.uri (printf "mongodb://mongodb.%s.svc.cluster.local:27017" (include "aegispay.infraNs" .)) -}}
+{{- end }}
+
+{{/* Keycloak internal realm URL — server-side OIDC discovery + token exchange */}}
+{{- define "aegispay.keycloakInternalUrl" -}}
+{{- coalesce .Values.global.oauth2.keycloakInternalUrl (printf "http://keycloak.%s.svc.cluster.local:8080/realms/aegispay" (include "aegispay.infraNs" .)) -}}
+{{- end }}
+
+{{/* JWK set URI for JWT signature validation (Spring services) */}}
+{{- define "aegispay.jwkSetUri" -}}
+{{- coalesce .Values.global.oauth2.jwkSetUri (printf "http://keycloak.%s.svc.cluster.local:8080/realms/aegispay/protocol/openid-connect/certs" (include "aegispay.infraNs" .)) -}}
+{{- end }}
+
+{{/* ClickHouse hostname (used by Grafana datasource provisioning) */}}
+{{- define "aegispay.clickhouseHost" -}}
+{{- coalesce .Values.global.clickhouse.host (printf "clickhouse.%s.svc.cluster.local" (include "aegispay.infraNs" .)) -}}
+{{- end }}
+
+{{/* ClickHouse JDBC URL (used by data-pipeline and reconciliation-service) */}}
+{{- define "aegispay.clickhouseJdbcUrl" -}}
+{{- coalesce .Values.global.clickhouse.url (printf "jdbc:clickhouse://clickhouse.%s.svc.cluster.local:8123/aegispay_analytics" (include "aegispay.infraNs" .)) -}}
+{{- end }}
+
+{{/*
+─────────────────────────────────────────────────────────────────────────────
+Chart metadata helpers
+─────────────────────────────────────────────────────────────────────────────
+*/}}
+
+{{/*
 Expand the name of the chart.
 */}}
 {{- define "aegispay.name" -}}
@@ -116,7 +177,7 @@ spec:
                   name: aegispay-db-secret
                   key: password
             - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
-              value: {{ $ctx.Values.global.kafka.brokers | quote }}
+              value: {{ include "aegispay.kafkaBroker" $ctx | quote }}
             - name: JAVA_OPTS
               value: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError -Dspring.config.location=classpath:/application.yml,optional:/config/application.yml"
             {{- if $svc.extraEnv }}

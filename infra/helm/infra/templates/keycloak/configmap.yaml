@@ -1,0 +1,30 @@
+{{- if .Values.keycloak.enabled }}
+# ── Keycloak Realm ConfigMap ──────────────────────────────────────────────────
+# Managed by Helm / ArgoCD — stays in sync with infra/helm/infra/files/realm-export.json.
+#
+# Source file: infra/helm/infra/files/realm-export.json
+# (canonical copy — used by both this template and the setup-cluster scripts)
+#
+# Keycloak mounts this ConfigMap at /opt/keycloak/data/import and imports on
+# every pod start with KC_IMPORT_STRATEGY=IGNORE_EXISTING.
+#
+# ⚠ IGNORE_EXISTING means Keycloak skips resources that already exist in its DB.
+# New resources (e.g. a newly added client) are imported on the next pod restart.
+# To force a full re-import (e.g. update an existing client's settings), either:
+#   • Use the Keycloak Admin UI directly, OR
+#   • Temporarily set KC_IMPORT_STRATEGY=OVERWRITE_EXISTING in the deployment +
+#     restart Keycloak + revert KC_IMPORT_STRATEGY back to IGNORE_EXISTING.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: keycloak-realm-config
+  namespace: {{ .Values.global.namespace | default .Release.Namespace }}
+  labels:
+    app: keycloak
+    app.kubernetes.io/name: keycloak
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+data:
+  realm-export.json: |
+{{ .Files.Get "files/realm-export.json" | indent 4 }}
+{{- end }}

@@ -84,9 +84,12 @@ kubectl create configmap postgres-init-scripts \
   --dry-run=client -o yaml | kubectl apply -f -
 
 # ── 7. Create Keycloak realm ConfigMap ────────────────────────────────────────
+# NOTE: The ConfigMap is now managed by the infra Helm chart (ArgoCD will keep it
+# in sync). This step only pre-creates it for the initial cluster bootstrap before
+# ArgoCD first sync. Canonical source: infra/helm/infra/files/realm-export.json
 section "Creating Keycloak realm ConfigMap"
 kubectl create configmap keycloak-realm-config \
-  --from-file=realm-export.json=infra/local/keycloak/realm-export.json \
+  --from-file=realm-export.json=infra/helm/infra/files/realm-export.json \
   --namespace aegispay-infra \
   --dry-run=client -o yaml | kubectl apply -f -
 

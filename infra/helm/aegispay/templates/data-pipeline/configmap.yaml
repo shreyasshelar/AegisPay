@@ -8,8 +8,8 @@ metadata:
     {{- include "aegispay.labels" . | nindent 4 }}
     app.kubernetes.io/name: data-pipeline
 data:
-  KAFKA_BOOTSTRAP_SERVERS: {{ .Values.global.kafka.brokers | quote }}
-  CLICKHOUSE_URL: {{ .Values.global.clickhouse.url | quote }}
+  KAFKA_BOOTSTRAP_SERVERS: {{ include "aegispay.kafkaBroker" . | quote }}
+  CLICKHOUSE_URL: {{ include "aegispay.clickhouseJdbcUrl" . | quote }}
   CLICKHOUSE_USERNAME: {{ .Values.global.clickhouse.username | quote }}
   SERVER_PORT: "8089"
   SPRING_APPLICATION_NAME: "data-pipeline"

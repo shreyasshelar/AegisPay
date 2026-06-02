@@ -17,7 +17,7 @@ data:
         uid: aegispay-clickhouse
         isDefault: true
         jsonData:
-          host: {{ .Values.grafana.clickhouseDatasource.host | quote }}
+          host: {{ coalesce .Values.grafana.clickhouseDatasource.host (include "aegispay.clickhouseHost" .) | quote }}
           port: {{ .Values.grafana.clickhouseDatasource.port | default 9000 }}
           username: {{ .Values.grafana.clickhouseDatasource.username | default "default" | quote }}
           defaultDatabase: {{ .Values.grafana.clickhouseDatasource.database | default "aegispay_analytics" | quote }}
