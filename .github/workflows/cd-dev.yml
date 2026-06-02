@@ -1,27 +1,36 @@
 name: CD — Deploy to Dev (dev branch)
 
-# Triggers when "CI — Java (Smart)" completes successfully on the dev branch.
-# Flow: Build Docker images for all Java services + web → push to GHCR →
-#       patch values-dev.yaml with new SHA tags → commit → ArgoCD auto-syncs.
+# Triggers when "CI — Java (Smart)" completes successfully on the dev branch,
+# OR when manually dispatched.
+#
+# Smart build: only builds images for services/web that actually changed.
+# If libs/ changed → rebuild ALL Java services (they all depend on shared libs).
+#
+# Flow: detect-changes → build only changed services → patch values-dev.yaml
+#       with new SHA tags → commit → ArgoCD auto-syncs.
 #
 # Git identity: shreyasshelar / shreyasshelarrr@gmail.com (no bots)
-# Requires: GIT_DEPLOY_TOKEN secret (PAT with repo write scope)
 
 on:
   workflow_run:
     workflows: ["CI — Java (Smart)"]
     types: [completed]
     branches: [dev]
-  # Manual trigger for testing or one-off deploys.
-  # NOTE: workflow_run.branches filter only applies to push/PR-triggered parent
-  # workflows, not workflow_dispatch — so manual CI runs don't auto-chain.
-  # Use this dispatch to trigger CD manually after a manual CI run.
+  # Manual trigger: use force-all=true to rebuild every service regardless of diff.
+  # NOTE: workflow_run.branches filter only applies to push-triggered parents,
+  # not workflow_dispatch — so manual CI runs don't auto-chain. Use this manually.
   workflow_dispatch:
     inputs:
       sha:
         description: "Git SHA to deploy (defaults to HEAD of dev)"
         required: false
         default: ""
+      force-all:
+        description: "Rebuild all services regardless of diff"
+        required: false
+        default: "false"
+        type: choice
+        options: ["false", "true"]
 
 # Cancel previous run on same branch
 concurrency:
@@ -34,29 +43,112 @@ env:
   HELM_VALUES_FILE: infra/helm/aegispay/values-dev.yaml
 
 jobs:
-  # ── Build & push each Java service ─────────────────────────────────────────
-  build-and-push:
-    name: Docker — ${{ matrix.service }}
+  # ── Detect which services changed ──────────────────────────────────────────
+  detect-changes:
+    name: Detect changed services
     runs-on: ubuntu-latest
     # Run when triggered by successful CI OR by manual workflow_dispatch
     if: |
       github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
+    outputs:
+      services: ${{ steps.diff.outputs.services }}
+      web: ${{ steps.diff.outputs.web }}
+      any-changed: ${{ steps.diff.outputs.any-changed }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: dev
+          fetch-depth: 2   # need HEAD and HEAD~1 for diff
+
+      - name: Compute changed services
+        id: diff
+        env:
+          FORCE_ALL: ${{ github.event.inputs.force-all || 'false' }}
+        run: |
+          ALL_JAVA=(api-gateway user-service transaction-service ledger-service \
+                    payment-orchestrator risk-engine notification-service \
+                    ai-platform data-pipeline reconciliation-service)
+
+          if [ "$FORCE_ALL" = "true" ]; then
+            echo "force-all=true: rebuilding everything"
+            JAVA_JSON=$(printf '%s\n' "${ALL_JAVA[@]}" | jq -Rc . | jq -sc .)
+            echo "services=${JAVA_JSON}" >> "$GITHUB_OUTPUT"
+            echo "web=true"             >> "$GITHUB_OUTPUT"
+            echo "any-changed=true"     >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Get the diff against the previous commit.
+          # git fetch-depth: 2 ensures HEAD~1 is available.
+          CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || echo "")
+
+          if [ -z "$CHANGED" ]; then
+            # No diff available (first commit, shallow clone edge case)
+            # Fall back to rebuilding everything
+            echo "No diff available — rebuilding all"
+            JAVA_JSON=$(printf '%s\n' "${ALL_JAVA[@]}" | jq -Rc . | jq -sc .)
+            echo "services=${JAVA_JSON}" >> "$GITHUB_OUTPUT"
+            echo "web=true"             >> "$GITHUB_OUTPUT"
+            echo "any-changed=true"     >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Changed files:"
+          echo "$CHANGED"
+
+          # ── libs/ changed → rebuild ALL Java services ──
+          LIBS_CHANGED=$(echo "$CHANGED" | grep -c "^libs/" || true)
+          if [ "$LIBS_CHANGED" -gt 0 ]; then
+            echo "Shared libs changed — rebuilding all Java services"
+            JAVA_JSON=$(printf '%s\n' "${ALL_JAVA[@]}" | jq -Rc . | jq -sc .)
+            echo "services=${JAVA_JSON}" >> "$GITHUB_OUTPUT"
+          else
+            # Build only services with changes in their own directory
+            BUILT=()
+            for svc in "${ALL_JAVA[@]}"; do
+              if echo "$CHANGED" | grep -q "^services/${svc}/"; then
+                BUILT+=("$svc")
+              fi
+            done
+            JAVA_JSON=$(printf '%s\n' "${BUILT[@]}" | jq -Rc . | jq -sc .)
+            echo "services=${JAVA_JSON}" >> "$GITHUB_OUTPUT"
+          fi
+
+          # ── web changed ──
+          WEB_CHANGED=$(echo "$CHANGED" | grep -cE "^(apps/web/|packages/|package\.json|turbo\.json)" || true)
+          if [ "$WEB_CHANGED" -gt 0 ]; then
+            echo "web=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "web=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          # ── any changed ──
+          SVC_COUNT=$(echo "$JAVA_JSON" | jq 'length')
+          WEB_VAL=$(grep "^web=" "$GITHUB_OUTPUT" | cut -d= -f2)
+          if [ "$SVC_COUNT" -gt 0 ] || [ "$WEB_VAL" = "true" ]; then
+            echo "any-changed=true"  >> "$GITHUB_OUTPUT"
+          else
+            echo "any-changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "--- Summary ---"
+          echo "Java services: $JAVA_JSON"
+          echo "Web: $WEB_VAL"
+
+  # ── Build & push changed Java services ─────────────────────────────────────
+  build-and-push:
+    name: Docker — ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    # Only run if at least one Java service changed; matrix skips automatically if empty
+    if: needs.detect-changes.outputs.services != '[]' && needs.detect-changes.outputs.services != ''
 
     strategy:
       fail-fast: false
       matrix:
-        service:
-          - api-gateway
-          - user-service
-          - transaction-service
-          - ledger-service
-          - payment-orchestrator
-          - risk-engine
-          - notification-service
-          - ai-platform
-          - data-pipeline
-          - reconciliation-service
+        service: ${{ fromJson(needs.detect-changes.outputs.services) }}
 
     permissions:
       contents: read
@@ -113,9 +205,8 @@ jobs:
   build-web:
     name: Docker — web
     runs-on: ubuntu-latest
-    if: |
-      github.event_name == 'workflow_dispatch' ||
-      github.event.workflow_run.conclusion == 'success'
+    needs: detect-changes
+    if: needs.detect-changes.outputs.web == 'true'
 
     permissions:
       contents: read
@@ -155,7 +246,16 @@ jobs:
   update-image-tags:
     name: Patch values-dev.yaml → commit
     runs-on: ubuntu-latest
-    needs: [build-and-push, build-web]
+    needs: [detect-changes, build-and-push, build-web]
+    # Run even if one of the build jobs was skipped (no changes in that area),
+    # but only if at least one thing changed and no build job failed.
+    if: |
+      always() &&
+      needs.detect-changes.result == 'success' &&
+      needs.detect-changes.outputs.any-changed == 'true' &&
+      (needs.build-and-push.result == 'success' || needs.build-and-push.result == 'skipped') &&
+      (needs.build-web.result == 'success' || needs.build-web.result == 'skipped') &&
+      (needs.build-and-push.result == 'success' || needs.build-web.result == 'success')
 
     permissions:
       contents: write
@@ -181,8 +281,10 @@ jobs:
       - name: Patch image tags in values-dev.yaml
         env:
           SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          CHANGED_JAVA: ${{ needs.detect-changes.outputs.services }}
+          WEB_CHANGED: ${{ needs.detect-changes.outputs.web }}
         run: |
-          # Key map: Helm values key (underscore) → Docker image name (hyphen)
+          # Key map: Helm values key → Docker image name
           declare -A SERVICE_MAP=(
             [api_gateway]="api-gateway"
             [user_service]="user-service"
@@ -194,14 +296,25 @@ jobs:
             [ai_platform]="ai-platform"
             [data_pipeline]="data-pipeline"
             [reconciliation_service]="reconciliation-service"
-            [web]="web"
           )
 
+          TAG="dev-${SHA}"
+
+          # Update only the Java services that were actually built
+          readarray -t BUILT_JAVA < <(echo "$CHANGED_JAVA" | jq -r '.[]' 2>/dev/null || true)
           for svc_key in "${!SERVICE_MAP[@]}"; do
-            TAG="dev-${SHA}"
-            yq e ".services.${svc_key}.image.tag = \"${TAG}\"" -i "${{ env.HELM_VALUES_FILE }}"
-            echo "  ✓ services.${svc_key}.image.tag = ${TAG}"
+            svc_img="${SERVICE_MAP[$svc_key]}"
+            if printf '%s\n' "${BUILT_JAVA[@]}" | grep -qx "${svc_img}"; then
+              yq e ".services.${svc_key}.image.tag = \"${TAG}\"" -i "${{ env.HELM_VALUES_FILE }}"
+              echo "  ✓ services.${svc_key}.image.tag = ${TAG}"
+            fi
           done
+
+          # Update web tag only if web was built
+          if [ "$WEB_CHANGED" = "true" ]; then
+            yq e ".services.web.image.tag = \"${TAG}\"" -i "${{ env.HELM_VALUES_FILE }}"
+            echo "  ✓ services.web.image.tag = ${TAG}"
+          fi
 
       - name: Commit and push [skip ci]
         env:
@@ -217,3 +330,4 @@ jobs:
 
       # ArgoCD watches dev branch (app-gcp.yaml targetRevision: dev) and
       # auto-syncs when values-dev.yaml changes — no manual trigger needed.
+      # ApplyOutOfSyncOnly=true ensures only changed resources are reapplied.

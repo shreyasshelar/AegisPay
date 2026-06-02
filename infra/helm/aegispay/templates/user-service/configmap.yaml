@@ -15,6 +15,6 @@ data:
   KAFKA_BOOTSTRAP_SERVERS: {{ .Values.global.kafka.brokers | quote }}
   REDIS_HOST: {{ .Values.global.redis.host | quote }}
   REDIS_PORT: {{ .Values.global.redis.port | quote }}
-  OAUTH2_ISSUER_URI: {{ .Values.global.oauth2.issuerUri | quote }}
+  OAUTH2_JWK_SET_URI: {{ .Values.global.oauth2.jwkSetUri | quote }}
   SERVER_PORT: "8081"
 {{- end }}

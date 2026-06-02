@@ -16,7 +16,7 @@ data:
   REDIS_HOST: {{ .Values.global.redis.host | quote }}
   REDIS_PORT: {{ .Values.global.redis.port | quote }}
   MONGODB_URI: {{ .Values.global.mongodb.uri | quote }}
-  OAUTH2_ISSUER_URI: {{ .Values.global.oauth2.issuerUri | quote }}
+  OAUTH2_JWK_SET_URI: {{ .Values.global.oauth2.jwkSetUri | quote }}
   SERVER_PORT: "8086"
   SMTP_HOST: {{ .Values.global.smtp.host | default "smtp.gmail.com" | quote }}
   SMTP_PORT: {{ .Values.global.smtp.port | default "587" | quote }}

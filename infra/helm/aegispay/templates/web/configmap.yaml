@@ -13,5 +13,5 @@ data:
   NEXT_PUBLIC_WS_BASE_URL: {{ .Values.services.web.env.wsBaseUrl | default "wss://aegispay-ws.shreyasshelar.uk" | quote }}
   NEXTAUTH_URL: {{ .Values.services.web.env.nextauthUrl | default "https://aegispay.shreyasshelar.uk" | quote }}
   KEYCLOAK_ID: {{ .Values.services.web.env.keycloakClientId | default "aegispay-web" | quote }}
-  KEYCLOAK_ISSUER: {{ .Values.global.oauth2.issuerUri | default "http://keycloak.aegispay-infra.svc.cluster.local:8080/realms/aegispay" | quote }}
+  KEYCLOAK_ISSUER: {{ .Values.global.oauth2.issuerUri | quote }}
 {{- end }}

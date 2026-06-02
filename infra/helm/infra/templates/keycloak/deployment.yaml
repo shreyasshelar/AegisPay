@@ -81,7 +81,15 @@ spec:
               value: "IGNORE_EXISTING"
             - name: KC_HTTP_ENABLED
               value: "true"
+            # KC_HOSTNAME fixes the iss claim and all generated redirect URIs to the
+            # public URL — critical for browser OAuth flows via Cloudflare tunnel.
+            # Without this Keycloak uses the incoming request hostname, which is the
+            # internal cluster DNS when accessed from within K8s → browser can't resolve.
+            - name: KC_HOSTNAME
+              value: {{ .Values.keycloak.hostname | default "keycloak.shreyasshelar.uk" | quote }}
             - name: KC_HOSTNAME_STRICT
+              value: "false"
+            - name: KC_HOSTNAME_STRICT_HTTPS
               value: "false"
             - name: KC_PROXY
               value: "edge"

@@ -66,7 +66,7 @@ spec:
                   name: aegispay-web-secret
                   key: keycloak-client-secret
             - name: KEYCLOAK_ISSUER
-              value: {{ .Values.global.oauth2.issuerUri | default "http://keycloak.aegispay-infra.svc.cluster.local:8080/realms/aegispay" | quote }}
+              value: {{ .Values.global.oauth2.issuerUri | quote }}
             # Internal API URL (server-side only — goes directly to api-gateway, not via Cloudflare)
             - name: API_BASE_URL
               value: "http://api-gateway.{{ .Values.global.namespace }}.svc.cluster.local:{{ .Values.services.api_gateway.port | default 8080 }}"

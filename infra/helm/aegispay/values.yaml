@@ -23,7 +23,12 @@ global:
   mongodb:
     uri: "mongodb://mongodb.aegispay-infra.svc.cluster.local:27017"
   oauth2:
+    # Public issuer URL — KC_HOSTNAME on Keycloak ensures iss claim always matches.
+    # Used by: web (KEYCLOAK_ISSUER), api-gateway (issuer-uri + trusted-issuers).
     issuerUri: "http://keycloak.aegispay-infra.svc.cluster.local:8080/realms/aegispay"
+    # Internal JWK set URL — used by all Spring services for signature validation.
+    # Stays on cluster-internal DNS to avoid Cloudflare hairpin on every JWT check.
+    jwkSetUri: "http://keycloak.aegispay-infra.svc.cluster.local:8080/realms/aegispay/protocol/openid-connect/certs"
   clickhouse:
     url: "jdbc:clickhouse://clickhouse.aegispay-infra.svc.cluster.local:8123/aegispay_analytics"
     username: "default"
