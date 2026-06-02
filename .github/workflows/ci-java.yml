@@ -724,7 +724,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install yq
-        uses: mikefarah/yq@v4.44.2
+        uses: mikefarah/yq@v4.53.2
 
       - name: Patch image tags for changed services
         env:
