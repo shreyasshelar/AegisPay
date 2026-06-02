@@ -109,7 +109,12 @@ Combined with the existing `ignoreDifferences` block for Ingress `/status/loadBa
 ArgoCD no longer marks syncs as OutOfSync due to missing Ingress ADDRESS.
 Applied on cluster: `kubectl apply -f infra/argocd/app-gcp.yaml` (commit 8e13f6c).
 
-### P1-3 · GitHub contributor pollution (@claude, @sshelar110ss3-ship-it)
+### ~~P1-3~~ ⚠️ GitHub contributor pollution — USER ACTION NEEDED
+Go to `github.com/shreyasshelar/AegisPay/settings/installations` and revoke
+`Claude Code` and `sshelar110ss3-ship-it` GitHub Apps. All git commit authors
+verified clean (shreyasshelar / dependabot / github-actions only).
+
+### ~~(was P1-3)~~
 **Problem**: Two bot identities appear in GitHub contributors:
 - `claude/` branches (worktrees created by Claude Code) may have been pushed to remote
 - `sshelar110ss3-ship-it` is a GitHub Actions bot from old CD commits
@@ -182,10 +187,11 @@ independent sync trigger.
 2. Bind via Workload Identity to `aegispay-infra/keycloak-rotation-sa` K8s SA
 3. Update rotation script: `gcloud secrets versions add aegispay-keycloak-secret --data-file=-`
 
-### P2-6 · Dependabot PRs accumulating (80+ open)
-**Problem**: Dependabot has opened 80+ PRs across services. Most are safe minor/patch bumps.
-**Fix**: Configure `dependabot.yml` with `auto-merge: true` for patch-level updates.
-Enable GitHub's auto-merge on PRs that pass CI. Group related dependabot PRs together.
+### ~~P2-6~~ ✅ Dependabot auto-merge — FIXED
+Added grouping (Spring/patch groups per service) and `dependabot-auto-merge.yml`
+workflow that auto-approves+squash-merges patch/minor PRs, labels major bumps
+`needs-review`. npm moved to root directory to cover all workspaces.
+**Action needed**: Enable "Allow auto-merge" in repo Settings → General. (commit d2399fa)
 
 ---
 
