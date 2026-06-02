@@ -26,6 +26,6 @@
     "clsx": "^2.1.1",
     "tailwind-merge": "^2.5.2",
     "class-variance-authority": "^0.7.0",
-    "lucide-react": "^0.441.0"
+    "lucide-react": "^1.17.0"
   }
 }
