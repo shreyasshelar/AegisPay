@@ -24,7 +24,7 @@ spring:
     host: ${SMTP_HOST:smtp.gmail.com}
     port: ${SMTP_PORT:587}
     username: ${SMTP_USERNAME:aegispay.dev@gmail.com}
-    # SMTP_PASSWORD injected from Vault via ESO â†’ K8s secret aegispay-smtp-secret
+    # SMTP_PASSWORD injected via ESO → GCP Secret Manager → K8s secret aegispay-smtp-secret
     password: ${SMTP_PASSWORD:}
     from: ${SMTP_FROM_ADDRESS:aegispay.dev@gmail.com}
     properties:

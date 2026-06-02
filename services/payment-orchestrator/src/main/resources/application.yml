@@ -65,7 +65,7 @@ management:
       service: ${spring.application.name}
 
 stripe:
-  # Injected from K8s Secret aegispay-stripe-secret (via ESO â†’ Vault)
+  # Injected from K8s Secret aegispay-stripe-secret (via ESO → GCP Secret Manager)
   secret-key: ${STRIPE_SECRET_KEY:sk_test_placeholder_local_dev}
   webhook-secret: ${STRIPE_WEBHOOK_SECRET:whsec_placeholder_local_dev}
   # Default payment method used for server-side confirmation.

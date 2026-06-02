@@ -86,7 +86,7 @@ aegispay:
     base-url: ${AI_PLATFORM_URL:http://ai-platform:8088}
   # Shared secret for authenticating internal service-to-service calls.
   # The AI Platform passes this in X-Internal-Api-Key after async KYC processing.
-  # Set USER_SERVICE_INTERNAL_API_KEY in production (via Vault / External Secrets).
+  # Set USER_SERVICE_INTERNAL_API_KEY in production (via ESO → GCP Secret Manager).
   internal-api-key: ${USER_SERVICE_INTERNAL_API_KEY:aegispay-internal-dev-key}
   sms:
     fast2sms:

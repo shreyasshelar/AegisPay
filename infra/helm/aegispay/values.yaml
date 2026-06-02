@@ -368,8 +368,13 @@ pdb:
   minAvailable: 1
 
 # ─── External Secrets Operator ───────────────────────────────────────────────
+# Backend is selected by environment overlay (values-{env}.yaml):
+#   useGcpSm: true    → GCP Secret Manager (dev/GCP — ClusterSecretStore)
+#   useVault: true    → HashiCorp Vault     (future prod option — namespace SecretStore)
+#   neither           → AWS Secrets Manager (future prod option — namespace SecretStore)
 secrets:
-  useVault: false          # true = Vault, false = AWS Secrets Manager
+  useGcpSm: false          # overridden to true in values-gcp.yaml / values-dev.yaml
+  useVault: false          # overridden to true in values-prod.yaml if Vault used
   vault:
     address: "https://vault.aegispay-infra.svc.cluster.local:8200"
     path: "aegispay"

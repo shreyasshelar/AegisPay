@@ -9,8 +9,9 @@
 #   1. Log in to dash.cloudflare.com → Zero Trust → Networks → Tunnels
 #   2. Create a tunnel → name it "aegispay-dev"
 #   3. Copy the tunnel token shown in the dashboard
-#   4. Store it in Vault:
-#      vault kv put secret/aegispay/cloudflare tunnel_token="<paste token here>"
+#   4. Store it in GCP Secret Manager:
+#      echo -n "<paste token here>" | gcloud secrets versions add aegispay-cloudflare-tunnel-token \
+#        --data-file=- --project=aegispay
 #   5. Add DNS routes in the tunnel config (Cloudflare UI):
 #        aegispay.yourdomain.com     → http://traefik.kube-system.svc:80
 #        api.aegispay.yourdomain.com → http://traefik.kube-system.svc:80
@@ -52,7 +53,7 @@ spec:
             - name: TUNNEL_TOKEN
               valueFrom:
                 secretKeyRef:
-                  # This K8s secret is created by ESO from Vault
+                  # This K8s secret is synced by ESO from GCP Secret Manager
                   name: cloudflare-tunnel-secret
                   key: tunnel-token
           resources:

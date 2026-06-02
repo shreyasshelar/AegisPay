@@ -4,7 +4,7 @@
 # Overrides values.yaml for a self-hosted single server running k3s.
 # Images pulled from GHCR (public repo → no registry auth needed).
 # Ingress via Traefik (k3s default) + Cloudflare Tunnel for external access.
-# Secrets pulled from local HashiCorp Vault via External Secrets Operator.
+# Secrets pulled from GCP Secret Manager via External Secrets Operator (ESO).
 # AI via OpenRouter (free tier) instead of Anthropic direct.
 # Stripe in test-mode sandbox (sk_test_...).
 # ─────────────────────────────────────────────────────────────────────────────
@@ -43,14 +43,11 @@ global:
     username: "aegispay.dev@gmail.com"
     fromAddress: "aegispay.dev@gmail.com"
 # ─── Secrets backend ──────────────────────────────────────────────────────────
+# GCP Secret Manager is the only secrets backend for dev/GCP.
+# values-gcp.yaml (applied after this file) sets useGcpSm: true which gates
+# all ESO ClusterSecretStore references in externalsecrets.yaml.
 secrets:
-  # GCP Secret Manager via External Secrets Operator (ESO) — Vault not deployed on dev
-  useVault: false
-  useGcpSecretManager: true
-  vault:
-    address: "http://vault.aegispay-vault.svc.cluster.local:8200"
-    path: "secret"
-    role: "aegispay-role"
+  useGcpSm: true           # ESO ClusterSecretStore → GCP Secret Manager
   db:
     secretPath: "secret/data/aegispay/database"
   redis:
@@ -289,7 +286,7 @@ services:
     autoscaling:
       enabled: false
     # OpenRouter replaces Anthropic on dev.
-    # OPENROUTER_API_KEY injected via ESO from Vault secret/data/aegispay/ai
+    # OPENROUTER_API_KEY injected via ESO from GCP Secret Manager (aegispay-ai-secret)
     springProfile: dev
     jvmOpts: "-XX:MaxRAMPercentage=50.0 -XX:+UseG1GC -XX:+UseContainerSupport"
     db:

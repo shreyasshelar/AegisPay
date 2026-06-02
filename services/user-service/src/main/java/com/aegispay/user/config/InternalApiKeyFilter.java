@@ -32,7 +32,7 @@ import java.util.List;
  * <h3>Security posture</h3>
  * <ul>
  *   <li>The key is a long random string injected via the {@code USER_SERVICE_INTERNAL_API_KEY}
- *       environment variable (HashiCorp Vault in production).</li>
+ *       environment variable (GCP Secret Manager via ESO in production).</li>
  *   <li>Service-to-service traffic never leaves the cluster network —
  *       the AI Platform calls the User Service directly (not via the public API Gateway),
  *       so the secret is not exposed to external networks.</li>

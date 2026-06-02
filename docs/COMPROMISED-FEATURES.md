@@ -229,10 +229,15 @@ egress ports to each downstream service + Redis + Keycloak).
 `web` NetworkPolicy added now: ingress from cloudflared/kube-system/monitoring;
 egress to api-gateway (8080), Keycloak (8080 infra), HTTPS (443), DNS (53).
 
-### P3-5 · Vault for production secret management
-**Current**: GCP Secret Manager + ESO for dev. Vault stubs still in codebase.
-**Fix**: For prod (main branch), decide: keep GCP SM or deploy Vault in prod cluster.
-Remove all Vault stub code that currently misleads readers.
+### ~~P3-5~~ ✅ Vault stubs removed — codebase now accurate
+`infra/vault/` directory deleted (values.yaml, init.sh, policies/).
+All "stored in Vault" comments updated to "GCP Secret Manager via ESO" across:
+Helm values, ExternalSecrets template, Cloudflare tunnel manifests, Java application.yml.
+`values-dev.yaml` bug fixed: dead key `useGcpSecretManager` renamed to `useGcpSm`
+(the key the template actually reads). Base `values.yaml` comment updated to list
+all three backend options (GCP SM / Vault / AWS SM) clearly.
+Vault code path in `externalsecrets.yaml` preserved (behind `useVault: true` flag)
+for future prod use — not misleading now that it's clearly documented as inactive.
 
 ### P3-6 · No image-build CI for main branch (prod pipeline prerequisite)
 **Current**: Only `cd-dev.yml` builds Docker images, always tagged `dev-<sha>`.
@@ -262,7 +267,7 @@ Only then uncomment the `workflow_run` trigger in `cd-prod.yml`.
 | Dependabot auto-merge | ⚠️ Manual | GitHub settings | P2-6 |
 | HPA / autoscaling | ✅ Templates ready, disabled on single-node dev | `values-dev.yaml` (autoscaling.enabled: false) | P3-2 |
 | PodDisruptionBudget | ✅ All 11 services have PDB (minAvailable: 1) | Helm templates | P3-3 |
-| Vault integration | 🗑️ Removed (correct) | All Helm templates | P3-5 |
+| Vault integration | ✅ All stubs removed; GCP SM is the sole active backend | All Helm templates + infra/vault/ deleted | P3-5 |
 
 ---
 
