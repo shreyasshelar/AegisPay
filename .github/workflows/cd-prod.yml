@@ -1,26 +1,20 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# AegisPay — CD: Production (main)
+# AegisPay — CD: Production  [DISABLED — not yet active]
 #
-# Triggered automatically after the Java CI completes successfully on
-# main (images already pushed to GHCR by ci-java.yml).
+# dev is the current active deployment branch (GCP K3s via cd-dev.yml).
+# This workflow is for future production promotion only.
 #
-# Also supports manual promotion via workflow_dispatch for a specific release tag.
-#
-# Flow:
-#   1. Pull the SHA that was just built (or the tag from manual input)
-#   2. Update image tags in values-prod.yaml for changed services
-#   3. Commit [skip ci] → ArgoCD detects OutOfSync → auto-sync (dev-style)
-#      OR manual sync gate (prod-style) depending on environment approval
-#   4. Post-deployment smoke test via ArgoCD health endpoint
+# Auto-trigger from main has been removed — manual dispatch only.
 # ─────────────────────────────────────────────────────────────────────────────
-name: CD — Production (main)
+name: CD — Production (manual only)
 
 on:
-  # Auto-trigger: Java CI green on prod branch
-  workflow_run:
-    workflows: ["CI — Java (Smart)"]
-    types: [completed]
-    branches: [main]
+  # Auto-trigger DISABLED: production pipeline not yet active.
+  # Uncomment workflow_run below when ready to enable prod deploys from main.
+  # workflow_run:
+  #   workflows: ["CI — Java (Smart)"]
+  #   types: [completed]
+  #   branches: [main]
 
   # Manual: promote a specific git tag to production
   workflow_dispatch:

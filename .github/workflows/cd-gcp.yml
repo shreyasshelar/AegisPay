@@ -1,22 +1,17 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# AegisPay — CD: GCP Free-Tier K3s (main branch)
+# AegisPay — CD: GCP K3s  [DISABLED — superseded by cd-dev.yml]
 #
-# Flow:
-#   1. Java CI green on main → this workflow triggers
-#   2. Resolves the git SHA that was just built + pushed to GHCR
-#   3. Updates image tags in values-gcp.yaml for each changed service
-#   4. Commits [skip ci] back to main → ArgoCD detects OutOfSync → auto-sync
+# dev is now the sole GCP deployment branch.
+# cd-dev.yml handles all GCP K3s deployments triggered from dev.
 #
-# ArgoCD polls every 3 minutes (default) or you can add a webhook for instant sync.
+# This file is kept for reference / future prod promotion use.
+# Auto-trigger from main has been removed — manual dispatch only.
 # ─────────────────────────────────────────────────────────────────────────────
-name: CD — GCP K3s (main)
+name: CD — GCP K3s (legacy — manual only)
 
 on:
-  workflow_run:
-    workflows: ["CI — Java (Smart)"]
-    types: [completed]
-    branches: [main]
-
+  # Auto-trigger DISABLED: dev is the deployment branch, handled by cd-dev.yml
+  # workflow_run was removed to prevent accidental main deploys.
   workflow_dispatch:
     inputs:
       image_tag:
@@ -74,8 +69,8 @@ jobs:
 
       - name: Configure git
         run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name  "shreyasshelar"
+          git config user.email "shreyasshelarrr@gmail.com"
 
       - name: Update image tags
         env:

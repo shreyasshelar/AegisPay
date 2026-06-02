@@ -14,7 +14,6 @@ name: CI — Android
 on:
   push:
     branches:
-      - main
       - dev
     paths:
       - 'apps/android/**'
