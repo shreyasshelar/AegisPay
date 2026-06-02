@@ -372,9 +372,16 @@ pdb:
 #   useGcpSm: true    → GCP Secret Manager (dev/GCP — ClusterSecretStore)
 #   useVault: true    → HashiCorp Vault     (future prod option — namespace SecretStore)
 #   neither           → AWS Secrets Manager (future prod option — namespace SecretStore)
+#
+# secretName  = GCP Secret Manager resource name (used when useGcpSm: true)
+# secretPath  = Vault/AWS path                   (used when useGcpSm: false)
+# Defaults here must satisfy helm lint (run with values.yaml + values-dev.yaml,
+# where useGcpSm: true). values-gcp.yaml overrides secretName with actuals.
 secrets:
   useGcpSm: false          # overridden to true in values-gcp.yaml / values-dev.yaml
   useVault: false          # overridden to true in values-prod.yaml if Vault used
+  gcpSm:
+    projectId: ""          # overridden per-env (values-gcp.yaml)
   vault:
     address: "https://vault.aegispay-infra.svc.cluster.local:8200"
     path: "aegispay"
@@ -383,22 +390,39 @@ secrets:
     region: "ap-south-1"
   db:
     secretPath: "aegispay/db"
+    secretName: "aegispay-db-password"
   redis:
     secretPath: "aegispay/redis"
-  ai:
-    secretPath: "aegispay/ai-keys"
+    secretName: "aegispay-redis-password"
+  mongo:
+    secretName: "aegispay-mongo-password"
   kafka:
     secretPath: "aegispay/kafka"
+    secretName: "aegispay-kafka-password"
+  ai:
+    secretPath: "aegispay/ai-keys"
+    secretName: "aegispay-openrouter-api-key"
   stripe:
     secretPath: "aegispay/stripe"
+    secretName: "aegispay-stripe-secret-key"
+    webhookSecretName: "aegispay-stripe-webhook-secret"
   smtp:
     secretPath: "aegispay/smtp"
+    secretName: "aegispay-smtp-password"
   slack:
     secretPath: "aegispay/slack"
+    secretName: "aegispay-slack-webhook-url"
   fast2sms:
     secretPath: "aegispay/fast2sms"
+    secretName: "aegispay-fast2sms-api-key"
   clickhouse:
     secretPath: "aegispay/clickhouse"
+    secretName: "aegispay-clickhouse-password"
+  cloudflare:
+    secretName: "aegispay-cloudflare-tunnel-token"
+  web:
+    nextauthSecretName: "aegispay-nextauth-secret"
+    keycloakClientSecretName: "aegispay-keycloak-web-client-secret"
 
 # ─── ClickHouse ──────────────────────────────────────────────────────────────
 clickhouse:
