@@ -75,7 +75,7 @@
     <dependency>
       <groupId>com.stripe</groupId>
       <artifactId>stripe-java</artifactId>
-      <version>25.3.0</version>
+      <version>32.2.0</version>
     </dependency>
 
     <!-- Observability -->
