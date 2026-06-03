@@ -98,15 +98,17 @@ spec:
 EOF
 info "ClusterSecretStore created — ESO will use the VM service account via ADC."
 
-# ── 5. kube-prometheus-stack (lightweight config for single node) ──────────────
+# ── 5. kube-prometheus-stack (with Grafana — exposed at aegispay-metrics.shreyasshelar.uk) ──
 section "Installing Prometheus + Grafana (infra monitoring)"
+# Requires grafana-admin-secret in monitoring namespace before this step.
+# If ESO is not yet seeded, create it manually first:
+#   kubectl create secret generic grafana-admin-secret -n monitoring \
+#     --from-literal=admin-user=admin --from-literal=admin-password=<choose-password>
 helm upgrade --install monitoring prometheus-community/kube-prometheus-stack \
   --namespace monitoring \
-  --set prometheus.prometheusSpec.resources.requests.memory=256Mi \
-  --set prometheus.prometheusSpec.resources.limits.memory=512Mi \
-  --set alertmanager.enabled=false \
-  --set grafana.enabled=false \
-  --wait
+  -f infra/helm/monitoring/values-dev.yaml \
+  --wait \
+  --timeout 10m
 
 # ── 6. PostgreSQL init ConfigMap ──────────────────────────────────────────────
 section "Creating PostgreSQL init ConfigMap"
