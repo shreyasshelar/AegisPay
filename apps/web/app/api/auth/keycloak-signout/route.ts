@@ -46,19 +46,32 @@ export async function GET(request: NextRequest) {
   // Clear all NextAuth session cookies — both the base name and the per-chunk
   // variants (.0, .1, …) that next-auth uses when the JWT > 4096 bytes.
   // Use the NextAuth default names (no custom override in authOptions.cookies).
+  //
+  // IMPORTANT: response.cookies.delete(name) in Next.js App Router does NOT include
+  // the Secure flag in the Set-Cookie header.  Browsers silently reject deletion of
+  // __Secure-* prefix cookies unless the Set-Cookie also carries Secure=true.
+  // Must use response.cookies.set() with explicit maxAge=0 and secure/httpOnly flags.
   const useSecureCookies = process.env.NEXTAUTH_URL?.startsWith('https://') ?? false
   const sessionBase  = useSecureCookies ? '__Secure-next-auth.session-token' : 'next-auth.session-token'
   const csrfBase     = useSecureCookies ? '__Host-next-auth.csrf-token'      : 'next-auth.csrf-token'
   const p            = useSecureCookies ? '__Secure-next-auth.' : 'next-auth.'
 
-  response.cookies.delete(sessionBase)
-  for (let i = 0; i < 5; i++) response.cookies.delete(`${sessionBase}.${i}`)
+  const wipe = (name: string) =>
+    response.cookies.set({ name, value: '', maxAge: 0, path: '/', httpOnly: true, secure: useSecureCookies, sameSite: 'lax' })
 
-  response.cookies.delete(csrfBase)
-  response.cookies.delete(`${p}callback-url`)
-  response.cookies.delete(`${p}pkce.code_verifier`)
-  response.cookies.delete(`${p}state`)
-  response.cookies.delete(`${p}nonce`)
+  wipe(sessionBase)
+  for (let i = 0; i < 5; i++) wipe(`${sessionBase}.${i}`)
+
+  // CSRF uses __Host- prefix on HTTPS — no Domain, Path must be /, Secure required.
+  response.cookies.set({ name: csrfBase, value: '', maxAge: 0, path: '/', httpOnly: true, secure: useSecureCookies, sameSite: 'lax' })
+  wipe(`${p}callback-url`)
+  wipe(`${p}pkce.code_verifier`)
+  wipe(`${p}state`)
+  wipe(`${p}nonce`)
+
+  // Prevent Cloudflare or any CDN from caching this redirect — each call is
+  // user-specific (reads idToken) and must reach the origin every time.
+  response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate')
 
   return response
 }
