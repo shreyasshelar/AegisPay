@@ -1,3 +1,42 @@
 {{- if .Values.services.notification_service.enabled }}
-{{ include "aegispay.serviceNetworkPolicy" (dict "name" "notification-service" "svc" .Values.services.notification_service "context" .) }}
+# Notification-service has a custom NetworkPolicy instead of the shared helper
+# because cloudflared must be allowed to connect directly (WebSocket/STOMP).
+# Every other service is reached through the API gateway, which already allows
+# app:cloudflared.  Only notification-service needs the direct cloudflared rule.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: notification-service
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "aegispay.labels" . | nindent 4 }}
+    app.kubernetes.io/name: notification-service
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: notification-service
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        # API gateway (HTTP REST calls from backend)
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: api-gateway
+        # Other aegispay services (Kafka-driven calls, health checks)
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/part-of: aegispay
+        # Cloudflare Tunnel — browser WebSocket/STOMP connections arrive here
+        # directly from cloudflared, not via the API gateway.
+        # Matches the cloudflared deployment label set in the cloudflared template.
+        - podSelector:
+            matchLabels:
+              app: cloudflared
+      ports:
+        - protocol: TCP
+          port: {{ .Values.services.notification_service.port }}
+  egress:
+    - {}   # Allow all egress (Kafka, DB, Redis, external)
 {{- end }}
