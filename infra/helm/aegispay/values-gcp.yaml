@@ -6,13 +6,13 @@
 #
 # What this file overrides:
 #   - Secrets backend: Vault → GCP Secret Manager (saves ~512 MB RAM on the VM)
-#   - Image pull policy: IfNotPresent (saves egress on restart)
-# Everything else (domains, replicas, JVM tuning) comes from values-dev.yaml.
+# Everything else (domains, replicas, JVM tuning, imagePullPolicy) comes from values-dev.yaml.
 # ─────────────────────────────────────────────────────────────────────────────
 
 global:
-  # IfNotPresent avoids re-pulling on every pod restart when using SHA tags
-  imagePullPolicy: IfNotPresent
+  # imagePullPolicy intentionally NOT overridden here.
+  # values-dev.yaml sets Always — correct for dev where dev-latest tag is reused.
+  # When the CD pipeline is updated to push SHA-tagged images, set IfNotPresent here.
   # GHCR pull secret — images at ghcr.io/shreyasshelar/aegispay/* are private
   # The secret is created by setup-cluster-gcp.sh using the GHCR_TOKEN variable
   imagePullSecrets:
