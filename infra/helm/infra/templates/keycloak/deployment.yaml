@@ -90,7 +90,12 @@ spec:
             - name: KC_HOSTNAME_STRICT
               value: "false"
             - name: KC_HOSTNAME_STRICT_HTTPS
-              value: "false"
+              # Must be "true" — without this Keycloak generates http:// in the
+              # discovery doc issuer field.  openid-client re-fetches the issuer
+              # URL for validation; if the issuer is http:// but KEYCLOAK_ISSUER
+              # is https:// the mismatch triggers a re-discover via https:// which
+              # then hits the http.Agent restriction → ERR_INVALID_PROTOCOL.
+              value: "true"
             - name: KC_PROXY
               value: "edge"
           readinessProbe:
