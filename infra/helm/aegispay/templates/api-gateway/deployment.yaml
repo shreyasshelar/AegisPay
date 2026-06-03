@@ -72,6 +72,12 @@ spec:
                   name: aegispay-redis-secret
                   key: password
                   optional: true
+            # REDIS_URL overrides the embedded application.yml default (localhost:6379).
+            # Spring Data Redis `url` takes precedence over host/port, so the configmap's
+            # host/port values were being ignored — the app was connecting to localhost.
+            # Kubernetes $(VAR) substitution resolves REDIS_HOST/PORT/PASSWORD in the same env list.
+            - name: REDIS_URL
+              value: "redis://:$(REDIS_PASSWORD)@$(REDIS_HOST):$(REDIS_PORT)"
             - name: OAUTH2_PRIMARY_ISSUER_URI
               value: {{ .Values.global.oauth2.issuerUri | quote }}
             - name: JAVA_OPTS
