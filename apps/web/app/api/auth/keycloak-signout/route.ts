@@ -24,10 +24,13 @@ export async function GET(request: NextRequest) {
   const token  = await getToken({ req: request })
   const issuer = process.env.KEYCLOAK_ISSUER
 
-  // Derive post-logout destination from the same logic used by Keycloak's allowed
-  // redirect URIs (wildcards on localhost:3000 and the configured NEXTAUTH_URL host).
-  const origin        = request.nextUrl.origin
-  const postLogoutUri = `${origin}/login`
+  // Derive post-logout destination.
+  // MUST use NEXTAUTH_URL — request.nextUrl.origin inside the pod is the
+  // server's bind address (http://0.0.0.0:3000), not the public hostname.
+  // Keycloak rejects post_logout_redirect_uri values that aren't in its
+  // allowed-redirect-URIs list, so we must send the public HTTPS domain.
+  const appUrl        = (process.env.NEXTAUTH_URL ?? request.nextUrl.origin).replace(/\/$/, '')
+  const postLogoutUri = `${appUrl}/login`
 
   let redirectTarget = postLogoutUri
 
@@ -42,18 +45,20 @@ export async function GET(request: NextRequest) {
 
   // Clear all NextAuth session cookies — both the base name and the per-chunk
   // variants (.0, .1, …) that next-auth uses when the JWT > 4096 bytes.
+  // Use the NextAuth default names (no custom override in authOptions.cookies).
   const useSecureCookies = process.env.NEXTAUTH_URL?.startsWith('https://') ?? false
   const sessionBase  = useSecureCookies ? '__Secure-next-auth.session-token' : 'next-auth.session-token'
   const csrfBase     = useSecureCookies ? '__Host-next-auth.csrf-token'      : 'next-auth.csrf-token'
+  const p            = useSecureCookies ? '__Secure-next-auth.' : 'next-auth.'
 
   response.cookies.delete(sessionBase)
   for (let i = 0; i < 5; i++) response.cookies.delete(`${sessionBase}.${i}`)
 
   response.cookies.delete(csrfBase)
-  response.cookies.delete('next-auth.callback-url')
-  response.cookies.delete('next-auth.pkce.code_verifier')
-  response.cookies.delete('next-auth.state')
-  response.cookies.delete('next-auth.nonce')
+  response.cookies.delete(`${p}callback-url`)
+  response.cookies.delete(`${p}pkce.code_verifier`)
+  response.cookies.delete(`${p}state`)
+  response.cookies.delete(`${p}nonce`)
 
   return response
 }
