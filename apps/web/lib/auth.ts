@@ -1,5 +1,4 @@
 import { randomUUID } from 'crypto'
-import http from 'http'
 import type { NextAuthOptions, Session } from 'next-auth'
 import type { JWT } from 'next-auth/jwt'
 import KeycloakProvider from 'next-auth/providers/keycloak'
@@ -26,14 +25,11 @@ if (process.env.NODE_ENV === 'production') {
 const keycloakInternalBase = process.env.KEYCLOAK_INTERNAL_URL?.replace(/\/$/, '') || null
 const keycloakPublicBase   = (process.env.KEYCLOAK_ISSUER ?? '').replace(/\/$/, '')
 
-// Force IPv4 for openid-client — only needed in local dev where macOS resolves
-// localhost → ::1 but Keycloak listens on 127.0.0.1.
-// ⚠️  NEVER pass this agent (or any http.Agent) in production: openid-client passes
-// the agent to ALL HTTP/HTTPS requests including issuer re-discovery and JWKS fetches.
-// An http.Agent cannot handle https:// → ERR_INVALID_PROTOCOL on every callback.
-// In Kubernetes, CoreDNS always returns IPv4 so no custom agent is needed.
-const ipv4Agent = new http.Agent({ family: 4 })
-const isProduction = process.env.NODE_ENV === 'production'
+// NOTE: httpOptions (http.Agent) is intentionally NOT passed to KeycloakProvider.
+// openid-client shares the agent across ALL requests — HTTP AND HTTPS — so any
+// http.Agent (protocol='http:') passed here causes ERR_INVALID_PROTOCOL on the
+// HTTPS JWKS and issuer re-discovery requests.  In Kubernetes, CoreDNS always
+// resolves to IPv4, so no custom agent is needed for production.
 
 /**
  * Derive the AegisPay role from a list of Keycloak realm roles.
@@ -153,11 +149,6 @@ export const authOptions: NextAuthOptions = {
         userinfo: `${keycloakInternalBase}/protocol/openid-connect/userinfo`,
       } : {}),
       authorization: { params: { scope: 'openid email profile offline_access' } },
-      // In production omit httpOptions entirely — any custom value (even just
-      // { timeout }) causes openid-client to instantiate an http.Agent which it
-      // then passes to ALL requests including HTTPS (JWKS, issuer re-discovery),
-      // throwing ERR_INVALID_PROTOCOL.  In Kubernetes no custom agent is needed.
-      ...(!isProduction && { httpOptions: { agent: ipv4Agent, timeout: 10000 } }),
       profile(profile) {
         const p = profile as Record<string, unknown>
         const aegisUserId = p.aegispay_user_id as string | undefined
