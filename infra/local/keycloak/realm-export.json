@@ -1486,9 +1486,10 @@
       "config": {
         "syncMode": "IMPORT",
         "clientSecret": "**********",
-        "clientId": "",
+        "clientId": "0783de8c-078b-4968-98d1-acd858605aa3",
         "tenant": "common",
-        "defaultScope": "openid email profile User.Read"
+        "defaultScope": "openid profile email",
+        "useJwksUrl": "true"
       }
     }
   ],
