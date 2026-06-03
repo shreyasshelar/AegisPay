@@ -112,7 +112,13 @@ jobs:
                 BUILT+=("$svc")
               fi
             done
-            JAVA_JSON=$(printf '%s\n' "${BUILT[@]}" | jq -Rc . | jq -sc .)
+            # Guard: empty BUILT array — printf '' | jq produces [""] not []
+            # which triggers a spurious Docker job with matrix.service="" → Maven fails.
+            if [ ${#BUILT[@]} -eq 0 ]; then
+              JAVA_JSON='[]'
+            else
+              JAVA_JSON=$(printf '%s\n' "${BUILT[@]}" | jq -Rc . | jq -sc .)
+            fi
             echo "services=${JAVA_JSON}" >> "$GITHUB_OUTPUT"
           fi
 
