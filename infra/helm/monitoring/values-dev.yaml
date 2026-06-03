@@ -109,6 +109,11 @@ grafana:
       searchNamespace: ALL
     datasources:
       enabled: true
+      # Disable the chart's auto-generated isDefault:true Prometheus datasource.
+      # We provision it explicitly in datasources.yaml below so we can also
+      # add ClickHouse in the same file.  Without this, two isDefault:true
+      # datasources exist → Grafana crashes on startup.
+      defaultDatasourceEnabled: false
 
   # Auto-configure datasources
   datasources:
@@ -117,7 +122,7 @@ grafana:
       datasources:
         - name: Prometheus
           type: prometheus
-          url: http://monitoring-prometheus.monitoring.svc.cluster.local:9090
+          url: http://monitoring-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090
           isDefault: true
           access: proxy
         # AegisPay ClickHouse — analytics dashboards (payment ops, fraud, SLA)

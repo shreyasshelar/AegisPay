@@ -29,12 +29,14 @@ const keycloakPublicBase   = (process.env.KEYCLOAK_ISSUER ?? '').replace(/\/$/, 
 // Force IPv4 for openid-client — Next.js 14 native fetch (undici) resolves
 // localhost → ::1 on macOS; Keycloak only listens on 127.0.0.1 → 3.5s timeout.
 //
-// IMPORTANT: http.Agent must NOT be passed for https:// URLs — Node throws
-// "Protocol 'https:' not supported. Expected 'http:'".  Only attach the agent
-// when the effective Keycloak URL is http:// (in-cluster internal URL).
-// For https:// (public external URL) omit the agent and let openid-client use
-// its default https.Agent.
+// ⚠️  PRODUCTION: do NOT pass ipv4Agent in httpOptions.
+// openid-client makes HTTPS requests (JWKS key fetch, issuer re-discovery on
+// every callback) using the same agent.  An http.Agent cannot handle https://
+// and throws ERR_INVALID_PROTOCOL.  In Kubernetes, CoreDNS always returns IPv4
+// so no custom agent is needed.  The agent is only needed for local dev where
+// macOS resolves localhost → ::1 while Keycloak listens on 127.0.0.1.
 const ipv4Agent = new http.Agent({ family: 4 })
+const isProduction = process.env.NODE_ENV === 'production'
 
 /**
  * Derive the AegisPay role from a list of Keycloak realm roles.
@@ -154,11 +156,13 @@ export const authOptions: NextAuthOptions = {
         userinfo: `${keycloakInternalBase}/protocol/openid-connect/userinfo`,
       } : {}),
       authorization: { params: { scope: 'openid email profile offline_access' } },
-      // Only attach the IPv4 http.Agent when the effective Keycloak base is http://.
-      // Passing an http.Agent to an https:// request throws ERR_INVALID_PROTOCOL.
-      httpOptions: keycloakInternalBase?.startsWith('http://')
-        ? { agent: ipv4Agent, timeout: 10000 }
-        : { timeout: 10000 },
+      // In production (Kubernetes) omit the agent entirely — openid-client makes
+      // HTTPS requests (JWKS, issuer re-discovery) using the same agent, and an
+      // http.Agent throws ERR_INVALID_PROTOCOL on those HTTPS calls.
+      // In local dev the IPv4 agent is needed because macOS resolves localhost→::1.
+      httpOptions: isProduction
+        ? { timeout: 10000 }
+        : { agent: ipv4Agent, timeout: 10000 },
       profile(profile) {
         const p = profile as Record<string, unknown>
         const aegisUserId = p.aegispay_user_id as string | undefined
