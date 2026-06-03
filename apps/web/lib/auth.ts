@@ -153,19 +153,11 @@ export const authOptions: NextAuthOptions = {
         userinfo: `${keycloakInternalBase}/protocol/openid-connect/userinfo`,
       } : {}),
       authorization: { params: { scope: 'openid email profile offline_access' } },
-<<<<<<< HEAD
-      // Only attach the IPv4 http.Agent when the effective Keycloak base is http://.
-      // Passing an http.Agent to an https:// request throws ERR_INVALID_PROTOCOL.
-      httpOptions: keycloakInternalBase?.startsWith('http://')
-        ? { agent: ipv4Agent, timeout: 10000 }
-        : { timeout: 10000 },
-=======
       // In production omit httpOptions entirely — any custom value (even just
       // { timeout }) causes openid-client to instantiate an http.Agent which it
       // then passes to ALL requests including HTTPS (JWKS, issuer re-discovery),
       // throwing ERR_INVALID_PROTOCOL.  In Kubernetes no custom agent is needed.
       ...(!isProduction && { httpOptions: { agent: ipv4Agent, timeout: 10000 } }),
->>>>>>> d6663e5 (fix(auth): omit httpOptions entirely in production — ERR_INVALID_PROTOCOL root fix)
       profile(profile) {
         const p = profile as Record<string, unknown>
         const aegisUserId = p.aegispay_user_id as string | undefined
