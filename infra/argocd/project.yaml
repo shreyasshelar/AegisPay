@@ -30,6 +30,12 @@ spec:
   clusterResourceWhitelist:
     - group: ""
       kind: Namespace
+    # Required for pod-cleanup CronJob RBAC — ClusterRole/ClusterRoleBinding let
+    # the cleanup SA list+delete pods across all namespaces (aegispay + aegispay-infra).
+    - group: "rbac.authorization.k8s.io"
+      kind: ClusterRole
+    - group: "rbac.authorization.k8s.io"
+      kind: ClusterRoleBinding
 
   namespaceResourceWhitelist:
     - group: "apps"
