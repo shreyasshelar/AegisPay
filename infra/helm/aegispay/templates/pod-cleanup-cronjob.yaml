@@ -1,0 +1,129 @@
+# CronJob: force-delete pods stuck in Unknown state.
+#
+# Why this is needed:
+#   When the k3s node loses contact with the kubelet (VM restart, containerd crash,
+#   OOM kill of the container runtime), running pods transition to Unknown state.
+#   Kubernetes does NOT automatically delete them — it waits for the node to come
+#   back.  On a single-node cluster the node does come back, but the old Unknown
+#   pod objects remain until explicitly deleted.  Deployment/StatefulSet controllers
+#   only spawn a replacement once the stuck pod is gone.
+#
+# This CronJob runs every 5 minutes, scans all namespaces, and force-deletes
+# any pod in Unknown phase.  It is deliberately namespace-scoped via a
+#   ClusterRole so it can clean up aegispay AND aegispay-infra namespaces.
+#
+# RBAC: ServiceAccount → ClusterRole (get/list/delete pods) → CronJob.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pod-cleanup
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "aegispay.labels" . | nindent 4 }}
+    app.kubernetes.io/name: pod-cleanup
+    app.kubernetes.io/component: operations
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: aegispay-pod-cleanup
+  labels:
+    {{- include "aegispay.labels" . | nindent 4 }}
+    app.kubernetes.io/name: pod-cleanup
+    app.kubernetes.io/component: operations
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: aegispay-pod-cleanup
+  labels:
+    {{- include "aegispay.labels" . | nindent 4 }}
+    app.kubernetes.io/name: pod-cleanup
+    app.kubernetes.io/component: operations
+subjects:
+  - kind: ServiceAccount
+    name: pod-cleanup
+    namespace: {{ .Values.global.namespace }}
+roleRef:
+  kind: ClusterRole
+  name: aegispay-pod-cleanup
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: pod-cleanup
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "aegispay.labels" . | nindent 4 }}
+    app.kubernetes.io/name: pod-cleanup
+    app.kubernetes.io/component: operations
+spec:
+  # Every 5 minutes — fast enough to catch disruptions without noisy logs.
+  schedule: "*/5 * * * *"
+  # Keep the last 3 successful and 1 failed job for debugging.
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  # If the previous run is still going, skip this invocation.
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      # Pod should complete in well under 30s normally; 120s is a generous limit.
+      activeDeadlineSeconds: 120
+      template:
+        metadata:
+          labels:
+            {{- include "aegispay.labels" . | nindent 12 }}
+            app.kubernetes.io/name: pod-cleanup
+        spec:
+          serviceAccountName: pod-cleanup
+          automountServiceAccountToken: true
+          restartPolicy: OnFailure
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534   # nobody
+            runAsGroup: 65534
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: cleanup
+              # bitnami/kubectl is a minimal image with kubectl pre-installed.
+              image: bitnami/kubectl:1.30
+              imagePullPolicy: IfNotPresent
+              command:
+                - /bin/bash
+                - -c
+                - |
+                  set -euo pipefail
+                  DELETED=0
+                  # Scan every namespace for Unknown pods.
+                  while IFS= read -r line; do
+                    NS=$(echo "$line"  | awk '{print $1}')
+                    POD=$(echo "$line" | awk '{print $2}')
+                    if [ -n "$POD" ]; then
+                      echo "$(date -u '+%Y-%m-%dT%H:%M:%SZ') Force-deleting Unknown pod $POD in $NS"
+                      kubectl delete pod "$POD" -n "$NS" --force --grace-period=0 || true
+                      DELETED=$((DELETED + 1))
+                    fi
+                  done < <(kubectl get pods --all-namespaces \
+                                --field-selector='status.phase=Unknown' \
+                                --no-headers 2>/dev/null || true)
+                  echo "$(date -u '+%Y-%m-%dT%H:%M:%SZ') Scan complete — deleted $DELETED Unknown pod(s)."
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  cpu: 100m
+                  memory: 64Mi
