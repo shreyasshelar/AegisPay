@@ -169,6 +169,14 @@ services:
           secretKeyRef:
             name: aegispay-redis-secret
             key: password
+      # Stripe key for POST /api/v1/ledger/topup/intent — application.yml falls back
+      # to "sk_test_placeholder_local_dev" when STRIPE_SECRET_KEY is not set,
+      # which Stripe rejects with 422 "Invalid API Key".
+      - name: STRIPE_SECRET_KEY
+        valueFrom:
+          secretKeyRef:
+            name: aegispay-stripe-secret
+            key: secret-key
 
   payment_orchestrator:
     enabled: true
