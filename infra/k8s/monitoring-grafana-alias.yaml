@@ -1,0 +1,37 @@
+# grafana alias Service — monitoring namespace
+#
+# Problem: cloudflared tunnel is configured in the Cloudflare Zero Trust dashboard
+# to route aegispay-metrics.shreyasshelar.uk to:
+#   http://grafana.monitoring.svc.cluster.local:80
+#
+# But kube-prometheus-stack names its Grafana service "monitoring-grafana", not
+# "grafana".  The mismatch causes a 502 Bad Gateway from Cloudflare because
+# cloudflared can't resolve the DNS name.
+#
+# Fix: create a ClusterIP service named "grafana" that selects the same pods as
+# monitoring-grafana (matched by app.kubernetes.io/name=grafana,
+# app.kubernetes.io/instance=monitoring).  This gives cloudflared the expected
+# DNS name without modifying the kube-prometheus-stack release or the tunnel config.
+#
+# Apply manually once, or include in a GitOps bootstrap step.
+#   kubectl apply -f infra/k8s/monitoring-grafana-alias.yaml
+#
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: grafana
+    app.kubernetes.io/component: grafana-alias
+    app.kubernetes.io/managed-by: manual
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/instance: monitoring
+    app.kubernetes.io/name: grafana
+  ports:
+    - name: http
+      port: 80
+      targetPort: 3000
+      protocol: TCP

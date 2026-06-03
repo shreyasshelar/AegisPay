@@ -1,0 +1,22 @@
+[Unit]
+Description=AegisPay — force-delete Unknown pods after k3s startup
+Documentation=https://github.com/shreyasshelar/AegisPay
+# Start after k3s is running (API server is up)
+After=k3s.service network-online.target
+Requires=k3s.service
+# Do not block k3s — start in parallel once k3s unit is active
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# The script waits internally for the API server — no extra ExecStartPre delay needed.
+ExecStart=/usr/local/bin/aegispay-pod-cleanup.sh
+# Keep running so `systemctl status` shows last-run result and exit code.
+RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal
+# k3s writes its kubeconfig to /etc/rancher/k3s/k3s.yaml (root-owned).
+Environment=KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+
+[Install]
+WantedBy=multi-user.target
