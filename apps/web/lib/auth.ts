@@ -22,19 +22,18 @@ if (process.env.NODE_ENV === 'production') {
 // pod). This adds ~100ms latency per call and fails if Cloudflare is unreachable.
 // With KEYCLOAK_INTERNAL_URL, server-side calls stay in-cluster; the browser still
 // redirects to the public Keycloak URL for the login form.
-// Use || null so an empty string (env var set but blank) is treated the same as unset.
+// Use || null so empty string env var (env var set but blank) is treated as unset.
 const keycloakInternalBase = process.env.KEYCLOAK_INTERNAL_URL?.replace(/\/$/, '') || null
 const keycloakPublicBase   = (process.env.KEYCLOAK_ISSUER ?? '').replace(/\/$/, '')
 
-// Force IPv4 for openid-client — Next.js 14 native fetch (undici) resolves
-// localhost → ::1 on macOS; Keycloak only listens on 127.0.0.1 → 3.5s timeout.
-//
-// IMPORTANT: http.Agent must NOT be passed for https:// URLs — Node throws
-// "Protocol 'https:' not supported. Expected 'http:'".  Only attach the agent
-// when the effective Keycloak URL is http:// (in-cluster internal URL).
-// For https:// (public external URL) omit the agent and let openid-client use
-// its default https.Agent.
+// Force IPv4 for openid-client — only needed in local dev where macOS resolves
+// localhost → ::1 but Keycloak listens on 127.0.0.1.
+// ⚠️  NEVER pass this agent (or any http.Agent) in production: openid-client passes
+// the agent to ALL HTTP/HTTPS requests including issuer re-discovery and JWKS fetches.
+// An http.Agent cannot handle https:// → ERR_INVALID_PROTOCOL on every callback.
+// In Kubernetes, CoreDNS always returns IPv4 so no custom agent is needed.
 const ipv4Agent = new http.Agent({ family: 4 })
+const isProduction = process.env.NODE_ENV === 'production'
 
 /**
  * Derive the AegisPay role from a list of Keycloak realm roles.
@@ -154,11 +153,19 @@ export const authOptions: NextAuthOptions = {
         userinfo: `${keycloakInternalBase}/protocol/openid-connect/userinfo`,
       } : {}),
       authorization: { params: { scope: 'openid email profile offline_access' } },
+<<<<<<< HEAD
       // Only attach the IPv4 http.Agent when the effective Keycloak base is http://.
       // Passing an http.Agent to an https:// request throws ERR_INVALID_PROTOCOL.
       httpOptions: keycloakInternalBase?.startsWith('http://')
         ? { agent: ipv4Agent, timeout: 10000 }
         : { timeout: 10000 },
+=======
+      // In production omit httpOptions entirely — any custom value (even just
+      // { timeout }) causes openid-client to instantiate an http.Agent which it
+      // then passes to ALL requests including HTTPS (JWKS, issuer re-discovery),
+      // throwing ERR_INVALID_PROTOCOL.  In Kubernetes no custom agent is needed.
+      ...(!isProduction && { httpOptions: { agent: ipv4Agent, timeout: 10000 } }),
+>>>>>>> d6663e5 (fix(auth): omit httpOptions entirely in production — ERR_INVALID_PROTOCOL root fix)
       profile(profile) {
         const p = profile as Record<string, unknown>
         const aegisUserId = p.aegispay_user_id as string | undefined
