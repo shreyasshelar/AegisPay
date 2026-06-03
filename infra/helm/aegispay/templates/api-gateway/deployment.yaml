@@ -88,11 +88,23 @@ spec:
               readOnly: true
           resources:
             {{- toYaml .Values.services.api_gateway.resources | nindent 12 }}
+          # startupProbe gates liveness/readiness until the app is ready to serve.
+          # api-gateway spends ~60-85 s on JWT decoder pre-warm (Keycloak OIDC
+          # discovery) before the actuator readiness endpoint becomes healthy.
+          # failureThreshold * periodSeconds = 100 * 2 = 200 s maximum startup window.
+          startupProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: management
+            initialDelaySeconds: 30
+            periodSeconds: 2
+            timeoutSeconds: 3
+            failureThreshold: 100   # 200 s total window — covers slow Keycloak discovery
           livenessProbe:
             httpGet:
               path: /actuator/health/liveness
               port: management          # ③ probes also use management port
-            initialDelaySeconds: 30
+            initialDelaySeconds: 0     # startupProbe already ensures the app is live
             periodSeconds: 15
             timeoutSeconds: 5
             failureThreshold: 3
@@ -100,7 +112,7 @@ spec:
             httpGet:
               path: /actuator/health/readiness
               port: management
-            initialDelaySeconds: 20
+            initialDelaySeconds: 0     # startupProbe already ensures the app is ready
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 3
