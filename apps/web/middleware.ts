@@ -17,10 +17,17 @@ export default withAuth(
       // next-auth splits cookies > 4096 bytes into chunks (.0, .1, …).
       // Delete both the base name and all chunk variants so the stale session
       // is fully cleared and the user isn't looped back by a surviving chunk.
+      //
+      // Use cookies.set() with secure:true instead of cookies.delete() — Edge
+      // Runtime's delete() omits the Secure flag, which browsers silently
+      // ignore for __Secure-* prefix cookies.
+      const secure = req.nextUrl.protocol === 'https:'
+      const wipe = (name: string) =>
+        res.cookies.set({ name, value: '', maxAge: 0, path: '/', httpOnly: true, secure, sameSite: 'lax' })
       const bases = ['next-auth.session-token', '__Secure-next-auth.session-token']
       for (const base of bases) {
-        res.cookies.delete(base)
-        for (let i = 0; i < 5; i++) res.cookies.delete(`${base}.${i}`)
+        wipe(base)
+        for (let i = 0; i < 5; i++) wipe(`${base}.${i}`)
       }
       return res
     }
