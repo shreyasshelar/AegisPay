@@ -114,21 +114,16 @@ async function refreshAccessToken(token: JWT): Promise<JWT> {
   }
 }
 
-// On HTTP (LAN IP dev), suppress __Host- prefix cookies — browsers only accept
-// __Host- on HTTPS or localhost, so they silently drop them and the state is lost.
-const useSecureCookies = process.env.NEXTAUTH_URL?.startsWith('https://') ?? false
-const cookiePrefix = useSecureCookies ? '__Secure-' : 'next-auth.'
-const hostCookiePrefix = useSecureCookies ? '__Host-' : 'next-auth.'
+// NOTE: Cookie names use NextAuth defaults intentionally.
+// NextAuth v4's `withAuth` middleware reads the session token by the default
+// name (`__Secure-next-auth.session-token` for HTTPS, `next-auth.session-token`
+// for HTTP).  Custom names here would cause `withAuth` to not find the cookie →
+// it treats every request as unauthenticated → infinite redirect loop between
+// /dashboard and /login even when the session is valid.
+// NextAuth's built-in defaults already set the correct __Secure- prefix, Secure
+// flag, httpOnly, sameSite=lax, and path=/ for each environment.
 
 export const authOptions: NextAuthOptions = {
-  cookies: {
-    sessionToken:      { name: `${cookiePrefix}session-token`,       options: { httpOnly: true, sameSite: 'lax', path: '/', secure: useSecureCookies } },
-    callbackUrl:       { name: `${cookiePrefix}callback-url`,        options: { httpOnly: true, sameSite: 'lax', path: '/', secure: useSecureCookies } },
-    csrfToken:         { name: `${hostCookiePrefix}csrf-token`,      options: { httpOnly: true, sameSite: 'lax', path: '/', secure: useSecureCookies } },
-    pkceCodeVerifier:  { name: `${cookiePrefix}pkce.code_verifier`,  options: { httpOnly: true, sameSite: 'lax', path: '/', secure: useSecureCookies, maxAge: 60 * 15 } },
-    state:             { name: `${cookiePrefix}state`,               options: { httpOnly: true, sameSite: 'lax', path: '/', secure: useSecureCookies, maxAge: 60 * 15 } },
-    nonce:             { name: `${cookiePrefix}nonce`,               options: { httpOnly: true, sameSite: 'lax', path: '/', secure: useSecureCookies } },
-  },
   providers: [
     KeycloakProvider({
       clientId:     process.env.KEYCLOAK_ID!,
