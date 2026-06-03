@@ -125,6 +125,13 @@ services:
       maxReplicas: 12
       targetCPUUtilizationPercentage: 65
     extraEnv:
+      # Redis idempotency key store — application.yml falls back to "aegispay_dev"
+      # which is wrong in production; the real password is in aegispay-redis-secret.
+      - name: REDIS_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: aegispay-redis-secret
+            key: password
       - name: MONGO_PASSWORD
         valueFrom:
           secretKeyRef:
@@ -154,6 +161,14 @@ services:
       minReplicas: 3
       maxReplicas: 12
       targetCPUUtilizationPercentage: 65
+    extraEnv:
+      # Redis idempotency key store — application.yml falls back to "aegispay_dev"
+      # which is wrong in production; the real password is in aegispay-redis-secret.
+      - name: REDIS_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: aegispay-redis-secret
+            key: password
 
   payment_orchestrator:
     enabled: true
@@ -205,6 +220,14 @@ services:
       minReplicas: 2
       maxReplicas: 8
       targetCPUUtilizationPercentage: 70
+    extraEnv:
+      # Redis blacklist / idempotency store — application.yml falls back to "aegispay_dev"
+      # which is wrong in production; the real password is in aegispay-redis-secret.
+      - name: REDIS_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: aegispay-redis-secret
+            key: password
 
   notification_service:
     enabled: true
