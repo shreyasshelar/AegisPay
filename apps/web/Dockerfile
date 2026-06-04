@@ -43,11 +43,22 @@ ARG NEXT_PUBLIC_API_BASE_URL=https://aegispay-api.shreyasshelar.uk
 ARG NEXT_PUBLIC_WS_BASE_URL=wss://aegispay-ws.shreyasshelar.uk
 ARG NEXTAUTH_URL=https://aegispay.shreyasshelar.uk
 ARG KEYCLOAK_ISSUER=https://aegispay-keycloak.shreyasshelar.uk/realms/aegispay
+# Firebase Phone Auth — NEXT_PUBLIC_* vars are baked into the JS bundle at build time.
+# Values are public (appear in browser code); pass them via CI build-args.
+# Project: aegispay (GCP project ID = Firebase project ID)
+ARG NEXT_PUBLIC_FIREBASE_API_KEY
+ARG NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=aegispay.firebaseapp.com
+ARG NEXT_PUBLIC_FIREBASE_PROJECT_ID=aegispay
+ARG NEXT_PUBLIC_FIREBASE_APP_ID
 
 ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}
 ENV NEXT_PUBLIC_WS_BASE_URL=${NEXT_PUBLIC_WS_BASE_URL}
 ENV NEXTAUTH_URL=${NEXTAUTH_URL}
 ENV KEYCLOAK_ISSUER=${KEYCLOAK_ISSUER}
+ENV NEXT_PUBLIC_FIREBASE_API_KEY=${NEXT_PUBLIC_FIREBASE_API_KEY}
+ENV NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=${NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN}
+ENV NEXT_PUBLIC_FIREBASE_PROJECT_ID=${NEXT_PUBLIC_FIREBASE_PROJECT_ID}
+ENV NEXT_PUBLIC_FIREBASE_APP_ID=${NEXT_PUBLIC_FIREBASE_APP_ID}
 # Dummy build-time secrets (real values injected at runtime via K8s secrets)
 ENV NEXTAUTH_SECRET=build-time-placeholder
 ENV KEYCLOAK_ID=aegispay-web
