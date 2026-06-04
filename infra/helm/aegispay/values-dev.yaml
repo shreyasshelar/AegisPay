@@ -35,7 +35,7 @@ global:
 # values-gcp.yaml (applied after this file) sets useGcpSm: true which gates
 # all ESO ClusterSecretStore references in externalsecrets.yaml.
 secrets:
-  useGcpSm: true           # ESO ClusterSecretStore → GCP Secret Manager
+  useGcpSm: true # ESO ClusterSecretStore → GCP Secret Manager
   db:
     secretPath: "secret/data/aegispay/database"
   redis:
@@ -284,11 +284,11 @@ services:
     enabled: true
     image:
       repository: web
-      tag: dev-latest
+      tag: dev-3cc7b3600d84393bcdaf56012598b808e07ec1e3
     # Updated by cd-dev.yml on every successful web image build.
     # Injected as a pod annotation so ArgoCD detects a spec change and rolls
     # the pod even when the image tag stays "dev-latest" (reused tag scenario).
-    deployTimestamp: "initial"
+    deployTimestamp: "3cc7b3600d84393bcdaf56012598b808e07ec1e3"
     replicas: 1
     port: 3000
     resources:
@@ -299,7 +299,7 @@ services:
         cpu: 500m
         memory: 512Mi
     autoscaling:
-      enabled: false          # single node — HPA not useful on dev
+      enabled: false # single node — HPA not useful on dev
       minReplicas: 1
       maxReplicas: 3
       targetCPUUtilizationPercentage: 70
@@ -365,7 +365,6 @@ monitoring:
 clickhouse:
   initJob:
     enabled: false
-
 # ─── Storage class ────────────────────────────────────────────────────────────
 # local-path is the default k3s StorageClass — backed by a hostPath on your server.
 defaultStorageClass: local-path
