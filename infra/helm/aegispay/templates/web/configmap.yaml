@@ -9,16 +9,23 @@ metadata:
     {{- include "aegispay.labels" . | nindent 4 }}
     app.kubernetes.io/name: web
 data:
+  # ── Browser-side (NEXT_PUBLIC_*) ────────────────────────────────────────────
+  # These are baked into the JS bundle at build time and visible to the browser.
   NEXT_PUBLIC_API_BASE_URL: {{ .Values.services.web.env.apiBaseUrl | default "https://aegispay-api.shreyasshelar.uk" | quote }}
   NEXT_PUBLIC_WS_BASE_URL: {{ .Values.services.web.env.wsBaseUrl | default "wss://aegispay-ws.shreyasshelar.uk" | quote }}
+
+  # ── Server-side (Next.js runtime, auth.ts) ──────────────────────────────────
+  # API_BASE_URL: internal cluster URL used by auth.ts for server-side /register
+  # calls. Using the internal URL avoids hairpin routing and works when the public
+  # URL is unreachable from inside the cluster. MUST NOT have NEXT_PUBLIC_ prefix —
+  # this should never be exposed to the browser (server-side secrets context).
+  API_BASE_URL: {{ include "aegispay.apiGatewayInternalUrl" . | quote }}
+
   NEXTAUTH_URL: {{ .Values.services.web.env.nextauthUrl | default "https://aegispay.shreyasshelar.uk" | quote }}
   KEYCLOAK_ID: {{ .Values.services.web.env.keycloakClientId | default "aegispay-web" | quote }}
   # Public URL — used for JWT `iss` validation and browser authorization redirect
   KEYCLOAK_ISSUER: {{ .Values.global.oauth2.issuerUri | quote }}
   # Internal cluster URL — used for server-side OIDC discovery + token exchange.
   # Avoids hairpin routing through Cloudflare on every NextAuth server-side call.
-  # Keycloak returns public hostname in discovery responses (KC_HOSTNAME), so the
-  # openid-client issuer check still passes against KEYCLOAK_ISSUER above.
-  # Derived from global.infraNamespace via _helpers.tpl; override with explicit value if needed.
   KEYCLOAK_INTERNAL_URL: {{ include "aegispay.keycloakInternalUrl" . | quote }}
 {{- end }}
