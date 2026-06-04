@@ -104,6 +104,15 @@ services:
       minReplicas: 2
       maxReplicas: 6
       targetCPUUtilizationPercentage: 70
+    extraEnv:
+      # Redis password — application.yml falls back to "aegispay_dev" without this;
+      # Redis requires auth so registration (idempotency key check) fails with
+      # RedisConnectionFailureException, causing social login users to get 500 on /register.
+      - name: REDIS_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: aegispay-redis-secret
+            key: password
 
   transaction_service:
     enabled: true
