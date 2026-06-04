@@ -247,6 +247,10 @@ jobs:
           build-args: |
             NEXT_PUBLIC_API_BASE_URL=https://aegispay-api.shreyasshelar.uk
             NEXT_PUBLIC_WS_BASE_URL=wss://aegispay-ws.shreyasshelar.uk
+            NEXT_PUBLIC_FIREBASE_API_KEY=${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}
+            NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}
+            NEXT_PUBLIC_FIREBASE_PROJECT_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}
+            NEXT_PUBLIC_FIREBASE_APP_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}
 
   # ── Patch image tags in values-dev.yaml and commit ────────────────────────
   update-image-tags:

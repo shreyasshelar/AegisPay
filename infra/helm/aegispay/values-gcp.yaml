@@ -60,6 +60,14 @@ secrets:
   microsoft:
     clientIdSecretName: "aegispay-microsoft-client-id"
     clientSecretSecretName: "aegispay-microsoft-client-secret"
+  # Firebase Phone Auth — NEXT_PUBLIC_* vars baked into the web Docker image at build time.
+  # Passed as Docker build-args from GitHub secrets in cd-dev.yml / ci-web.yml.
+  # GCP Secret Manager mirrors (source of truth): aegispay-firebase-api-key, etc.
+  firebase:
+    apiKeySecretName: "aegispay-firebase-api-key"
+    authDomainSecretName: "aegispay-firebase-auth-domain"
+    projectIdSecretName: "aegispay-firebase-project-id"
+    appIdSecretName: "aegispay-firebase-app-id"
   # Web frontend secrets
   web:
     nextauthSecretName: "aegispay-nextauth-secret"
