@@ -20,6 +20,10 @@ spec:
         app.kubernetes.io/part-of: aegispay
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/web/configmap.yaml") . | sha256sum }}
+        # deploy/timestamp changes on every web image push so ArgoCD detects a
+        # pod-spec diff and rolls the pod even when the image tag is reused
+        # (e.g. "dev-latest").  Updated by cd-dev.yml via yq on values-dev.yaml.
+        deploy/timestamp: {{ .Values.services.web.deployTimestamp | default "initial" | quote }}
     spec:
       serviceAccountName: default
       securityContext:
