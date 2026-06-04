@@ -1,5 +1,5 @@
 import { initializeApp, getApps } from 'firebase/app'
-import { getAuth, initializeRecaptchaConfig } from 'firebase/auth'
+import { getAuth } from 'firebase/auth'
 
 /**
  * Firebase is used for phone-number OTP verification ONLY.
@@ -51,13 +51,12 @@ if (apiKey && authDomain && projectId && appId) {
       console.info('[firebase] ⚠ appVerificationDisabledForTesting=true — use test phone numbers only')
     }
 
-    // Pre-warm reCAPTCHA Enterprise config on module load.
-    // signInWithPhoneNumber auto-initialises if this is not called first, but calling
-    // it eagerly here avoids a round-trip delay when the user clicks "Send OTP".
-    // Requires firebase >= 11 / @firebase/auth >= 1.8.0.
-    initializeRecaptchaConfig(firebaseAuth).catch(e => {
-      console.warn('[firebase] reCAPTCHA Enterprise pre-warm failed (non-fatal):', e.message)
-    })
+    // Note: initializeRecaptchaConfig() is intentionally NOT called here.
+    // This project uses phoneEnforcementState = "OFF" (standard reCAPTCHA v2
+    // invisible, not Enterprise).  Calling initializeRecaptchaConfig when
+    // phoneEnforcementState is OFF throws "recaptchaKey undefined" because
+    // the Firebase backend returns no phone reCAPTCHA key in that mode.
+    // The RecaptchaVerifier in profile-client.tsx handles the v2 flow instead.
   } catch (e) {
     console.warn('[firebase] Init failed — phone OTP disabled:', e)
   }
