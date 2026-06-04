@@ -175,7 +175,7 @@ jobs:
       - name: Build JAR (shared libs + service)
         run: |
           mvn --batch-mode --no-transfer-progress clean package \
-            -pl libs/common-domain,libs/common-events,libs/common-security,libs/common-kafka,libs/common-observability,services/${{ matrix.service }} \
+            -pl libs/common-domain,libs/common-security,libs/common-kafka,libs/common-observability,services/${{ matrix.service }} \
             --also-make \
             -DskipTests
 
