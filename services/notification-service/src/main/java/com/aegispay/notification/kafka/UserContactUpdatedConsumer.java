@@ -52,11 +52,12 @@ public class UserContactUpdatedConsumer {
                             .build());
 
             contact.setPhoneNumber(event.getPhoneNumber());
+            contact.setSmsNotificationsEnabled(event.isSmsNotificationsEnabled());
             contact.setUpdatedAt(Instant.now());
             userContactRepository.save(contact);
 
-            log.info("UserContactDocument updated: userId={} hasPhone={}",
-                    userId, event.getPhoneNumber() != null);
+            log.info("UserContactDocument updated: userId={} hasPhone={} smsEnabled={}",
+                    userId, event.getPhoneNumber() != null, event.isSmsNotificationsEnabled());
 
         } catch (Exception e) {
             log.error("Error processing user.contact.updated: key={} error={}",

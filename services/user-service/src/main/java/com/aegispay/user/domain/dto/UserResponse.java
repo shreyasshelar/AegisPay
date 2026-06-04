@@ -28,7 +28,14 @@ public record UserResponse(
      * Shown directly in the profile KYC banner so the user knows what to fix
      * before re-uploading.
      */
-    String rejectionReason
+    String rejectionReason,
+    /**
+     * Whether the user wants to receive SMS notifications.
+     * {@code true} only when a verified phone number is on file AND the user has
+     * not manually disabled it via the profile preferences toggle.
+     * Always {@code false} when {@code phone} is {@code null}.
+     */
+    boolean smsNotificationsEnabled
 ) {
     /**
      * Returns a copy of this response with the given rejection reason attached.
@@ -39,6 +46,6 @@ public record UserResponse(
     public UserResponse withRejectionReason(String reason) {
         return new UserResponse(id, externalId, name, email, phone,
                 firstName, lastName, role, tenantId, kycStatus,
-                active, createdAt, updatedAt, reason);
+                active, createdAt, updatedAt, reason, smsNotificationsEnabled);
     }
 }

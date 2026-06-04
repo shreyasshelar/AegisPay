@@ -29,5 +29,16 @@ public class UserContactDocument {
     @Nullable
     private String maskedEmail;
 
+    /**
+     * Whether the user has opted in to SMS notifications.
+     * Synced from user-service via {@code user.contact.updated} Kafka events.
+     *
+     * <p>Gate logic in {@link com.aegispay.notification.kafka.TransactionStatusConsumer}:
+     * SMS is dispatched only when BOTH {@code smsNotificationsEnabled == true}
+     * AND {@code phoneNumber} is non-null.
+     */
+    @Builder.Default
+    private boolean smsNotificationsEnabled = false;
+
     private Instant updatedAt;
 }

@@ -58,6 +58,7 @@ public class UserEventProducer {
                 .schemaVersion(1)
                 .userId(user.getId())
                 .phoneNumber(user.getPhone())
+                .smsNotificationsEnabled(user.isSmsNotificationsEnabled())
                 .build();
 
         return OutboxEntry.builder()

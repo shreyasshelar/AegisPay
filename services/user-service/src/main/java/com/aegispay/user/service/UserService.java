@@ -357,13 +357,62 @@ public class UserService {
                     "You can only update your own phone number.", HttpStatus.FORBIDDEN);
         }
 
-        user.setPhone(phone == null || phone.isBlank() ? null : phone);
+        boolean newPhonePresent = phone != null && !phone.isBlank();
+        user.setPhone(newPhonePresent ? phone : null);
+
+        // Auto-enable SMS when a verified phone is first saved.
+        // Auto-disable when the number is removed (can't receive SMS without a number).
+        if (newPhonePresent) {
+            user.setSmsNotificationsEnabled(true);
+        } else {
+            user.setSmsNotificationsEnabled(false);
+        }
+
         userRepository.save(user);
 
         OutboxEntry outboxEntry = eventProducer.buildUserContactUpdatedEntry(user);
         outboxEntryRepository.save(outboxEntry);
 
-        log.info("Phone updated: userId={} hasPhone={}", userId, user.getPhone() != null);
+        log.info("Phone updated: userId={} hasPhone={} smsEnabled={}",
+                userId, newPhonePresent, user.isSmsNotificationsEnabled());
+        return userMapper.toResponse(user);
+    }
+
+    /**
+     * Toggles SMS notification preference for the user.
+     *
+     * <p>Enabling SMS requires a verified phone number to already be on file.
+     * If the user has no phone, enabling SMS returns 422 — the client should prevent
+     * this state, but the server is the authoritative guard.
+     *
+     * <p>Disabling is always allowed regardless of phone status.
+     *
+     * @param userId            the AegisPay domain UUID of the user to update
+     * @param enabled           new SMS preference value
+     * @param callerExternalId  Keycloak {@code sub} — self-service only
+     */
+    @Transactional
+    public UserResponse updateSmsPreference(UUID userId, boolean enabled, String callerExternalId) {
+        User user = requireUser(userId);
+        if (!user.getExternalId().equals(callerExternalId)) {
+            throw new AegisPayException("FORBIDDEN",
+                    "You can only update your own notification preferences.", HttpStatus.FORBIDDEN);
+        }
+
+        if (enabled && (user.getPhone() == null || user.getPhone().isBlank())) {
+            throw new AegisPayException("PHONE_REQUIRED",
+                    "Add and verify a phone number before enabling SMS notifications.",
+                    HttpStatus.UNPROCESSABLE_ENTITY);
+        }
+
+        user.setSmsNotificationsEnabled(enabled);
+        userRepository.save(user);
+
+        // Propagate preference change to notification-service read-model via Outbox → Kafka.
+        OutboxEntry outboxEntry = eventProducer.buildUserContactUpdatedEntry(user);
+        outboxEntryRepository.save(outboxEntry);
+
+        log.info("SMS preference updated: userId={} smsEnabled={}", userId, enabled);
         return userMapper.toResponse(user);
     }
 

@@ -31,12 +31,18 @@ public class UserRegisteredConsumer {
             UserRegisteredEvent event = objectMapper.readValue(record.value(), UserRegisteredEvent.class);
             String userId = event.getUserId().toString();
 
-            // Persist email, phone + masked email so EMAIL/SMS can be sent on future events
+            // Persist email, phone + masked email so EMAIL/SMS can be sent on future events.
+            // smsNotificationsEnabled is explicitly set to FALSE at registration:
+            //   - Phone numbers provided at registration are not OTP-verified yet.
+            //   - SMS is only enabled after the user verifies via OTP (UserService.updatePhone
+            //     auto-sets sms_notifications_enabled = true and publishes UserContactUpdatedEvent).
+            //   - This prevents SMS delivery to unverified numbers collected at sign-up.
             UserContactDocument contact = UserContactDocument.builder()
                     .userId(userId)
                     .email(event.getEmail())
                     .phoneNumber(event.getPhoneNumber())
                     .maskedEmail(event.getMaskedEmail())
+                    .smsNotificationsEnabled(false)   // explicitly false until OTP-verified
                     .updatedAt(Instant.now())
                     .build();
             userContactRepository.save(contact);
