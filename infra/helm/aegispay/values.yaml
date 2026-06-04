@@ -304,11 +304,17 @@ services:
       maxReplicas: 6
       targetCPUUtilizationPercentage: 60
     extraEnv:
-      # Spring AI Anthropic client reads ANTHROPIC_API_KEY.
+      # ANTHROPIC_API_KEY: prod profile (AnthropicChatModel direct).
+      # OPENROUTER_API_KEY: dev profile (OpenAiChatModel via OpenRouter, Authorization: Bearer).
       # We use OpenRouter as the provider (sk-or-v1-* key) with the base-url
       # overridden to https://openrouter.ai/api/v1 via SPRING_APPLICATION_JSON
       # in the configmap, so the same Anthropic client works through OpenRouter.
       - name: ANTHROPIC_API_KEY
+        valueFrom:
+          secretKeyRef:
+            name: aegispay-ai-secret
+            key: openrouter-api-key
+      - name: OPENROUTER_API_KEY
         valueFrom:
           secretKeyRef:
             name: aegispay-ai-secret
