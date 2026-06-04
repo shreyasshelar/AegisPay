@@ -258,14 +258,14 @@ jobs:
     runs-on: ubuntu-latest
     needs: [detect-changes, build-and-push, build-web]
     # Run even if one of the build jobs was skipped (no changes in that area),
-    # but only if at least one thing changed and no build job failed.
+    # Run whenever at least one build succeeded, even if the other failed.
+    # This ensures the web tag+timestamp are always committed when the web
+    # image builds successfully — even when a Java service build fails.
     if: |
       always() &&
       needs.detect-changes.result == 'success' &&
       needs.detect-changes.outputs.any-changed == 'true' &&
-      (needs.build-and-push.result == 'success' || needs.build-and-push.result == 'skipped') &&
-      (needs.build-web.result == 'success' || needs.build-web.result == 'skipped') &&
-      (needs.build-and-push.result == 'success' || needs.build-web.result == 'success')
+      (needs.build-web.result == 'success' || needs.build-and-push.result == 'success')
 
     permissions:
       contents: write
@@ -320,10 +320,15 @@ jobs:
             fi
           done
 
-          # Update web tag only if web was built
-          if [ "$WEB_CHANGED" = "true" ]; then
+          # Update web tag + deployTimestamp whenever web was built.
+          # deployTimestamp is injected as a pod annotation in the Helm template,
+          # so ArgoCD detects a spec diff and rolls the pod even when the image
+          # tag is reused (dev-latest scenario caused by a failed CD run).
+          if [ "$WEB_CHANGED" = "true" ] && [ "${{ needs.build-web.result }}" = "success" ]; then
             yq e ".services.web.image.tag = \"${TAG}\"" -i "${{ env.HELM_VALUES_FILE }}"
+            yq e ".services.web.deployTimestamp = \"${SHA}\"" -i "${{ env.HELM_VALUES_FILE }}"
             echo "  ✓ services.web.image.tag = ${TAG}"
+            echo "  ✓ services.web.deployTimestamp = ${SHA}"
           fi
 
       - name: Commit and push [skip ci]
