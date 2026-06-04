@@ -65,7 +65,7 @@ services:
     enabled: true
     image:
       repository: api-gateway
-      tag: latest
+      tag: dev-3804380a376cd190995e17137b9acea538b15a30
     replicas: 1
     port: 8080
     resources:
@@ -98,7 +98,7 @@ services:
     enabled: true
     image:
       repository: user-service
-      tag: latest
+      tag: dev-3804380a376cd190995e17137b9acea538b15a30
     replicas: 1
     port: 8081
     resources:
@@ -117,7 +117,7 @@ services:
     enabled: true
     image:
       repository: transaction-service
-      tag: latest
+      tag: dev-3804380a376cd190995e17137b9acea538b15a30
     replicas: 1
     port: 8082
     resources:
@@ -136,7 +136,7 @@ services:
     enabled: true
     image:
       repository: ledger-service
-      tag: latest
+      tag: dev-3804380a376cd190995e17137b9acea538b15a30
     replicas: 1
     port: 8083
     resources:
@@ -155,7 +155,7 @@ services:
     enabled: true
     image:
       repository: payment-orchestrator
-      tag: latest
+      tag: dev-3804380a376cd190995e17137b9acea538b15a30
     replicas: 1
     port: 8084
     resources:
@@ -174,7 +174,7 @@ services:
     enabled: true
     image:
       repository: risk-engine
-      tag: latest
+      tag: dev-3804380a376cd190995e17137b9acea538b15a30
     replicas: 1
     port: 8085
     resources:
@@ -193,7 +193,7 @@ services:
     enabled: true
     image:
       repository: notification-service
-      tag: latest
+      tag: dev-3804380a376cd190995e17137b9acea538b15a30
     replicas: 1
     port: 8086
     resources:
@@ -227,7 +227,7 @@ services:
     enabled: true
     image:
       repository: data-pipeline
-      tag: latest
+      tag: dev-3804380a376cd190995e17137b9acea538b15a30
     replicas: 1
     port: 8089
     resources:
@@ -244,7 +244,7 @@ services:
     enabled: true
     image:
       repository: reconciliation-service
-      tag: latest
+      tag: dev-3804380a376cd190995e17137b9acea538b15a30
     replicas: 1
     port: 8087
     resources:
@@ -261,7 +261,7 @@ services:
     enabled: true
     image:
       repository: ai-platform
-      tag: latest
+      tag: dev-3804380a376cd190995e17137b9acea538b15a30
     replicas: 1
     port: 8088
     resources:
@@ -284,11 +284,11 @@ services:
     enabled: true
     image:
       repository: web
-      tag: dev-3cc7b3600d84393bcdaf56012598b808e07ec1e3
+      tag: dev-3804380a376cd190995e17137b9acea538b15a30
     # Updated by cd-dev.yml on every successful web image build.
     # Injected as a pod annotation so ArgoCD detects a spec change and rolls
     # the pod even when the image tag stays "dev-latest" (reused tag scenario).
-    deployTimestamp: "3cc7b3600d84393bcdaf56012598b808e07ec1e3"
+    deployTimestamp: "3804380a376cd190995e17137b9acea538b15a30"
     replicas: 1
     port: 3000
     resources:
