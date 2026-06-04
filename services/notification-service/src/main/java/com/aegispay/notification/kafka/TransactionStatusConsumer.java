@@ -42,8 +42,19 @@ public class TransactionStatusConsumer {
         }
     }
 
+    /**
+     * Resolves the user's phone number for SMS delivery.
+     *
+     * <p>Returns the phone number only when BOTH conditions are met:
+     * <ol>
+     *   <li>{@code smsNotificationsEnabled == true} — user has opted in</li>
+     *   <li>{@code phoneNumber} is non-null and non-blank — number is on file</li>
+     * </ol>
+     * Returns {@code null} (skip SMS) if either condition fails.
+     */
     private String resolvePhone(String userId) {
         return resolveContact(userId)
+                .filter(UserContactDocument::isSmsNotificationsEnabled)
                 .map(UserContactDocument::getPhoneNumber)
                 .filter(p -> p != null && !p.isBlank())
                 .orElse(null);

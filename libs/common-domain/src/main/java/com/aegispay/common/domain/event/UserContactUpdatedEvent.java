@@ -8,7 +8,7 @@ import lombok.experimental.SuperBuilder;
 import java.util.UUID;
 
 /**
- * Published when a user adds or updates their phone number (or other contact detail).
+ * Published when a user adds, updates, or removes their phone number or SMS preference.
  *
  * <p>Consumed by the notification-service to keep its {@code UserContactDocument}
  * read-model in sync.  This is the only supported mutation path — the notification
@@ -18,6 +18,9 @@ import java.util.UUID;
  * a phone number because OAuth providers don't share them.  This event fires when the
  * user later adds their phone via {@code PATCH /api/v1/users/{userId}/phone}, enabling
  * SMS notifications that were silently skipped until then.
+ *
+ * <p>Also fires when the user toggles SMS notifications on/off via
+ * {@code PATCH /api/v1/users/{userId}/notifications/sms}.
  */
 @Getter
 @NoArgsConstructor(onConstructor_ = @JsonCreator)
@@ -31,4 +34,12 @@ public class UserContactUpdatedEvent extends BaseEvent {
      * {@code null} when the phone is being removed.
      */
     private String phoneNumber;
+
+    /**
+     * Whether the user wants to receive SMS notifications.
+     * Auto-set to {@code true} when a verified phone number is first saved.
+     * Users can override this to {@code false} via the profile preferences toggle.
+     * Always {@code false} when {@code phoneNumber} is {@code null}.
+     */
+    private boolean smsNotificationsEnabled;
 }

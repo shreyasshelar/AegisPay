@@ -56,6 +56,16 @@ public class User {
     @Builder.Default
     private boolean active = true;
 
+    /**
+     * Whether the user wants to receive SMS notifications.
+     * Auto-set to {@code true} when a verified phone number is first saved.
+     * Users can toggle it OFF via the profile preferences page even after verification.
+     * Always {@code false} when {@code phone} is {@code null}.
+     */
+    @Column(name = "sms_notifications_enabled", nullable = false)
+    @Builder.Default
+    private boolean smsNotificationsEnabled = false;
+
     /** FCM registration token (Android) or APNs device token (iOS). Nullable — set on first login. */
     @Column(name = "push_token", length = 512)
     private String pushToken;

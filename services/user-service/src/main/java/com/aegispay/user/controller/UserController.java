@@ -304,6 +304,30 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.ok(response));
     }
 
+    // ── Notification preferences ───────────────────────────────────────────────
+
+    /**
+     * Toggle SMS notifications on or off.
+     *
+     * <p>Self-service only — the authenticated caller must match the path {@code userId}.
+     * Enabling requires a verified phone number to already be on file; the server returns
+     * 422 if the phone is null so the client cannot enable SMS for numberless accounts.
+     *
+     * <p>Disabling is always permitted — users can opt out at any time regardless of
+     * whether a number is on file.
+     */
+    @PatchMapping("/{userId}/notifications/sms")
+    public ResponseEntity<ApiResponse<UserResponse>> updateSmsPreference(
+            @PathVariable UUID userId,
+            @Valid @RequestBody UpdateSmsPreferenceRequest request,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        userService.assertSelfOrAdmin(userId, jwt);
+        UserResponse response = userService.updateSmsPreference(
+                userId, request.enabled(), jwt.getSubject());
+        return ResponseEntity.ok(ApiResponse.ok(response));
+    }
+
     // ── Phone OTP (Fast2SMS — replaces Firebase Phone Auth for web) ───────────
 
     /**
