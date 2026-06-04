@@ -1,31 +1,37 @@
 name: CD — Deploy to Dev (dev branch)
 
-# Triggers when either CI workflow completes on dev, OR when manually dispatched.
+# Triggers on every push to dev that touches deployable paths, plus manual dispatch.
 #
-# Two trigger paths:
-#   CI — Java (Smart) completes → cd-dev detects Java + web changes, builds both
-#   CI — Web App     completes → cd-dev detects web changes, builds web only
+# WHY push: not workflow_run:
+#   workflow_run always reads the workflow file from the DEFAULT branch (main).
+#   Since main is reserved for future prod infra, it would run main's stale copy
+#   of this file instead of dev's. push: triggers read the file from the pushed
+#   branch (dev), so dev's workflow is always what runs.
 #
-# This dual-trigger ensures web-only commits (apps/web/** changes that don't
-# touch any Java service or Helm chart) still get built and deployed.
-# Without it, web-only PRs have no auto-deploy because ci-java.yml never runs.
+# [skip ci] guard: GitHub natively skips push-triggered workflows when the commit
+#   message contains "[skip ci]" — so the tag-update commit this workflow writes
+#   back to dev will NOT re-trigger it.
 #
 # Smart build: only builds images for services/web that actually changed.
 # If libs/ changed → rebuild ALL Java services (they all depend on shared libs).
 #
 # Flow: detect-changes → build only changed services → patch values-dev.yaml
-#       with new SHA tags → commit → ArgoCD auto-syncs.
+#       with new SHA tags → commit [skip ci] → ArgoCD auto-syncs.
 #
 # Git identity: shreyasshelar / shreyasshelarrr@gmail.com (no bots)
 
 on:
-  workflow_run:
-    workflows: ["CI — Java (Smart)", "CI — Web App"]
-    types: [completed]
+  push:
     branches: [dev]
+    paths:
+      - 'services/**'
+      - 'libs/**'
+      - 'apps/web/**'
+      - 'packages/**'
+      - 'pom.xml'
+      - 'turbo.json'
+      - 'package.json'
   # Manual trigger: use force-all=true to rebuild every service regardless of diff.
-  # NOTE: workflow_run.branches filter only applies to push-triggered parents,
-  # not workflow_dispatch — so manual CI runs don't auto-chain. Use this manually.
   workflow_dispatch:
     inputs:
       sha:
@@ -54,10 +60,9 @@ jobs:
   detect-changes:
     name: Detect changed services
     runs-on: ubuntu-latest
-    # Run when triggered by successful CI OR by manual workflow_dispatch
-    if: |
-      github.event_name == 'workflow_dispatch' ||
-      github.event.workflow_run.conclusion == 'success'
+    # Always run — push trigger fires only on real code changes (paths filter above),
+    # [skip ci] commits are skipped natively by GitHub before the workflow starts.
+    if: always()
     outputs:
       services: ${{ steps.diff.outputs.services }}
       web: ${{ steps.diff.outputs.web }}
@@ -210,7 +215,7 @@ jobs:
           push: true
           tags: |
             ${{ env.IMAGE_PREFIX }}/${{ matrix.service }}:dev-latest
-            ${{ env.IMAGE_PREFIX }}/${{ matrix.service }}:dev-${{ github.event.workflow_run.head_sha || github.sha }}
+            ${{ env.IMAGE_PREFIX }}/${{ matrix.service }}:dev-${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -248,7 +253,7 @@ jobs:
           push: true
           tags: |
             ${{ env.IMAGE_PREFIX }}/web:dev-latest
-            ${{ env.IMAGE_PREFIX }}/web:dev-${{ github.event.workflow_run.head_sha || github.sha }}
+            ${{ env.IMAGE_PREFIX }}/web:dev-${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
@@ -297,7 +302,7 @@ jobs:
 
       - name: Patch image tags in values-dev.yaml
         env:
-          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          SHA: ${{ github.sha }}
           CHANGED_JAVA: ${{ needs.detect-changes.outputs.services }}
           WEB_CHANGED: ${{ needs.detect-changes.outputs.web }}
         run: |
@@ -340,7 +345,7 @@ jobs:
 
       - name: Commit and push [skip ci]
         env:
-          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          SHA: ${{ github.sha }}
         run: |
           git add "${{ env.HELM_VALUES_FILE }}"
           if git diff --staged --quiet; then
