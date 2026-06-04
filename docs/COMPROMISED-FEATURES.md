@@ -258,20 +258,112 @@ Major version bumps get the `needs-review` label.
 > Repo Settings → General → Pull Requests → check **"Allow auto-merge"**
 Without this, Dependabot PRs can be approved but GitHub won't auto-merge them.
 
-#### Free security scanning — what can still be added
-All tools below are free for public repos and complement existing (CodeQL + OWASP + Trivy):
+#### Free security scanning — parked, implement after go-live stabilisation
 
-| Tool | What it catches | Trigger |
-|------|----------------|---------|
-| **Gitleaks** | Secrets committed to git (API keys, passwords, tokens) | Every push — pre-commit + CI |
-| **Trivy fs** | Dockerfile + Helm K8s misconfigs | Every PR (fast, no image needed) |
-| **Checkov** | K8s/Helm security misconfigs (privileged pods, root containers, no limits) | Every PR on `infra/**` |
-| **Semgrep** | Java SAST — SQL injection, insecure deserialization, auth bypasses | Every PR on `services/**` |
-| **SonarCloud** | Java + TypeScript code quality + security; inline PR comments | Every PR (free for public repos) |
-| **GitHub Dependency Review Action** | Blocks PRs that introduce a known-CVE dependency | Every PR (native GitHub, zero config) |
+All four are free for public repos and fill gaps that CodeQL + OWASP + Trivy don't cover.
+**Priority order**: Gitleaks → Semgrep → Checkov → Dependabot (already wired, see above).
+One PR adds all four to `security-scan.yml`.
 
-**Fintech priority order**: Gitleaks → Semgrep → Checkov → Dependency Review → SonarCloud
-**One PR wires all of them** into `security-scan.yml`. Park until after go-live stabilisation.
+---
+
+##### 🔐 Gitleaks — never have another secret leak
+**Status**: ⏸ Parked
+**What it catches**: API keys, passwords, tokens, connection strings committed to git.
+Would have caught the Firebase `AIzaSy...` key before it ever reached GitHub.
+**Two layers**:
+1. **Pre-commit hook** (local) — blocks the push at your machine before it hits GitHub
+2. **CI check** (every push to dev/main) — safety net if hook was skipped
+
+**How to add**:
+```yaml
+# In security-scan.yml — new job
+gitleaks:
+  name: Gitleaks secret scan
+  runs-on: ubuntu-latest
+  steps:
+    - uses: actions/checkout@v4
+      with: { fetch-depth: 0 }
+    - uses: gitleaks/gitleaks-action@v2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+**Config file** `.gitleaks.toml` — add allowlists for intentionally-public keys (e.g. Firebase Web API key).
+**Pre-commit**: `brew install gitleaks` + `gitleaks protect --staged` in `.git/hooks/pre-commit`.
+
+---
+
+##### 🔍 Semgrep — Java SAST for payment code
+**Status**: ⏸ Parked
+**What it catches**: SQL injection, insecure deserialization, hardcoded credentials, JWT algorithm confusion, broken auth — the exact attack surface in `services/`.
+**Why it matters here**: Payment orchestrator, risk engine, and transaction service handle real money. CodeQL covers generic Java; Semgrep has 300+ fintech-specific rules (e.g. Stripe API misuse, JWT `alg:none`, Spring `@PreAuthorize` bypass patterns).
+**Free for public repos** via `semgrep/semgrep-action`.
+
+**How to add**:
+```yaml
+# In security-scan.yml — new job
+semgrep:
+  name: Semgrep SAST
+  runs-on: ubuntu-latest
+  steps:
+    - uses: actions/checkout@v4
+    - uses: semgrep/semgrep-action@v1
+      with:
+        config: >-
+          p/java
+          p/spring
+          p/secrets
+          p/owasp-top-ten
+      env:
+        SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}  # optional, enables dashboard
+```
+**No token needed** for open-source rulesets — just remove the `env` block.
+**Path filter**: add `paths: services/**` to only run on Java service changes.
+
+---
+
+##### 🛡️ Checkov — K8s/Helm misconfiguration scanner
+**Status**: ⏸ Parked
+**What it catches**: Privileged pods, containers running as root, missing resource limits/requests, missing readOnly root filesystem, hostPath mounts, exposed NodePorts, missing security contexts — misconfigs that matter when pods process live payment transactions.
+**Specific to AegisPay**: payment-orchestrator and ledger-service pods with `privileged: true` or no `runAsNonRoot` would be a critical finding on a financial platform audit.
+
+**How to add**:
+```yaml
+# In security-scan.yml — new job, runs on infra/** changes
+checkov:
+  name: Checkov IaC scan
+  runs-on: ubuntu-latest
+  steps:
+    - uses: actions/checkout@v4
+    - uses: bridgecrewio/checkov-action@v12
+      with:
+        directory: infra/helm/aegispay
+        framework: helm
+        output_format: sarif
+        output_file_path: checkov.sarif
+        soft_fail: true          # park as warning until baseline established
+    - uses: github/codeql-action/upload-sarif@v3
+      if: always()
+      with:
+        sarif_file: checkov.sarif
+```
+**Baseline**: first run will have findings (resource limits are intentionally relaxed on dev).
+Set `soft_fail: true` initially, triage findings, add `--skip-check` for known-acceptable deviations, then flip to hard fail.
+
+---
+
+##### 📦 Dependabot — passive zero-day catcher
+**Status**: ⚠️ Wired but auto-merge blocked — one owner action needed
+**What it catches**: Known CVEs in Maven + npm dependencies. Would catch Log4Shell-style zero-days automatically — a PR lands in your inbox within hours of NVD publication.
+**Already done**:
+- `dependabot.yml` configured for Maven (all services) + npm (all workspaces), grouped updates
+- `dependabot-auto-merge.yml` auto-approves + squash-merges patch/minor PRs on CI green
+- Major bumps get `needs-review` label
+
+**One action remaining** (repo owner only — requires GitHub UI):
+> **Repo Settings → General → Pull Requests → ✅ Allow auto-merge**
+
+Without this checkbox, Dependabot PRs are approved but GitHub refuses to auto-merge them.
+After enabling: patch/minor dep updates will merge themselves silently in the background.
 
 #### Firebase Web API key — monitoring note
 `AIzaSyCN4tJBSceEYIzGqbVaqjGSuSlvcm-LoU8` removed from git history (rebase + force push, 2026-06-04).
