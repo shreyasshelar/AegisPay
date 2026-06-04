@@ -94,3 +94,20 @@ export function useUpdatePhone() {
     },
   })
 }
+
+/**
+ * Toggle SMS notifications on or off.
+ * Invalidates /me on success so the profile toggle reflects the new state immediately.
+ * Server returns 422 if enabling SMS with no phone on file — callers should guard against this.
+ */
+export function useUpdateSmsPreference() {
+  const { users } = useApiClient()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ userId, enabled }: { userId: string; enabled: boolean }) =>
+      users.updateSmsPreference(userId, enabled),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: userKeys.me() })
+    },
+  })
+}

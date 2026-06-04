@@ -19,7 +19,7 @@ import {
   Check,
   Phone,
 } from 'lucide-react'
-import { useMe, useProcessKyc, useBiometric, useUpdatePhone, ApiError } from '@aegispay/api-client'
+import { useMe, useProcessKyc, useBiometric, useUpdatePhone, useUpdateSmsPreference, ApiError } from '@aegispay/api-client'
 import { Header } from '@/components/header'
 import { Button as AegisButton } from '@aegispay/design-system'
 import { cn } from '@/lib/utils'
@@ -464,6 +464,16 @@ export function ProfileClient({ userId }: { userId: string }) {
 
 type PhoneFlowStep = 'idle' | 'enter-phone' | 'sending' | 'enter-otp' | 'saving' | 'saved'
 
+/** Country codes shown in the dropdown — India first as default. */
+const COUNTRY_CODES = [
+  { code: '+91',  flag: '🇮🇳', name: 'India'       },
+  { code: '+1',   flag: '🇺🇸', name: 'US / Canada' },
+  { code: '+44',  flag: '🇬🇧', name: 'UK'          },
+  { code: '+971', flag: '🇦🇪', name: 'UAE'         },
+  { code: '+65',  flag: '🇸🇬', name: 'Singapore'   },
+  { code: '+61',  flag: '🇦🇺', name: 'Australia'   },
+] as const
+
 /**
  * Phone OTP via Firebase Phone Auth — standard reCAPTCHA v2 invisible flow.
  *
@@ -474,41 +484,48 @@ type PhoneFlowStep = 'idle' | 'enter-phone' | 'sending' | 'enter-otp' | 'saving'
  *
  * Flow:
  *   1. RecaptchaVerifier (invisible) renders silently — no user interaction.
- *   2. signInWithPhoneNumber(auth, phone, verifier) — Firebase sends the SMS.
+ *   2. signInWithPhoneNumber(auth, fullPhone, verifier) — Firebase sends the SMS.
  *   3. confirmationResult.confirm(otp) — verify the code the user types.
  *   4. firebaseAuth.signOut() — discard the Firebase session; Keycloak owns auth.
+ *   5. Backend saves phone + auto-enables smsNotificationsEnabled.
+ *
+ * SMS toggle (idle state, phone verified):
+ *   - Shown only when a phone number is on file.
+ *   - Reflects user.smsNotificationsEnabled from backend.
+ *   - Calls PATCH /api/v1/users/{id}/notifications/sms to toggle.
  */
 function PhoneVerificationCard({ userId }: { userId: string }) {
   const [step,         setStep]         = useState<PhoneFlowStep>('idle')
-  const [phone,        setPhone]        = useState('')
+  const [countryCode,  setCountryCode]  = useState('+91')
+  const [phoneDigits,  setPhoneDigits]  = useState('')
   const [otp,          setOtp]          = useState('')
   const [error,        setError]        = useState<string | null>(null)
   const [recaptchaKey, setRecaptchaKey] = useState(0)
+  const [smsToggling,  setSmsToggling]  = useState(false)
 
   const confirmResultRef     = useRef<ConfirmationResult | null>(null)
   const recaptchaVerifierRef = useRef<RecaptchaVerifier | null>(null)
 
   const { data: user } = useMe()
-  const updatePhone    = useUpdatePhone()
+  const updatePhone          = useUpdatePhone()
+  const updateSmsPreference  = useUpdateSmsPreference()
+
+  /** Full E.164 phone (e.g. "+919876543210") used for Firebase OTP. */
+  const fullPhone = `${countryCode}${phoneDigits.trim()}`
 
   function resetVerifier() {
     try { recaptchaVerifierRef.current?.clear() } catch { /* ignore */ }
     recaptchaVerifierRef.current = null
-    // Increment key to unmount + remount the container div so grecaptcha
-    // sees a fresh element and doesn't throw "already rendered in this element".
     setRecaptchaKey(k => k + 1)
   }
 
   async function handleSendOtp() {
-    const trimmed = phone.trim()
-    if (!trimmed) { setError('Enter a phone number (e.g. +919876543210)'); return }
+    if (!phoneDigits.trim()) { setError('Enter your phone number'); return }
     if (!firebaseAuth) { setError('Phone verification is not configured.'); return }
     setStep('sending')
     setError(null)
     try {
       const { RecaptchaVerifier, signInWithPhoneNumber } = await import('firebase/auth')
-
-      // Create verifier lazily; reuse across retries until it errors.
       if (!recaptchaVerifierRef.current) {
         recaptchaVerifierRef.current = new RecaptchaVerifier(
           firebaseAuth,
@@ -516,8 +533,7 @@ function PhoneVerificationCard({ userId }: { userId: string }) {
           { size: 'invisible' },
         )
       }
-
-      const result = await signInWithPhoneNumber(firebaseAuth, trimmed, recaptchaVerifierRef.current)
+      const result = await signInWithPhoneNumber(firebaseAuth, fullPhone, recaptchaVerifierRef.current)
       confirmResultRef.current = result
       setStep('enter-otp')
     } catch (e) {
@@ -530,7 +546,7 @@ function PhoneVerificationCard({ userId }: { userId: string }) {
         code === 'auth/too-many-requests'
           ? 'Too many requests — wait a few minutes and try again.'
           : code === 'auth/invalid-phone-number'
-            ? 'Invalid phone number — use international format, e.g. +919876543210'
+            ? `Invalid phone number — check the number and country code.`
             : code === 'auth/quota-exceeded'
               ? 'SMS quota exceeded — try again tomorrow.'
               : `Failed to send OTP (${code || raw}). Try again.`
@@ -549,9 +565,10 @@ function PhoneVerificationCard({ userId }: { userId: string }) {
       await result.confirm(trimmedOtp)
       await firebaseAuth?.signOut()
       resetVerifier()
-      await updatePhone.mutateAsync({ userId, phone: phone.trim() })
+      // Backend saves phone + auto-enables smsNotificationsEnabled = true
+      await updatePhone.mutateAsync({ userId, phone: fullPhone })
       setStep('saved')
-      toast.success('Phone number saved')
+      toast.success('Phone number verified and saved')
     } catch (e) {
       setStep('enter-otp')
       setError(e instanceof Error ? e.message : 'Verification failed')
@@ -563,8 +580,28 @@ function PhoneVerificationCard({ userId }: { userId: string }) {
     confirmResultRef.current = null
     setStep('idle')
     setOtp('')
+    setPhoneDigits('')
     setError(null)
   }
+
+  async function handleSmsToggle(enabled: boolean) {
+    setSmsToggling(true)
+    try {
+      await updateSmsPreference.mutateAsync({ userId, enabled })
+      toast.success(enabled ? 'SMS notifications enabled' : 'SMS notifications disabled')
+    } catch (e) {
+      if (e instanceof ApiError && e.errorCode === 'PHONE_REQUIRED') {
+        toast.error('Add a verified phone number first')
+      } else {
+        toast.error('Failed to update SMS preference')
+      }
+    } finally {
+      setSmsToggling(false)
+    }
+  }
+
+  const hasPhone   = !!user?.phone
+  const smsEnabled = user?.smsNotificationsEnabled ?? false
 
   return (
     <div className="rounded-xl bg-white p-6 shadow-sm ring-1 ring-slate-200 space-y-4">
@@ -577,59 +614,130 @@ function PhoneVerificationCard({ userId }: { userId: string }) {
           </div>
           <div>
             <h3 className="text-sm font-semibold text-slate-900">Phone Number</h3>
-            <p className="text-xs text-slate-400">Required for SMS notifications</p>
+            <p className="text-xs text-slate-400">
+              {hasPhone ? 'Verified — used for SMS alerts' : 'Add to enable SMS notifications'}
+            </p>
           </div>
         </div>
         {step === 'idle' && (
           <button
-            onClick={() => { setStep('enter-phone'); setPhone('') }}
+            onClick={() => { setStep('enter-phone'); setPhoneDigits('') }}
             className="text-sm font-semibold text-primary-600 hover:text-primary-700 transition-colors"
           >
-            {user?.phone ? 'Update' : 'Add'}
+            {hasPhone ? 'Update' : 'Add'}
           </button>
         )}
       </div>
 
-      {/* Current (masked) phone */}
-      {step === 'idle' && user?.phone && (
-        <p className="text-sm font-medium text-slate-700">{user.phone}</p>
+      {/* Idle state: show masked number + verified badge */}
+      {step === 'idle' && hasPhone && (
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-medium text-slate-700">{user.phone}</p>
+          <span className="inline-flex items-center gap-1 rounded-full bg-success-50 px-2 py-0.5 text-xs font-medium text-success-700 ring-1 ring-success-200">
+            <CheckCircle2 className="h-3 w-3" />
+            Verified
+          </span>
+        </div>
+      )}
+
+      {/* Idle state: no phone — prompt to add */}
+      {step === 'idle' && !hasPhone && (
+        <p className="text-xs text-slate-400">
+          No phone number on file. Add one to receive payment alerts via SMS.
+        </p>
       )}
 
       {/* Success banner */}
       {step === 'saved' && (
         <div className="flex items-center gap-2 rounded-lg bg-success-50 px-3 py-2 ring-1 ring-success-200">
           <CheckCircle2 className="h-4 w-4 shrink-0 text-success-500" />
-          <p className="text-sm text-success-700 flex-1">Phone number saved</p>
+          <p className="text-sm text-success-700 flex-1">Phone verified and SMS alerts enabled</p>
           <button
-            onClick={() => { setStep('enter-phone'); setPhone('') }}
+            onClick={() => { setStep('enter-phone'); setPhoneDigits('') }}
             className="text-xs font-medium text-primary-600 hover:text-primary-700"
           >
-            Update again
+            Update
           </button>
         </div>
       )}
 
-      {/* Invisible reCAPTCHA v2 container — must stay mounted while a send is in flight.
-          key forces React to remount the div after resetVerifier() so grecaptcha
-          never sees the same element twice and "already rendered" errors are avoided. */}
+      {/* ── SMS Notifications toggle — only when phone is verified ── */}
+      {step === 'idle' && hasPhone && (
+        <>
+          <div className="border-t border-slate-100" />
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium text-slate-800">SMS Notifications</p>
+              <p className="text-xs text-slate-400 mt-0.5">
+                {smsEnabled
+                  ? 'Receive payment alerts and failure notices via SMS.'
+                  : 'SMS alerts are off — toggle to re-enable.'}
+              </p>
+            </div>
+            <button
+              role="switch"
+              aria-checked={smsEnabled}
+              aria-label="SMS notifications"
+              disabled={smsToggling}
+              onClick={() => void handleSmsToggle(!smsEnabled)}
+              className={cn(
+                'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500',
+                smsEnabled ? 'bg-primary-600' : 'bg-slate-200',
+                smsToggling && 'opacity-50 cursor-not-allowed',
+              )}
+            >
+              <span
+                className={cn(
+                  'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                  smsEnabled ? 'translate-x-5' : 'translate-x-0',
+                )}
+              />
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* Invisible reCAPTCHA v2 container */}
       <div key={recaptchaKey} id="phone-recaptcha-container" className="hidden" />
 
-      {/* Phone entry */}
+      {/* Phone entry with country code dropdown */}
       {(step === 'enter-phone' || step === 'sending') && (
         <div className="space-y-3">
           <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1">
-              Phone number (international format)
+            <label className="block text-xs font-medium text-slate-700 mb-1.5">
+              Phone number
             </label>
-            <input
-              type="tel"
-              value={phone}
-              onChange={e => { setPhone(e.target.value); setError(null) }}
-              onKeyDown={e => e.key === 'Enter' && void handleSendOtp()}
-              placeholder="+919876543210"
-              autoComplete="tel"
-              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-200 transition-colors"
-            />
+            <div className="flex gap-2">
+              {/* Country code selector */}
+              <div className="relative shrink-0">
+                <select
+                  value={countryCode}
+                  onChange={e => setCountryCode(e.target.value)}
+                  className="h-full appearance-none rounded-lg border border-slate-300 bg-white pl-3 pr-7 py-2.5 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-200 transition-colors"
+                >
+                  {COUNTRY_CODES.map(c => (
+                    <option key={c.code} value={c.code}>
+                      {c.flag} {c.code}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+              </div>
+              {/* Number digits */}
+              <input
+                type="tel"
+                inputMode="numeric"
+                value={phoneDigits}
+                onChange={e => { setPhoneDigits(e.target.value.replace(/[^\d]/g, '')); setError(null) }}
+                onKeyDown={e => e.key === 'Enter' && void handleSendOtp()}
+                placeholder={countryCode === '+91' ? '9876543210' : '1234567890'}
+                autoComplete="tel-national"
+                className="flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-200 transition-colors"
+              />
+            </div>
+            <p className="mt-1 text-xs text-slate-400">
+              Will send OTP to <span className="font-medium text-slate-600">{fullPhone || `${countryCode}…`}</span>
+            </p>
           </div>
           <div className="flex items-center justify-between gap-2">
             <button
@@ -640,7 +748,7 @@ function PhoneVerificationCard({ userId }: { userId: string }) {
             </button>
             <button
               onClick={handleSendOtp}
-              disabled={step === 'sending' || !phone.trim()}
+              disabled={step === 'sending' || !phoneDigits.trim()}
               className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {step === 'sending' && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
@@ -654,7 +762,8 @@ function PhoneVerificationCard({ userId }: { userId: string }) {
       {(step === 'enter-otp' || step === 'saving') && (
         <div className="space-y-3">
           <p className="text-xs text-slate-500">
-            Enter the 6-digit code sent to <span className="font-medium text-slate-700">{phone}</span>
+            Enter the 6-digit code sent to{' '}
+            <span className="font-medium text-slate-700">{fullPhone}</span>
           </p>
           <div>
             <label className="block text-xs font-medium text-slate-700 mb-1">OTP code</label>

@@ -40,6 +40,13 @@ export const UserSchema = z.object({
    * shown directly in the KYC status banner on the profile page.
    */
   rejectionReason: z.string().nullable().optional(),
+  /**
+   * Whether the user has opted in to SMS notifications.
+   * true  → phone on file AND user opted in  → SMS will be sent
+   * false → no phone OR user explicitly disabled → SMS skipped
+   * Automatically enabled when a verified phone number is first saved.
+   */
+  smsNotificationsEnabled: z.boolean().optional(),
 })
 export type User = z.infer<typeof UserSchema>
 
