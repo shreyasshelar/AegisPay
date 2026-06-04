@@ -104,7 +104,7 @@ public class UserService {
 
         // Write aegispay_user_id + aegispay_tenant_id back to Keycloak asynchronously
         // so subsequent JWTs carry the domain UUID and tenant claim.
-        keycloakAdminService.writeUserAttributes(externalId, user.getId(), user.getTenantId());
+        keycloakAdminService.writeUserAttributes(externalId, user.getId(), user.getTenantId(), user.getRole() != null ? user.getRole().name() : "CUSTOMER");
 
         log.info("User registered: userId={} externalId={}", user.getId(), externalId);
         return userMapper.toResponse(user);

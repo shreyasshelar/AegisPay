@@ -16,17 +16,22 @@ import java.util.UUID;
 
 /**
  * Writes AegisPay domain attributes back to the Keycloak user after registration,
- * so subsequent JWTs include {@code aegispay_user_id} and {@code aegispay_tenant_id}.
+ * so subsequent JWTs include {@code aegispay_user_id}, {@code aegispay_tenant_id},
+ * and {@code aegispay_role}.
  *
  * <p>Flow:
  * <ol>
  *   <li>Obtain a service-account access token via client-credentials grant.</li>
- *   <li>PATCH {@code /admin/realms/{realm}/users/{keycloakId}} with the attributes map.</li>
+ *   <li>PUT {@code /admin/realms/{realm}/users/{keycloakId}} with the attributes map.</li>
  * </ol>
  *
  * <p>Called asynchronously after user creation so it never blocks the registration response.
  * If Keycloak is unreachable the user still exists in our DB; the attribute will be written
- * on the next token refresh once the admin endpoint is reachable.
+ * on the next registration attempt.
+ *
+ * <p><b>K8s note</b>: {@code KEYCLOAK_URL} must point to the internal cluster URL
+ * ({@code http://keycloak.aegispay-infra.svc.cluster.local:8080}) NOT {@code localhost:8180}.
+ * The configmap injects this via the {@code aegispay.keycloakInternalBaseUrl} Helm helper.
  */
 @Slf4j
 @Service
@@ -50,22 +55,35 @@ public class KeycloakAdminService {
     }
 
     /**
-     * Asynchronously writes {@code aegispay_user_id} and {@code aegispay_tenant_id}
-     * to the Keycloak user identified by {@code keycloakSubject} (the JWT {@code sub} claim).
+     * Asynchronously writes AegisPay domain attributes to the Keycloak user identified
+     * by {@code keycloakSubject} (JWT {@code sub} claim).
+     *
+     * <p>Attributes written:
+     * <ul>
+     *   <li>{@code aegispay_user_id} — AegisPay domain UUID; maps to JWT claim via Keycloak mapper</li>
+     *   <li>{@code aegispay_tenant_id} — tenant for the user</li>
+     *   <li>{@code aegispay_role} — defaults to {@code CUSTOMER}; maps to JWT claim via Keycloak mapper.
+     *       Without this, social-login users have no role claim in the JWT and some @PreAuthorize
+     *       checks fall back to the SecurityConfig default (ROLE_CUSTOMER) rather than reading the
+     *       explicit claim. Writing it explicitly ensures consistency across all login methods.</li>
+     * </ul>
      *
      * @param keycloakSubject the Keycloak internal UUID (== JWT sub)
      * @param aegisUserId     the AegisPay domain UUID assigned during registration
      * @param tenantId        the tenant assigned during registration
+     * @param role            the AegisPay role (e.g. "CUSTOMER") — use "CUSTOMER" for social login
      */
     @Async
-    public void writeUserAttributes(String keycloakSubject, UUID aegisUserId, String tenantId) {
+    public void writeUserAttributes(String keycloakSubject, UUID aegisUserId,
+                                    String tenantId, String role) {
         try {
             String token = fetchAdminToken();
 
             Map<String, Object> body = Map.of(
                 "attributes", Map.of(
-                    "aegispay_user_id", List.of(aegisUserId.toString()),
-                    "aegispay_tenant_id", List.of(tenantId != null ? tenantId : "default")
+                    "aegispay_user_id",   List.of(aegisUserId.toString()),
+                    "aegispay_tenant_id", List.of(tenantId != null ? tenantId : "default"),
+                    "aegispay_role",      List.of(role != null ? role.toUpperCase() : "CUSTOMER")
                 )
             );
 
@@ -77,13 +95,12 @@ public class KeycloakAdminService {
                     .retrieve()
                     .toBodilessEntity();
 
-            log.debug("Keycloak attributes written: sub={} aegisUserId={}", keycloakSubject, aegisUserId);
+            log.info("Keycloak attributes written: sub={} aegisUserId={} role={}", keycloakSubject, aegisUserId, role);
 
         } catch (RestClientException e) {
-            // Non-fatal: user is registered in our DB. The attribute will be missing from
-            // the JWT until the next registration attempt or manual admin fix.
-            // A retry could be added here via Spring Retry if needed.
-            log.warn("Failed to write Keycloak attributes for sub={}: {}", keycloakSubject, e.getMessage());
+            log.warn("Failed to write Keycloak attributes for sub={}: {} " +
+                     "(user IS registered in DB — check KEYCLOAK_URL env var points to internal cluster URL)",
+                     keycloakSubject, e.getMessage());
         }
     }
 

@@ -17,4 +17,11 @@ data:
   REDIS_PORT: {{ .Values.global.redis.port | quote }}
   OAUTH2_JWK_SET_URI: {{ include "aegispay.jwkSetUri" . | quote }}
   SERVER_PORT: "8081"
+  # Keycloak admin URL — used by KeycloakAdminService.writeUserAttributes() to
+  # write aegispay_user_id + aegispay_tenant_id back to Keycloak after registration.
+  # Without this, social-login users never get aegispay_user_id in their JWT and
+  # every /users/me call falls back to the external_id bootstrap path indefinitely.
+  # Uses the internal cluster URL to avoid hairpin routing through Cloudflare.
+  KEYCLOAK_URL: {{ include "aegispay.keycloakInternalBaseUrl" . | quote }}
+  KEYCLOAK_REALM: "aegispay"
 {{- end }}
