@@ -18,31 +18,30 @@ data:
   MONGODB_URI: {{ include "aegispay.mongoUri" . | quote }}
   OAUTH2_JWK_SET_URI: {{ include "aegispay.jwkSetUri" . | quote }}
   SERVER_PORT: "8088"
-  # SPRING_APPLICATION_JSON overrides Spring properties at runtime without rebuild.
-  #
-  # spring.ai.anthropic.chat.base-url — redirect the Spring AI Anthropic client to
-  # OpenRouter's Anthropic-compatible endpoint instead of api.anthropic.com.
-  # The ANTHROPIC_API_KEY env var carries the sk-or-v1-* OpenRouter key.
-  #
-  # spring.ai.anthropic.chat.options.model — OpenRouter requires the fully-qualified
-  # provider/model-name format (e.g. "anthropic/claude-sonnet-4-5") not just the
-  # short alias used by Anthropic direct API.
+
+  # Activate dev Spring profile:
+  #   - OpenRouter via OpenAI-compatible adapter (Authorization: Bearer header)
+  #   - Fixes streaming-mode auth error that happens with Anthropic client + OpenRouter
+  SPRING_PROFILES_ACTIVE: "dev"
+
+  # K8s namespace — injected into tools so they can call K8s API and service DNS
+  K8S_NAMESPACE: {{ .Values.global.namespace | quote }}
+  INFRA_NAMESPACE: {{ .Values.global.infraNamespace | quote }}
+
+  # GitHub repo for DeploymentHistoryTool (git not available in container)
+  GITHUB_REPO: "shreyasshelar/AegisPay"
+
+  # SPRING_APPLICATION_JSON: runtime overrides (no rebuild needed).
+  # Only sets triage project root — all AI model config is in application-dev.yml.
   SPRING_APPLICATION_JSON: >-
     {
-      "spring": {
+      "aegispay": {
         "ai": {
-          "anthropic": {
-            "chat": {
-              "base-url": "https://openrouter.ai/api/v1",
-              "options": {
-                "model": "anthropic/claude-sonnet-4-5"
-              }
-            }
+          "triage": {
+            "project-root": "/app",
+            "k8s-mode": true
           }
         }
-      },
-      "aegispay": {
-        "triage": {"project-root": "/app"}
       }
     }
 {{- end }}
