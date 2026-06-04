@@ -1,0 +1,45 @@
+{{- if .Values.services.ai_platform.enabled }}
+# RBAC Role — grants ai-platform's ServiceAccount the minimum K8s API permissions
+# needed for the IncidentTriageAgent tools:
+#   - LogReaderTool: list pods, get pod logs
+#   - PodRestartTool: patch deployments (triggers rolling restart)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ai-platform-triage-role
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "aegispay.labels" . | nindent 4 }}
+    app.kubernetes.io/name: ai-platform
+    app.kubernetes.io/component: triage-agent-rbac
+rules:
+  # LogReaderTool: list pods to find the running instance, then fetch its logs
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+  # PodRestartTool: patch deployment pod template annotation (rolling restart)
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ai-platform-triage-rolebinding
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "aegispay.labels" . | nindent 4 }}
+    app.kubernetes.io/name: ai-platform
+    app.kubernetes.io/component: triage-agent-rbac
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: ai-platform-triage-role
+subjects:
+  - kind: ServiceAccount
+    name: ai-platform
+    namespace: {{ .Values.global.namespace }}
+{{- end }}
