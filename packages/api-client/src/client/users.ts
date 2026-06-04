@@ -113,4 +113,14 @@ export class UsersClient {
     const data = await this.client.post<unknown>(`/api/v1/users/${userId}/phone/verify-otp`, { phone, otp })
     return UserSchema.parse(data)
   }
+
+  /**
+   * Toggle SMS notifications on or off.
+   * Enabling requires a verified phone number to be on file (server returns 422 otherwise).
+   * Disabling is always permitted.
+   */
+  async updateSmsPreference(userId: string, enabled: boolean): Promise<User> {
+    const data = await this.client.patch<unknown>(`/api/v1/users/${userId}/notifications/sms`, { enabled })
+    return UserSchema.parse(data)
+  }
 }
