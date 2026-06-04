@@ -4,128 +4,181 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.web.reactive.function.client.WebClient;
 
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStreamReader;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Returns REAL deployment/change context from git history.
+ * Returns REAL deployment/change history.
  *
- * AegisPay runs locally (not on K8s in dev), so there is no ArgoCD or Helm
- * rollout history to query.  The most relevant change signal is git commits —
- * they show exactly what changed and when.
+ * <b>K8s mode</b> (detected via KUBERNETES_SERVICE_HOST):
+ *   Uses the GitHub REST API (public, no auth required for public repos) to fetch
+ *   the last 10 commits on the dev branch. Git is not installed in containers.
  *
- * The tool reads `git log` from the project root so the agent sees real commits,
- * not invented deployment SHAs.
+ * <b>Local mode:</b>
+ *   Runs git log from the project root (original behaviour).
  */
 @Slf4j
 @Component
 public class DeploymentHistoryTool {
 
     private final File projectRoot;
+    private final boolean k8sMode;
+    private final String githubRepo;
 
     public DeploymentHistoryTool(
-            @Value("${aegispay.triage.project-root:}") String projectRootPath) {
-        // Compute into a local variable first — a final field cannot be assigned
-        // inside multiple branches of a try-catch in Java.
-        File resolved;
+            @Value("${aegispay.triage.project-root:}") String projectRootPath,
+            @Value("${GITHUB_REPO:shreyasshelar/AegisPay}") String githubRepo) {
+        this.k8sMode = System.getenv("KUBERNETES_SERVICE_HOST") != null;
+        this.githubRepo = githubRepo;
+
+        File resolved = new File("/app");
         if (projectRootPath != null && !projectRootPath.isBlank()) {
             resolved = new File(projectRootPath);
-        } else {
-            // Auto-detect: JAR is at <root>/services/ai-platform/target/*.jar
-            // Walk 4 levels up: BOOT-INF/classes → target → ai-platform → services → root
-            File fallback = new File("/app"); // safe default for containerised deployment
+        } else if (!k8sMode) {
             try {
                 File jarDir = new File(DeploymentHistoryTool.class
                         .getProtectionDomain().getCodeSource().getLocation().toURI());
                 File candidate = jarDir;
                 for (int i = 0; i < 4; i++) {
                     File parent = candidate.getParentFile();
-                    if (parent == null) break; // don't walk past filesystem root
+                    if (parent == null) break;
                     candidate = parent;
                 }
-                if (candidate.exists()) {
-                    fallback = candidate;
-                }
+                if (candidate.exists()) resolved = candidate;
             } catch (Exception e) {
-                log.warn("DeploymentHistoryTool: could not resolve project root from JAR path: {}", e.getMessage());
+                log.warn("DeploymentHistoryTool: could not resolve project root: {}", e.getMessage());
             }
-            resolved = fallback;
         }
-        // Final safety net — should never be null but guard defensively
-        this.projectRoot = (resolved != null) ? resolved : new File("/app");
-        log.debug("DeploymentHistoryTool: project root resolved to {}", this.projectRoot.getAbsolutePath());
+        this.projectRoot = resolved;
+        log.info("DeploymentHistoryTool: k8s-mode={} repo={} root={}", k8sMode, githubRepo, this.projectRoot);
     }
 
     @Tool(description =
-            "Returns REAL recent change history for the AegisPay project. " +
-            "Reads the last 10 git commits from the project repository so you can identify " +
-            "what changed recently and correlate it with an incident. " +
-            "This is a local dev environment (no K8s/ArgoCD deployment history). " +
-            "serviceName is accepted but ignored — git log covers the whole project.")
+            "Returns REAL recent change and deployment history for AegisPay. " +
+            "In K8s: queries the GitHub API for recent commits on the dev branch " +
+            "and recent [skip ci] deployment commits to show what was deployed when. " +
+            "In local mode: reads git log from the project repository. " +
+            "serviceName is used to filter commits touching that service's directory.")
     public String getDeploymentHistory(String serviceName) {
-        log.info("DeploymentHistoryTool.getDeploymentHistory: service={} (git log covers all services)",
-                serviceName);
+        log.info("DeploymentHistoryTool.getDeploymentHistory: service={} k8s={}", serviceName, k8sMode);
 
+        if (k8sMode) {
+            return fetchGitHubHistory(serviceName);
+        } else {
+            return fetchLocalGitHistory(serviceName);
+        }
+    }
+
+    // ── GitHub API (K8s mode) ─────────────────────────────────────────────────
+
+    private String fetchGitHubHistory(String serviceName) {
         StringBuilder sb = new StringBuilder();
-        sb.append("=== ENVIRONMENT: local dev (Windows, docker compose, no K8s) ===\n");
-        sb.append("There is no ArgoCD/Helm deployment history in this environment.\n");
-        sb.append("Change history comes from git commits.\n\n");
+        sb.append("=== DEPLOYMENT HISTORY (GitHub API: ").append(githubRepo).append(") ===\n");
 
-        // ── git log ──────────────────────────────────────────────────────────────
-        sb.append("=== GIT LOG (last 10 commits) ===\n");
-        String gitLog = runGit(
-                "log", "--oneline", "--no-merges", "--format=%h  %ai  %an  %s", "-10");
-        sb.append(gitLog).append("\n");
+        try {
+            WebClient gh = WebClient.builder()
+                    .baseUrl("https://api.github.com")
+                    .defaultHeader("Accept", "application/vnd.github.v3+json")
+                    .defaultHeader("User-Agent", "AegisPay-TriageAgent")
+                    .codecs(c -> c.defaultCodecs().maxInMemorySize(512 * 1024))
+                    .build();
 
-        // ── recent changes to the named service ─────────────────────────────────
-        sb.append("=== RECENT CHANGES TO services/").append(serviceName).append("/ (last 5 commits) ===\n");
-        String serviceLog = runGit(
-                "log", "--oneline", "--format=%h  %ai  %s",
-                "-5", "--", "services/" + serviceName + "/");
-        sb.append(serviceLog.isBlank() ? "(no recent commits for this service path)\n" : serviceLog + "\n");
+            // Last 15 commits on dev branch
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> commits = gh.get()
+                    .uri("/repos/" + githubRepo + "/commits?sha=dev&per_page=15")
+                    .retrieve().bodyToMono(List.class)
+                    .block(Duration.ofSeconds(10));
 
-        // ── unstaged / staged changes (indicates in-flight work) ─────────────────
-        sb.append("\n=== WORKING TREE STATUS ===\n");
-        String status = runGit("status", "--short");
-        sb.append(status.isBlank() ? "(clean working tree)\n" : status + "\n");
+            if (commits == null || commits.isEmpty()) {
+                sb.append("(no commits returned from GitHub API)\n");
+                return sb.toString();
+            }
 
+            sb.append("Recent commits on dev branch:\n");
+            for (Object obj : commits) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> commit = (Map<String, Object>) obj;
+                String sha = ((String) commit.get("sha")).substring(0, 8);
+                @SuppressWarnings("unchecked")
+                Map<String, Object> commitData = (Map<String, Object>) commit.get("commit");
+                String message = ((String) commitData.get("message")).split("\n")[0]; // first line only
+                @SuppressWarnings("unchecked")
+                Map<String, Object> author = (Map<String, Object>) commitData.get("author");
+                String date = (String) author.get("date");
+                String name = (String) author.get("name");
+                sb.append("  ").append(sha).append("  ").append(date).append("  ")
+                        .append(name).append("  ").append(message).append("\n");
+            }
+
+            // Filter for service-specific commits
+            sb.append("\nCommits touching services/").append(serviceName).append("/ (recent 15):\n");
+            boolean found = false;
+            for (Object obj : commits) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> commit = (Map<String, Object>) obj;
+                @SuppressWarnings("unchecked")
+                Map<String, Object> commitData = (Map<String, Object>) commit.get("commit");
+                String message = ((String) commitData.get("message")).split("\n")[0];
+                if (message.contains(serviceName) || message.contains(
+                        serviceName.replace("-service", "").replace("-", " "))) {
+                    String sha = ((String) commit.get("sha")).substring(0, 8);
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> author = (Map<String, Object>) commitData.get("author");
+                    sb.append("  ").append(sha).append("  ").append(author.get("date"))
+                            .append("  ").append(message).append("\n");
+                    found = true;
+                }
+            }
+            if (!found) sb.append("  (no recent commits matching '").append(serviceName).append("')\n");
+
+        } catch (Exception e) {
+            sb.append("GitHub API error: ").append(e.getMessage()).append("\n");
+            log.warn("DeploymentHistoryTool GitHub API failed: {}", e.getMessage());
+        }
         return sb.toString();
     }
 
-    // ── helpers ──────────────────────────────────────────────────────────────────
+    // ── Local git (non-K8s mode) ──────────────────────────────────────────────
+
+    private String fetchLocalGitHistory(String serviceName) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("=== GIT LOG (last 10 commits) ===\n");
+        sb.append(runGit("log", "--oneline", "--no-merges", "--format=%h  %ai  %an  %s", "-10")).append("\n");
+        sb.append("=== RECENT CHANGES TO services/").append(serviceName).append("/ ===\n");
+        String serviceLog = runGit("log", "--oneline", "--format=%h  %ai  %s", "-5", "--", "services/" + serviceName + "/");
+        sb.append(serviceLog.isBlank() ? "(no recent commits for this service path)\n" : serviceLog + "\n");
+        sb.append("\n=== WORKING TREE STATUS ===\n");
+        String status = runGit("status", "--short");
+        sb.append(status.isBlank() ? "(clean working tree)\n" : status + "\n");
+        return sb.toString();
+    }
 
     private String runGit(String... args) {
         List<String> cmd = new ArrayList<>();
         cmd.add("git");
         for (String arg : args) cmd.add(arg);
-
         try {
-            ProcessBuilder pb = new ProcessBuilder(cmd)
-                    .directory(projectRoot)
-                    .redirectErrorStream(true);
+            ProcessBuilder pb = new ProcessBuilder(cmd).directory(projectRoot).redirectErrorStream(true);
             Process proc = pb.start();
             StringBuilder output = new StringBuilder();
-            try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(proc.getInputStream()))) {
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(proc.getInputStream()))) {
                 String line;
-                while ((line = reader.readLine()) != null) {
-                    output.append(line).append("\n");
-                }
+                while ((line = reader.readLine()) != null) output.append(line).append("\n");
             }
             boolean finished = proc.waitFor(10, TimeUnit.SECONDS);
-            if (!finished) {
-                proc.destroyForcibly();
-                return "(git timed out)";
-            }
+            if (!finished) { proc.destroyForcibly(); return "(git timed out)"; }
             String result = output.toString().trim();
             return result.isEmpty() ? "(no output)" : result;
         } catch (Exception e) {
-            log.warn("DeploymentHistoryTool: git command {} failed: {}", cmd, e.getMessage());
             return "(git unavailable: " + e.getMessage() + ")";
         }
     }
