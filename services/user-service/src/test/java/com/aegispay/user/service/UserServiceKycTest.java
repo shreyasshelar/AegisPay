@@ -154,7 +154,7 @@ class UserServiceKycTest {
             // We verify the call was made with the correct externalId and tenantId; the UUID
             // arg is matched with any() since it will be null in the mock context.
             verify(keycloakAdminService).writeUserAttributes(
-                    eq(EXTERNAL_ID), any(), eq(TENANT_ID));
+                    eq(EXTERNAL_ID), any(), eq(TENANT_ID), anyString());
         }
 
         /** Simulates Google/Entra/Okta SSO: externalId is the IdP sub claim. */
