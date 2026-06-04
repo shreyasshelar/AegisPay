@@ -92,7 +92,12 @@ public class SecurityConfig {
                     "/actuator/health",
                     "/actuator/health/**",
                     "/actuator/info",
-                    "/actuator/prometheus"
+                    "/actuator/prometheus",
+                    // Internal service-to-service endpoints — called by risk-engine
+                    // without a user JWT (no end-user context, Keycloak service account
+                    // not configured).  Network-level security (NetworkPolicy) restricts
+                    // access to in-cluster callers only.
+                    "/ai/fraud/explain"
                 ).permitAll()
                 .anyRequest().authenticated()
             )
