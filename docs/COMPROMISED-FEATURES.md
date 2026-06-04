@@ -239,7 +239,50 @@ all three backend options (GCP SM / Vault / AWS SM) clearly.
 Vault code path in `externalsecrets.yaml` preserved (behind `useVault: true` flag)
 for future prod use — not misleading now that it's clearly documented as inactive.
 
-### P3-6 · No image-build CI for main branch (prod pipeline prerequisite)
+### P3-6 · Security scanning — parked items
+
+#### Trivy image scan — why it's schedule/dispatch only
+`security-scan.yml` runs Trivy only on `schedule` + `workflow_dispatch`, never on PRs.
+**Why**: Docker images are built by `cd-dev.yml` *after* a PR is merged — no image
+exists at PR time. Running Trivy on PR would scan the old `dev-latest` (pre-change),
+which is meaningless. Scanning 8 service images also adds ~10 min per PR.
+**Weekly is the right cadence** — base-image CVEs don't change per-commit.
+**Future option**: Add `trivy fs .` (filesystem scan, no image needed) on PRs to catch
+Dockerfile and Helm misconfiguration. Fast (~30s), no image pull required.
+
+#### Dependabot — current state
+`dependabot.yml` is wired for Maven + npm (grouped, security-first).
+`dependabot-auto-merge.yml` auto-approves + squash-merges patch/minor PRs.
+Major version bumps get the `needs-review` label.
+**One action still needed from repo owner**:
+> Repo Settings → General → Pull Requests → check **"Allow auto-merge"**
+Without this, Dependabot PRs can be approved but GitHub won't auto-merge them.
+
+#### Free security scanning — what can still be added
+All tools below are free for public repos and complement existing (CodeQL + OWASP + Trivy):
+
+| Tool | What it catches | Trigger |
+|------|----------------|---------|
+| **Gitleaks** | Secrets committed to git (API keys, passwords, tokens) | Every push — pre-commit + CI |
+| **Trivy fs** | Dockerfile + Helm K8s misconfigs | Every PR (fast, no image needed) |
+| **Checkov** | K8s/Helm security misconfigs (privileged pods, root containers, no limits) | Every PR on `infra/**` |
+| **Semgrep** | Java SAST — SQL injection, insecure deserialization, auth bypasses | Every PR on `services/**` |
+| **SonarCloud** | Java + TypeScript code quality + security; inline PR comments | Every PR (free for public repos) |
+| **GitHub Dependency Review Action** | Blocks PRs that introduce a known-CVE dependency | Every PR (native GitHub, zero config) |
+
+**Fintech priority order**: Gitleaks → Semgrep → Checkov → Dependency Review → SonarCloud
+**One PR wires all of them** into `security-scan.yml`. Park until after go-live stabilisation.
+
+#### Firebase Web API key — monitoring note
+`AIzaSyCN4tJBSceEYIzGqbVaqjGSuSlvcm-LoU8` removed from git history (rebase + force push, 2026-06-04).
+Key is intentionally public (embedded in JS bundle for Firebase SDK initialisation).
+Security comes from Firebase Authorized Domains + Security Rules, not key secrecy.
+**If you want to rotate anyway**: update GitHub Secret `NEXT_PUBLIC_FIREBASE_API_KEY`
+and GCP SM secret `aegispay-firebase-api-key`, then redeploy the web service.
+
+---
+
+### P3-7 · No image-build CI for main branch (prod pipeline prerequisite)
 **Current**: Only `cd-dev.yml` builds Docker images, always tagged `dev-<sha>`.
 `cd-prod.yml` (manual-only, disabled) expects images tagged `prod-<sha>` in GHCR.
 No workflow on `main` builds `prod-<sha>` images — prod deploys cannot happen yet.
