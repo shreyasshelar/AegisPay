@@ -28,11 +28,14 @@ jobs:
           cache: maven
 
       - name: Run OWASP dependency-check
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
         run: |
           mvn --batch-mode --no-transfer-progress \
             org.owasp:dependency-check-maven:check \
             -DfailBuildOnCVSS=7 \
             -DsuppressionsLocation=.github/owasp-suppressions.xml \
+            -DnvdApiKey="${NVD_API_KEY}" \
             --no-transfer-progress || true
 
       - name: Upload dependency-check report
