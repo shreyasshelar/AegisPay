@@ -1,7 +1,14 @@
 name: CD — Deploy to Dev (dev branch)
 
-# Triggers when "CI — Java (Smart)" completes successfully on the dev branch,
-# OR when manually dispatched.
+# Triggers when either CI workflow completes on dev, OR when manually dispatched.
+#
+# Two trigger paths:
+#   CI — Java (Smart) completes → cd-dev detects Java + web changes, builds both
+#   CI — Web App     completes → cd-dev detects web changes, builds web only
+#
+# This dual-trigger ensures web-only commits (apps/web/** changes that don't
+# touch any Java service or Helm chart) still get built and deployed.
+# Without it, web-only PRs have no auto-deploy because ci-java.yml never runs.
 #
 # Smart build: only builds images for services/web that actually changed.
 # If libs/ changed → rebuild ALL Java services (they all depend on shared libs).
@@ -13,7 +20,7 @@ name: CD — Deploy to Dev (dev branch)
 
 on:
   workflow_run:
-    workflows: ["CI — Java (Smart)"]
+    workflows: ["CI — Java (Smart)", "CI — Web App"]
     types: [completed]
     branches: [dev]
   # Manual trigger: use force-all=true to rebuild every service regardless of diff.
