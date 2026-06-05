@@ -62,7 +62,11 @@ management:
 
 aegispay:
   user-service:
-    base-url: ${USER_SERVICE_URI:http://localhost:8081}
+    base-url: ${USER_SERVICE_URL:http://localhost:8081}
+    # Shared secret for X-Internal-Api-Key header — used by UserServiceFallbackClient
+    # to fetch full (unmasked) contact details when UserContactDocument is missing.
+    # Override in production via USER_SERVICE_INTERNAL_API_KEY env var (GCP Secret Manager).
+    internal-api-key: ${USER_SERVICE_INTERNAL_API_KEY:aegispay-internal-dev-key}
   notification:
     websocket:
       endpoint: /ws

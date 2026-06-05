@@ -31,6 +31,10 @@ data:
   # GitHub repo for DeploymentHistoryTool (git not available in container)
   GITHUB_REPO: "shreyasshelar/AegisPay"
 
+  # Explicit FQDN for user-service — used by UserLookupService when JWT lacks
+  # aegispay_user_id claim (first-session social login users).
+  USER_SERVICE_URL: {{ printf "http://user-service.%s.svc.cluster.local:8081" .Values.global.namespace | quote }}
+
   # SPRING_APPLICATION_JSON: runtime overrides (no rebuild needed).
   # Only sets triage project root — all AI model config is in application-dev.yml.
   SPRING_APPLICATION_JSON: >-

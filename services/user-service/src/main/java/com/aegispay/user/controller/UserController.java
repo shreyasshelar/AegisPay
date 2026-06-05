@@ -3,7 +3,19 @@ package com.aegispay.user.controller;
 import com.aegispay.common.domain.dto.ApiResponse;
 import com.aegispay.common.domain.dto.PagedResponse;
 import com.aegispay.common.domain.exception.AegisPayException;
-import com.aegispay.user.domain.dto.*;
+import com.aegispay.user.domain.dto.KycConfirmRequest;
+import com.aegispay.user.domain.dto.KycDocumentUploadRequest;
+import com.aegispay.user.domain.dto.KycStatusResponse;
+import com.aegispay.user.domain.dto.KycStatusUpdateRequest;
+import com.aegispay.user.domain.dto.PushTokenRequest;
+import com.aegispay.user.domain.dto.RegistrationResult;
+import com.aegispay.user.domain.dto.SendOtpRequest;
+import com.aegispay.user.domain.dto.UpdatePhoneRequest;
+import com.aegispay.user.domain.dto.UpdateSmsPreferenceRequest;
+import com.aegispay.user.domain.dto.UserContactInfoResponse;
+import com.aegispay.user.domain.dto.UserRegistrationRequest;
+import com.aegispay.user.domain.dto.UserResponse;
+import com.aegispay.user.domain.dto.VerifyOtpRequest;
 import com.aegispay.user.service.PhoneOtpService;
 import com.aegispay.user.service.UserService;
 import jakarta.validation.Valid;
@@ -164,6 +176,32 @@ public class UserController {
     }
 
     // ── Per-user endpoints ─────────────────────────────────────────────────────
+
+    /**
+     * Internal service-to-service endpoint — returns full (unmasked) contact details.
+     *
+     * <p>Used exclusively by the notification-service's {@code UserServiceFallbackClient}
+     * when a {@code UserContactDocument} is missing from MongoDB (e.g. the
+     * {@code user.registered} Kafka event was delayed during a deployment restart and
+     * a transaction notification arrived before the contact document was created).
+     *
+     * <h3>Authentication</h3>
+     * Protected by {@code @PreAuthorize("hasRole('ADMIN')")} — satisfied by the
+     * {@code InternalApiKeyFilter} which grants {@code ROLE_ADMIN} to requests
+     * carrying a valid {@code X-Internal-Api-Key} header. No JWT is required or
+     * expected; this endpoint must never be exposed via the public API Gateway.
+     *
+     * <h3>Why unmasked data here</h3>
+     * The public {@link #getById} endpoint returns a {@link UserResponse} with masked
+     * email ({@code j***@example.com}) for privacy. Notification delivery requires the
+     * full address, which only internal services may access.
+     */
+    @GetMapping("/{userId}/internal/contact")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<UserContactInfoResponse>> getContactInfo(
+            @PathVariable UUID userId) {
+        return ResponseEntity.ok(ApiResponse.ok(userService.getContactInfo(userId)));
+    }
 
     /**
      * Lightweight existence check used by transaction-service before initiating a payment.
@@ -406,6 +444,13 @@ public class UserController {
      * </ul>
      */
     private UserResponse resolveUser(UUID userId, Jwt jwt) {
+        if (jwt == null) {
+            // Internal service-to-service call authenticated via X-Internal-Api-Key.
+            // InternalApiKeyFilter sets UsernamePasswordAuthenticationToken (not JwtAuthenticationToken),
+            // so @AuthenticationPrincipal Jwt jwt is null here.  Internal callers always
+            // pass the AegisPay domain UUID → primary-key lookup is always correct.
+            return userService.getById(userId);
+        }
         String aeId = jwt.getClaimAsString("aegispay_user_id");
 
         if (userId.toString().equals(jwt.getSubject()) && (aeId == null || aeId.isBlank())) {

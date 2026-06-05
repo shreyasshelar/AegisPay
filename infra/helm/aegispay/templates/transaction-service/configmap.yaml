@@ -18,4 +18,9 @@ data:
   MONGODB_URI: {{ include "aegispay.mongoUri" . | quote }}
   OAUTH2_JWK_SET_URI: {{ include "aegispay.jwkSetUri" . | quote }}
   SERVER_PORT: "8082"
+  # Explicit FQDN — prevents short-name DNS lookup failures if the service runs
+  # in a namespace different from the default search domain.
+  # resolveUserId() falls back to http://user-service:8081 without this, which works
+  # within the same namespace but is fragile across multi-namespace topologies.
+  USER_SERVICE_URL: {{ printf "http://user-service.%s.svc.cluster.local:8081" .Values.global.namespace | quote }}
 {{- end }}

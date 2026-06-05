@@ -292,6 +292,17 @@ services:
             name: aegispay-fast2sms-secret
             key: api-key
             optional: true   # SMS is optional — service starts without it
+      # Shared secret for X-Internal-Api-Key calls to user-service.
+      # Used by UserServiceFallbackClient to lazily provision UserContactDocument
+      # when user.registered Kafka event was not yet consumed.
+      # Must match USER_SERVICE_INTERNAL_API_KEY in user-service (same secret in GCP SM).
+      # Defaults to "aegispay-internal-dev-key" if the secret doesn't exist yet.
+      - name: USER_SERVICE_INTERNAL_API_KEY
+        valueFrom:
+          secretKeyRef:
+            name: aegispay-internal-api-secret
+            key: api-key
+            optional: true   # Falls back to default "aegispay-internal-dev-key" in dev
       - name: MONGO_PASSWORD
         valueFrom:
           secretKeyRef:

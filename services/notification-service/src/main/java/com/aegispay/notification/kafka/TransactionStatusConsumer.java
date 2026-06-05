@@ -4,6 +4,7 @@ import com.aegispay.common.domain.enums.NotificationType;
 import com.aegispay.common.domain.event.TransactionCompletedEvent;
 import com.aegispay.common.domain.event.TransactionFailedEvent;
 import com.aegispay.common.kafka.KafkaTopics;
+import com.aegispay.notification.client.UserServiceFallbackClient;
 import com.aegispay.notification.dispatcher.NotificationDispatcher;
 import com.aegispay.notification.domain.document.UserContactDocument;
 import com.aegispay.notification.repository.UserContactRepository;
@@ -23,9 +24,10 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class TransactionStatusConsumer {
 
-    private final NotificationDispatcher dispatcher;
-    private final UserContactRepository userContactRepository;
-    private final ObjectMapper objectMapper;
+    private final NotificationDispatcher        dispatcher;
+    private final UserContactRepository         userContactRepository;
+    private final UserServiceFallbackClient     userServiceFallbackClient;
+    private final ObjectMapper                  objectMapper;
 
     /** Ops Slack webhook — receives FAILED alerts regardless of individual user settings. */
     @Value("${aegispay.notification.slack.webhook-url:}")
@@ -33,9 +35,30 @@ public class TransactionStatusConsumer {
 
     // ── Contact resolution helpers ────────────────────────────────────────────
 
+    /**
+     * Resolves the {@link UserContactDocument} for {@code userId}.
+     *
+     * <p>Primary path: read from MongoDB {@code user_contacts} collection (populated
+     * by {@code UserRegisteredConsumer} when {@code user.registered} is consumed).
+     *
+     * <p>Fallback: when the document is missing (the {@code user.registered} event
+     * hasn't been processed yet — e.g. during a deployment restart race or a Kafka
+     * consumer rebalance), call {@link UserServiceFallbackClient#fetchAndProvision}
+     * to retrieve the full contact details from user-service via the internal API key
+     * and lazily create the document.  This ensures that the <em>first</em> transaction
+     * notification for a brand-new user is never silently dropped.
+     */
     private Optional<UserContactDocument> resolveContact(String userId) {
         try {
-            return userContactRepository.findById(userId);
+            Optional<UserContactDocument> contact = userContactRepository.findById(userId);
+            if (contact.isEmpty()) {
+                log.warn("UserContactDocument missing for userId={} — lazily provisioning "
+                        + "via user-service fallback (user.registered event not yet consumed)",
+                        userId);
+                UserContactDocument provisioned = userServiceFallbackClient.fetchAndProvision(userId);
+                return Optional.ofNullable(provisioned);
+            }
+            return contact;
         } catch (Exception ex) {
             log.warn("Contact lookup failed for userId={}: {}", userId, ex.getMessage());
             return Optional.empty();

@@ -3,6 +3,7 @@ package com.aegispay.notification.kafka;
 import com.aegispay.common.domain.enums.NotificationType;
 import com.aegispay.common.domain.event.KycStatusChangedEvent;
 import com.aegispay.common.kafka.KafkaTopics;
+import com.aegispay.notification.client.UserServiceFallbackClient;
 import com.aegispay.notification.dispatcher.NotificationDispatcher;
 import com.aegispay.notification.repository.UserContactRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -19,9 +20,10 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class KycStatusConsumer {
 
-    private final NotificationDispatcher dispatcher;
-    private final UserContactRepository userContactRepository;
-    private final ObjectMapper objectMapper;
+    private final NotificationDispatcher    dispatcher;
+    private final UserContactRepository     userContactRepository;
+    private final UserServiceFallbackClient userServiceFallbackClient;
+    private final ObjectMapper              objectMapper;
 
     @KafkaListener(topics = KafkaTopics.KYC_STATUS_CHANGED, groupId = "notification-service-kyc")
     public void handle(ConsumerRecord<String, String> record) {
@@ -56,7 +58,19 @@ public class KycStatusConsumer {
     private String resolvePhone(String userId) {
         try {
             var contact = userContactRepository.findById(userId);
-            if (contact.isEmpty()) return null;
+            if (contact.isEmpty()) {
+                // Defense-in-depth: lazily provision the contact document if missing.
+                // This covers the edge case where KYC completes before user.registered
+                // has been consumed by this consumer group (e.g. during a pod restart).
+                var provisioned = userServiceFallbackClient.fetchAndProvision(userId);
+                if (provisioned == null) return null;
+                // Only return phone if SMS is enabled and number is on file
+                return provisioned.isSmsNotificationsEnabled()
+                        && provisioned.getPhoneNumber() != null
+                        && !provisioned.getPhoneNumber().isBlank()
+                        ? provisioned.getPhoneNumber()
+                        : null;
+            }
             String phone = contact.get().getPhoneNumber();
             return (phone != null && !phone.isBlank()) ? phone : null;
         } catch (Exception ex) {
