@@ -8,6 +8,7 @@ import com.aegispay.user.domain.dto.KycStatusResponse;
 import com.aegispay.user.domain.dto.KycStatusUpdateRequest;
 import com.aegispay.user.domain.dto.PushTokenRequest;
 import com.aegispay.user.domain.dto.RegistrationResult;
+import com.aegispay.user.domain.dto.UserContactInfoResponse;
 import com.aegispay.user.domain.dto.UserRegistrationRequest;
 import com.aegispay.user.domain.dto.UserResponse;
 import com.aegispay.user.domain.entity.KycDocument;
@@ -147,6 +148,34 @@ public class UserService {
     @Transactional(readOnly = true)
     public boolean existsById(UUID userId) {
         return userRepository.existsById(userId);
+    }
+
+    /**
+     * Returns the <b>unmasked</b> contact details for a user — for internal
+     * service-to-service use only.
+     *
+     * <p>Unlike {@link #getById}, which returns a {@link UserResponse} with masked
+     * email ({@code j***@example.com}) and phone, this method returns the raw,
+     * deliverable values so the notification-service can construct outbound emails and
+     * SMS messages when lazily provisioning a missing {@code UserContactDocument}.
+     *
+     * <p>This method must <b>only</b> be called from endpoints protected by
+     * {@code X-Internal-Api-Key} ({@code ROLE_ADMIN}).  It must never be reachable
+     * from a customer-facing JWT-authenticated path.
+     *
+     * @param userId the AegisPay domain UUID (primary key)
+     * @return unmasked contact info record
+     * @throws com.aegispay.common.domain.exception.AegisPayException with code
+     *         {@code USER_NOT_FOUND} / HTTP 404 if no user exists with this UUID
+     */
+    @Transactional(readOnly = true)
+    public UserContactInfoResponse getContactInfo(UUID userId) {
+        User user = requireUser(userId);
+        return new UserContactInfoResponse(
+                user.getId(),
+                user.getEmail(),
+                user.getPhone(),
+                user.isSmsNotificationsEnabled());
     }
 
     @Transactional(readOnly = true)
