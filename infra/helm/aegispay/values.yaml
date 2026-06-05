@@ -113,15 +113,15 @@ services:
           secretKeyRef:
             name: aegispay-redis-secret
             key: password
-      # Keycloak admin client secret for KeycloakAdminService.writeUserAttributes().
-      # Without this, writeUserAttributes fails with 401 "unauthorized_client" and
-      # aegispay_user_id is never written to Keycloak → JWT never carries the claim
-      # → LedgerService.resolveUserId() slow path is always needed.
-      - name: KEYCLOAK_ADMIN_CLIENT_SECRET
+      # Keycloak master-realm admin password for KeycloakAdminService.fetchAdminToken().
+      # Uses password grant against master realm (admin-cli client) because service-account
+      # tokens in the aegispay realm lack resource_access.realm-management roles in JWT
+      # claims → admin REST API returns 403 even with manage-users role assigned.
+      - name: KEYCLOAK_ADMIN_PASSWORD
         valueFrom:
           secretKeyRef:
-            name: aegispay-keycloak-backend-secret
-            key: client-secret
+            name: aegispay-keycloak-secret
+            key: password
 
   transaction_service:
     enabled: true

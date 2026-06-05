@@ -21,13 +21,19 @@ import java.util.UUID;
  *
  * <p>Flow:
  * <ol>
- *   <li>Obtain a service-account access token via client-credentials grant.</li>
+ *   <li>Obtain an admin access token via password grant against the <b>master realm</b>
+ *       ({@code admin-cli} client + admin username/password). Using the master-realm admin
+ *       token is required because service-account tokens from a non-master realm do not
+ *       automatically include {@code resource_access.realm-management} roles in the JWT
+ *       claims, causing Keycloak's admin REST API to return 403 even when the service
+ *       account user has {@code manage-users} assigned. The master-realm admin token has
+ *       unconditional admin access to all realms.</li>
  *   <li>PUT {@code /admin/realms/{realm}/users/{keycloakId}} with the attributes map.</li>
  * </ol>
  *
  * <p>Called asynchronously after user creation so it never blocks the registration response.
  * If Keycloak is unreachable the user still exists in our DB; the attribute will be written
- * on the next registration attempt.
+ * on the next registration attempt (idempotent path in {@code UserService.register}).
  *
  * <p><b>K8s note</b>: {@code KEYCLOAK_URL} must point to the internal cluster URL
  * ({@code http://keycloak.aegispay-infra.svc.cluster.local:8080}) NOT {@code localhost:8180}.
@@ -39,19 +45,19 @@ public class KeycloakAdminService {
 
     private final RestClient restClient;
     private final String realm;
-    private final String adminClientId;
-    private final String adminClientSecret;
+    private final String adminUsername;
+    private final String adminPassword;
 
     public KeycloakAdminService(
             @Value("${keycloak.auth-server-url:http://localhost:8180}") String authServerUrl,
             @Value("${keycloak.realm:aegispay}")                         String realm,
-            @Value("${keycloak.admin.client-id:aegispay-backend}")       String adminClientId,
-            @Value("${keycloak.admin.client-secret:aegispay-backend-dev-secret}") String adminClientSecret
+            @Value("${keycloak.admin.username:admin}")                   String adminUsername,
+            @Value("${keycloak.admin.password:}")                        String adminPassword
     ) {
-        this.restClient        = RestClient.builder().baseUrl(authServerUrl).build();
-        this.realm             = realm;
-        this.adminClientId     = adminClientId;
-        this.adminClientSecret = adminClientSecret;
+        this.restClient    = RestClient.builder().baseUrl(authServerUrl).build();
+        this.realm         = realm;
+        this.adminUsername = adminUsername;
+        this.adminPassword = adminPassword;
     }
 
     /**
@@ -106,22 +112,40 @@ public class KeycloakAdminService {
 
     // ── helpers ──────────────────────────────────────────────────────────────
 
+    /**
+     * Fetches a Keycloak admin token using the <b>master realm password grant</b>.
+     *
+     * <p>We use the master realm admin user ({@code admin-cli} client, password grant) rather
+     * than a service-account client_credentials grant because:
+     * <ul>
+     *   <li>Service-account tokens issued in the {@code aegispay} realm do not include
+     *       {@code resource_access.realm-management} roles in JWT claims by default, even
+     *       when the SA user has {@code manage-users} assigned — Keycloak requires a custom
+     *       audience/scope mapper to propagate them, which is a complex Keycloak-internal
+     *       configuration step prone to breaking on realm reimport.</li>
+     *   <li>The master-realm admin token unconditionally passes admin REST API checks for
+     *       all realms, eliminating the 403 / unknown_error class of failures.</li>
+     * </ul>
+     * The admin password is injected from GCP Secret Manager via ESO →
+     * {@code KEYCLOAK_ADMIN_PASSWORD} env var so it never lives in plaintext in the repo.
+     */
     private String fetchAdminToken() {
         MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
-        form.add("grant_type",    "client_credentials");
-        form.add("client_id",     adminClientId);
-        form.add("client_secret", adminClientSecret);
+        form.add("grant_type", "password");
+        form.add("client_id",  "admin-cli");
+        form.add("username",   adminUsername);
+        form.add("password",   adminPassword);
 
         @SuppressWarnings("unchecked")
         Map<String, Object> response = restClient.post()
-                .uri("/realms/{realm}/protocol/openid-connect/token", realm)
+                .uri("/realms/master/protocol/openid-connect/token")
                 .contentType(MediaType.APPLICATION_FORM_URLENCODED)
                 .body(form)
                 .retrieve()
                 .body(Map.class);
 
         if (response == null || !response.containsKey("access_token")) {
-            throw new RestClientException("No access_token in Keycloak client-credentials response");
+            throw new RestClientException("No access_token in Keycloak master-realm admin response");
         }
         return (String) response.get("access_token");
     }

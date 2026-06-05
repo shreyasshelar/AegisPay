@@ -73,8 +73,12 @@ keycloak:
   auth-server-url: ${KEYCLOAK_URL:http://localhost:8180}
   realm:           ${KEYCLOAK_REALM:aegispay}
   admin:
-    client-id:     ${KEYCLOAK_ADMIN_CLIENT_ID:aegispay-backend}
-    client-secret: ${KEYCLOAK_ADMIN_CLIENT_SECRET:aegispay-backend-dev-secret}
+    # Master-realm admin credentials used by KeycloakAdminService.fetchAdminToken().
+    # A master-realm password grant is used instead of aegispay-realm client_credentials
+    # because service-account tokens lack resource_access.realm-management roles in JWT
+    # claims (Keycloak default) → admin REST API returns 403 even with manage-users role.
+    username: ${KEYCLOAK_ADMIN_USERNAME:admin}
+    password: ${KEYCLOAK_ADMIN_PASSWORD:}
 
 aegispay:
   outbox:
