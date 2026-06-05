@@ -244,40 +244,75 @@ export const authOptions: NextAuthOptions = {
                   // ── Propagate aegispay_user_id into the access token ────────────
                   // writeUserAttributes is @Async in User Service — it writes the
                   // aegispay_user_id attribute to Keycloak after /register returns.
-                  // The STOMP channel interceptor uses this claim to set the principal
-                  // for convertAndSendToUser routing.  Without refreshing, the current
-                  // session token lacks the claim → STOMP principal falls back to the
-                  // Keycloak sub → WebSocket notifications are silently dropped.
-                  // Wait 1.2 s (covers the @Async Keycloak admin write latency), then
-                  // refresh so the new token carries aegispay_user_id.
+                  // The STOMP channel interceptor uses this claim for WebSocket routing.
+                  // Without refreshing, the current session token lacks the claim →
+                  // STOMP principal falls back to the Keycloak sub → WebSocket
+                  // notifications are silently dropped.
+                  //
+                  // Retry strategy: attempt up to MAX_REFRESH_ATTEMPTS token refreshes,
+                  // each separated by REFRESH_INTERVAL_MS. Stop early when the refreshed
+                  // token carries aegispay_user_id. This converges even when the first
+                  // write races slightly ahead of the token endpoint TTL.
                   try {
-                    await new Promise<void>(r => setTimeout(r, 1200))
-                    // Prefer internal URL to avoid hairpin routing
+                    const MAX_REFRESH_ATTEMPTS = 3
+                    const REFRESH_INTERVAL_MS  = 1500   // 1.5 s between attempts
                     const kcBase     = keycloakInternalBase ?? keycloakPublicBase
                     const kcTokenUrl = `${kcBase}/protocol/openid-connect/token`
-                    const refreshParams: Record<string, string> = {
-                      grant_type:    'refresh_token',
-                      client_id:     process.env.KEYCLOAK_ID!,
-                      refresh_token: account.refresh_token ?? '',
-                    }
-                    if (process.env.KEYCLOAK_SECRET) {
-                      refreshParams.client_secret = process.env.KEYCLOAK_SECRET
-                    }
-                    const kcResp = await fetch(kcTokenUrl, {
-                      method:  'POST',
-                      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                      body:    new URLSearchParams(refreshParams),
-                    })
-                    if (kcResp.ok) {
+
+                    for (let attempt = 1; attempt <= MAX_REFRESH_ATTEMPTS; attempt++) {
+                      await new Promise<void>(r => setTimeout(r, REFRESH_INTERVAL_MS))
+
+                      const refreshParams: Record<string, string> = {
+                        grant_type:    'refresh_token',
+                        client_id:     process.env.KEYCLOAK_ID!,
+                        refresh_token: account.refresh_token ?? '',
+                      }
+                      if (process.env.KEYCLOAK_SECRET) {
+                        refreshParams.client_secret = process.env.KEYCLOAK_SECRET
+                      }
+
+                      const kcResp = await fetch(kcTokenUrl, {
+                        method:  'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body:    new URLSearchParams(refreshParams),
+                      })
+
+                      if (!kcResp.ok) {
+                        console.warn('[auth] Post-provisioning token refresh failed: HTTP',
+                          kcResp.status, '(attempt', attempt, '/', MAX_REFRESH_ATTEMPTS, ')')
+                        continue
+                      }
+
                       const refreshed = await kcResp.json() as {
-                        access_token: string; expires_in: number; refresh_token?: string
+                        access_token: string; expires_in: number;
+                        refresh_token?: string; id_token?: string
                       }
                       account.access_token = refreshed.access_token
                       account.expires_at   = Math.floor(Date.now() / 1000) + refreshed.expires_in
                       if (refreshed.refresh_token) account.refresh_token = refreshed.refresh_token
-                      console.log('[auth] Token refreshed after provisioning — aegispay_user_id claim now in JWT')
-                    } else {
-                      console.warn('[auth] Post-provisioning token refresh failed: HTTP', kcResp.status)
+
+                      // Check if the claim is now present in the refreshed token
+                      let claimPresent = false
+                      try {
+                        const parts = refreshed.access_token?.split('.')
+                        if (parts?.length === 3 && parts[1]) {
+                          const payload = JSON.parse(
+                            Buffer.from(parts[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString(),
+                          ) as Record<string, unknown>
+                          claimPresent = typeof payload['aegispay_user_id'] === 'string'
+                            && !!payload['aegispay_user_id']
+                        }
+                      } catch { /* ignore decode errors */ }
+
+                      if (claimPresent) {
+                        console.log('[auth] aegispay_user_id claim confirmed in JWT after',
+                          attempt, 'refresh attempt(s)')
+                        break
+                      }
+
+                      console.warn('[auth] aegispay_user_id not yet in token after refresh',
+                        attempt, '/', MAX_REFRESH_ATTEMPTS,
+                        '— Keycloak write-back still in flight, retrying...')
                     }
                   } catch (refreshErr) {
                     console.warn('[auth] Post-provisioning token refresh threw:', refreshErr)

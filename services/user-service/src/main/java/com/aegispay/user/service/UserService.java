@@ -58,6 +58,24 @@ public class UserService {
         return userRepository.findByExternalId(externalId)
                 .map(existing -> {
                     log.debug("User already registered (idempotent): externalId={}", externalId);
+                    // Always retry writeUserAttributes on idempotent path.
+                    //
+                    // Rationale: writeUserAttributes is @Async and can fail transiently
+                    // (Keycloak temporarily down, pod restart during first registration, etc.).
+                    // If the initial write failed, the JWT never carries aegispay_user_id and
+                    // LedgerService.resolveUserId() must call /users/me on every single request
+                    // forever — adding latency and a single point of failure.
+                    //
+                    // Re-writing on every subsequent /register call (which auth.ts makes on
+                    // EVERY login) is idempotent in Keycloak (same values overwrite same values)
+                    // and cheap (~200 ms via internal cluster URL).  It guarantees convergence:
+                    // even if N consecutive writes fail due to transient errors, the (N+1)-th
+                    // login will eventually succeed and the JWT will carry the correct claim.
+                    keycloakAdminService.writeUserAttributes(
+                            externalId,
+                            existing.getId(),
+                            existing.getTenantId(),
+                            existing.getRole() != null ? existing.getRole() : "CUSTOMER");
                     return new RegistrationResult(userMapper.toResponse(existing), false);
                 })
                 .orElseGet(() -> {

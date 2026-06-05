@@ -22,4 +22,9 @@ data:
   SMTP_PORT: {{ .Values.global.smtp.port | default "587" | quote }}
   SMTP_USERNAME: {{ .Values.global.smtp.username | default "" | quote }}
   SMTP_FROM_ADDRESS: {{ .Values.global.smtp.fromAddress | default "" | quote }}
+  # UserResolverService base URL — resolves email/phone for outbound notifications.
+  # Without this, notification-service falls back to http://localhost:8081, which is
+  # unreachable in K8s → all email/SMS/push notifications for social-login users fail
+  # silently because the contact info can't be resolved from the Kafka event's userId.
+  USER_SERVICE_URL: {{ printf "http://user-service.%s.svc.cluster.local:8081" .Values.global.namespace | quote }}
 {{- end }}
