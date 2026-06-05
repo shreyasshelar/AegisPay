@@ -98,7 +98,7 @@ services:
     enabled: true
     image:
       repository: user-service
-      tag: dev-6f55811f8880d3b6f7444b39593e8e6baf0abdf4
+      tag: dev-6ca19d5049e86b5e206e248aa3e1b3b340612af5
     replicas: 1
     port: 8081
     resources:
@@ -193,7 +193,7 @@ services:
     enabled: true
     image:
       repository: notification-service
-      tag: dev-3804380a376cd190995e17137b9acea538b15a30
+      tag: dev-6ca19d5049e86b5e206e248aa3e1b3b340612af5
     replicas: 1
     port: 8086
     resources:
