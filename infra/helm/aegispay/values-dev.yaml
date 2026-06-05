@@ -98,7 +98,7 @@ services:
     enabled: true
     image:
       repository: user-service
-      tag: dev-5a29d361aa7f13ff747d729b21e9b77aa809fe43
+      tag: dev-6f55811f8880d3b6f7444b39593e8e6baf0abdf4
     replicas: 1
     port: 8081
     resources:
@@ -136,7 +136,7 @@ services:
     enabled: true
     image:
       repository: ledger-service
-      tag: dev-fbf68bcfd7291598d2a53d6a1ce6ef22a50cd9a5
+      tag: dev-6f55811f8880d3b6f7444b39593e8e6baf0abdf4
     replicas: 1
     port: 8083
     resources:
@@ -284,11 +284,11 @@ services:
     enabled: true
     image:
       repository: web
-      tag: dev-3804380a376cd190995e17137b9acea538b15a30
+      tag: dev-6f55811f8880d3b6f7444b39593e8e6baf0abdf4
     # Updated by cd-dev.yml on every successful web image build.
     # Injected as a pod annotation so ArgoCD detects a spec change and rolls
     # the pod even when the image tag stays "dev-latest" (reused tag scenario).
-    deployTimestamp: "3804380a376cd190995e17137b9acea538b15a30"
+    deployTimestamp: "6f55811f8880d3b6f7444b39593e8e6baf0abdf4"
     replicas: 1
     port: 3000
     resources:
