@@ -186,11 +186,26 @@ public class TopUpService {
         BigDecimal paymentAmount = BigDecimal.valueOf(intent.getAmount())
                 .divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP);
 
-        // Find account — prefer matching currency, fall back to user's primary account
+        // Find account — prefer matching currency, fall back to user's primary account.
+        // Lazy creation: if no account exists (e.g. user.registered Kafka event was missed
+        // during a deployment restart), auto-create a ₹0 INR account here.  This is safe
+        // because UserServiceClient.resolveUserId() already proved the user exists and the
+        // Stripe payment has already been confirmed as succeeded — we must not drop the credit.
         Account account = accountRepository
                 .findByUserIdAndCurrency(userId, paymentCurrency)
                 .or(() -> accountRepository.findByUserId(userId).stream().findFirst())
-                .orElseThrow(() -> new AccountNotFoundException(userId));
+                .orElseGet(() -> {
+                    log.warn("No ledger account found for userId={} pi={} — auto-creating default INR account "
+                            + "(user.registered Kafka event was likely missed during deployment)", userId,
+                            request.paymentIntentId());
+                    return accountRepository.save(Account.builder()
+                            .userId(userId)
+                            .currency("INR")
+                            .availableBalance(BigDecimal.ZERO)
+                            .reservedBalance(BigDecimal.ZERO)
+                            .tenantId("default")
+                            .build());
+                });
 
         String accountCurrency = account.getCurrency();
 
