@@ -6,12 +6,18 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-/** Format a monetary amount for display. */
+/** Format a monetary amount for display.
+ *  Locale is derived from currency: INR → en-IN (lakh/crore grouping),
+ *  EUR → en-IE, GBP → en-GB, everything else → en-US.
+ */
 export function formatAmount(
   amount:   number,
   currency: string = 'INR',
-  locale:   string = 'en-IN',
 ): string {
+  const locale =
+    currency === 'INR' ? 'en-IN' :
+    currency === 'EUR' ? 'en-IE' :
+    currency === 'GBP' ? 'en-GB' : 'en-US'
   return new Intl.NumberFormat(locale, {
     style:                 'currency',
     currency,

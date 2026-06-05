@@ -3,14 +3,21 @@
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { ArrowLeft, ArrowRight, Banknote } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Banknote, AlertTriangle } from 'lucide-react'
 import {
   AmountInput as AegisAmountInput,
   Button as AegisButton,
 } from '@aegispay/design-system'
 import { useSendMoneyStore } from '@/lib/useSendMoneyStore'
+import { formatAmount } from '@/lib/utils'
+import { currencyToInr, inrToCurrency } from '@/lib/currency'
 
 const CURRENCIES = ['INR', 'USD', 'EUR', 'GBP'] as const
+
+// Risk-engine thresholds (INR) — matches risk-engine application.yml
+// NEW_ACCOUNT_HIGH_AMOUNT fires at ≥ ₹5,000 (score +50 → REVIEW for new accounts)
+// HIGH_AMOUNT_UNVERIFIED  fires at  > ₹10,000 (score +30 → contributes to REVIEW/REJECT)
+const RISK_REVIEW_THRESHOLD_INR = 10_000
 
 const schema = z.object({
   amount:   z.string().regex(/^\d+(\.\d{1,2})?$/, 'Enter a valid amount (e.g. 500 or 1234.50)'),
@@ -40,6 +47,13 @@ export function StepAmount() {
 
   // Watch currency so symbol stays in sync with selection
   const selectedCurrency = watch('currency')
+  const watchedAmount    = watch('amount')
+
+  // Convert entered amount to INR for risk threshold comparison
+  const parsedAmt              = parseFloat(watchedAmount) || 0
+  const parsedAmtInInr         = currencyToInr(parsedAmt, selectedCurrency)
+  const exceedsRiskThreshold   = parsedAmt > 0 && parsedAmtInInr > RISK_REVIEW_THRESHOLD_INR
+  const riskThresholdDisplay   = inrToCurrency(RISK_REVIEW_THRESHOLD_INR, selectedCurrency)
 
   function onSubmit(values: FormValues) {
     setAmount(values.amount)
@@ -77,6 +91,15 @@ export function StepAmount() {
           error={errors.amount?.message}
           onChange={(v) => setValue('amount', v, { shouldValidate: true })}
         />
+        {exceedsRiskThreshold && (
+          <div className="mt-2 flex items-start gap-1.5 text-xs text-amber-600">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>
+              Transfers above {formatAmount(riskThresholdDisplay, selectedCurrency)} may undergo
+              additional risk review and could be delayed.
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Note */}

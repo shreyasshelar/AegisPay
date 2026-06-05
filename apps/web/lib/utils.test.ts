@@ -18,14 +18,30 @@ describe('cn (className merger)', () => {
 })
 
 describe('formatAmount', () => {
-  it('formats INR correctly', () => {
-    const result = formatAmount(1000, 'INR', 'en-IN')
-    expect(result).toContain('1,000')
-    expect(result).toContain('00')   // decimal places
+  it('formats INR with lakh grouping', () => {
+    const result = formatAmount(100_000, 'INR')
+    // en-IN locale: ₹1,00,000.00 (lakh grouping, not 100,000)
+    expect(result).toContain('1,00,000')
+    expect(result).toContain('₹')
   })
 
-  it('formats USD correctly', () => {
-    const result = formatAmount(500.5, 'USD', 'en-US')
+  it('formats USD with western grouping', () => {
+    const result = formatAmount(1000, 'USD')
+    // en-US locale: $1,000.00 (NOT $1,000 Indian-style)
+    expect(result).toContain('$')
+    expect(result).toContain('1,000')
+  })
+
+  it('formats GBP correctly — not Indian lakh grouping', () => {
+    const result = formatAmount(1000, 'GBP')
+    expect(result).toContain('£')
+    expect(result).toContain('1,000')
+    // Must NOT contain Indian-style 1,000 misread as lakh grouping artifact
+    expect(result).not.toContain('1,00,')
+  })
+
+  it('formats EUR correctly', () => {
+    const result = formatAmount(500.5, 'EUR')
     expect(result).toContain('500')
     expect(result).toContain('50')
   })

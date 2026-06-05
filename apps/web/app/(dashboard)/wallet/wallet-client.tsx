@@ -19,6 +19,7 @@ import { useAccount, useTopUp } from '@aegispay/api-client'
 import { Header }               from '@/components/header'
 import { useAuthGuard }         from '@/lib/useAuthGuard'
 import { formatAmount, cn }     from '@/lib/utils'
+import { inrToCurrency, currencyToInr } from '@/lib/currency'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -33,16 +34,12 @@ const PRESET_AMOUNTS: Record<Currency, number[]> = {
 }
 
 /**
- * Maximum wallet balance per currency — must match the server-side
- * aegispay.ledger.topup.max-balance (default 100,000).
- * The backend is the authority; this is an early UX guard only.
+ * Maximum wallet balance defined in INR — matches the backend
+ * aegispay.ledger.topup.max-balance (default ₹1,00,000).
+ * For non-INR top-ups the backend converts the amount to INR before checking;
+ * the frontend converts here so users see limits in their selected currency.
  */
-const MAX_BALANCE: Record<Currency, number> = {
-  INR: 100_000,
-  USD: 100_000,
-  EUR: 100_000,
-  GBP: 100_000,
-}
+const BALANCE_LIMIT_INR = 100_000
 
 type Step = 'form' | 'processing' | 'success' | 'failed'
 
@@ -92,11 +89,23 @@ export function WalletClient({ userId }: WalletClientProps) {
   if (blocking) return null
 
   // ── Balance cap check (client-side early validation) ────────────────────────
-  const currentBalance   = account?.availableBalance ?? 0
-  const parsedAmt        = parseAmount(amount) ?? 0
-  const maxAllowed       = MAX_BALANCE[currency]
-  const remainingRoom    = Math.max(0, maxAllowed - currentBalance)
-  const wouldExceedLimit = parsedAmt > 0 && (currentBalance + parsedAmt) > maxAllowed
+  // The backend limit is ₹1,00,000 INR. For non-INR top-ups the backend converts
+  // the entered amount to INR before checking, so we do the same here using
+  // approximate FX rates to give early UX feedback.
+  const accountCurrency      = account?.currency ?? 'INR'
+  const currentBalance       = account?.availableBalance ?? 0
+  const parsedAmt            = parseAmount(amount) ?? 0
+
+  // All comparisons in INR
+  const currentBalanceInInr  = currencyToInr(currentBalance, accountCurrency)
+  const parsedAmtInInr       = currencyToInr(parsedAmt, currency)
+
+  // Display values in selected currency
+  const maxAllowed           = inrToCurrency(BALANCE_LIMIT_INR, currency)
+  const remainingRoomInInr   = Math.max(0, BALANCE_LIMIT_INR - currentBalanceInInr)
+  const remainingRoom        = inrToCurrency(remainingRoomInInr, currency)
+
+  const wouldExceedLimit     = parsedAmt > 0 && (currentBalanceInInr + parsedAmtInInr) > BALANCE_LIMIT_INR
 
   // ── Handlers ────────────────────────────────────────────────────────────────
 
