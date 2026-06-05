@@ -39,13 +39,13 @@ All helpers use coalesce so an explicit values override still wins:
 {{- end }}
 {{/* Keycloak internal BASE URL (no realm path) — used by admin API calls e.g. writeUserAttributes */}}
 {{- define "aegispay.keycloakInternalBaseUrl" -}}
-{{- coalesce .Values.global.oauth2.keycloakInternalBaseUrl (printf "http://keycloak.%s.svc.cluster.local:8080" (include "aegispay.infraNs" .)) -}}
+{{- printf "http://keycloak.%s.svc.cluster.local:8080" (include "aegispay.infraNs" .) -}}
 {{- end }}
 
 {{/* API Gateway internal URL — used by server-side Next.js auth.ts for /register calls */}}
-{{/* Using port 8080 (the api-gateway service port in K8s) */}}
+{{/* Derives URL from global.namespace — no override key needed */}}
 {{- define "aegispay.apiGatewayInternalUrl" -}}
-{{- coalesce .Values.global.apiGateway.internalUrl (printf "http://api-gateway.%s.svc.cluster.local:8080" .Values.global.namespace) -}}
+{{- printf "http://api-gateway.%s.svc.cluster.local:8080" .Values.global.namespace -}}
 {{- end }}
 
 {{/* JWK set URI for JWT signature validation (Spring services) */}}
