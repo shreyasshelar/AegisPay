@@ -24,8 +24,7 @@ data:
   # Uses the internal cluster URL to avoid hairpin routing through Cloudflare.
   KEYCLOAK_URL: {{ include "aegispay.keycloakInternalBaseUrl" . | quote }}
   KEYCLOAK_REALM: "aegispay"
-  # Client ID for KeycloakAdminService.writeUserAttributes() — the aegispay-backend
-  # service-account client which holds manage-users role in realm-management.
-  # The client secret is injected via extraEnv from aegispay-keycloak-backend-secret (ESO).
-  KEYCLOAK_ADMIN_CLIENT_ID: "aegispay-backend"
+  # Master-realm admin username for KeycloakAdminService.fetchAdminToken().
+  # The password is injected via extraEnv from aegispay-keycloak-admin-secret (ESO).
+  KEYCLOAK_ADMIN_USERNAME: "admin"
 {{- end }}
