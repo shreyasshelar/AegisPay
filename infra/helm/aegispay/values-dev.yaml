@@ -136,7 +136,7 @@ services:
     enabled: true
     image:
       repository: ledger-service
-      tag: dev-3804380a376cd190995e17137b9acea538b15a30
+      tag: dev-fbf68bcfd7291598d2a53d6a1ce6ef22a50cd9a5
     replicas: 1
     port: 8083
     resources:
