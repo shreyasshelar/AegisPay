@@ -193,7 +193,7 @@ services:
     enabled: true
     image:
       repository: notification-service
-      tag: dev-6ca19d5049e86b5e206e248aa3e1b3b340612af5
+      tag: dev-21e8ee0800fd20d7a37bb77de905c2ff5093f332
     replicas: 1
     port: 8086
     resources:
