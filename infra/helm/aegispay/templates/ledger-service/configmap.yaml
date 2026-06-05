@@ -18,4 +18,11 @@ data:
   MONGODB_URI: {{ include "aegispay.mongoUri" . | quote }}
   OAUTH2_JWK_SET_URI: {{ include "aegispay.jwkSetUri" . | quote }}
   SERVER_PORT: "8083"
+  # UserServiceClient base URL — resolveUserId() calls /api/v1/users/me to map
+  # the Keycloak sub (jwt.sub) to the AegisPay domain UUID so account lookups use
+  # the correct key.  Without this, the URL falls back to http://localhost:8081
+  # (the application.yml default), the call fails, and resolveUserId falls back
+  # to jwt.sub — which is the Keycloak UUID, not the AegisPay UUID — so every
+  # social-login user sees ₹0 balance even when their account has funds.
+  USER_SERVICE_URL: {{ printf "http://user-service.%s.svc.cluster.local:8081" .Values.global.namespace | quote }}
 {{- end }}
