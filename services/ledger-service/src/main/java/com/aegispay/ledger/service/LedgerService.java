@@ -259,11 +259,45 @@ public class LedgerService {
         log.info("Balance rolled back: txn={} amount={}", event.getTransactionId(), amount);
     }
 
-    @Transactional(readOnly = true)
+    /**
+     * Returns all ledger accounts for a user.
+     *
+     * <p><b>Self-healing account provisioning</b>: If no account exists for the user
+     * (e.g. the {@code user.registered} Kafka event was dropped or missed during a
+     * deployment restart), a default INR account at ₹0 is auto-created here.
+     *
+     * <p>This is safe because:
+     * <ul>
+     *   <li>The caller ({@link com.aegispay.ledger.controller.LedgerController#getMyAccounts})
+     *       already resolved {@code userId} via {@link com.aegispay.ledger.client.UserServiceClient},
+     *       which calls {@code /api/v1/users/me} and would 404 if the user doesn't exist.
+     *       By the time we reach this method, the user is confirmed to exist in the DB.</li>
+     *   <li>Starting with ₹0 and then crediting via top-up or receiving a payment is the
+     *       correct initial state for any account.</li>
+     *   <li>The auto-creation is guarded by {@code @Transactional} so a concurrent
+     *       {@code user.registered} event or parallel request cannot create duplicates —
+     *       the {@code UNIQUE (user_id, currency)} constraint in the DB catches races.</li>
+     * </ul>
+     *
+     * <p>Without this, social-login users see an empty balance panel until their first
+     * top-up triggers lazy creation in {@link com.aegispay.ledger.service.TopUpService#confirmTopUp}.
+     */
+    @Transactional
     public List<AccountResponse> getAccountsForUser(UUID userId) {
-        return accountRepository.findByUserId(userId).stream()
-                .map(ledgerMapper::toAccountResponse)
-                .toList();
+        List<Account> accounts = accountRepository.findByUserId(userId);
+        if (accounts.isEmpty()) {
+            log.warn("No ledger account found for userId={} — auto-provisioning default INR account "
+                    + "(user.registered Kafka event likely missed during deployment)", userId);
+            Account provisioned = accountRepository.save(Account.builder()
+                    .userId(userId)
+                    .currency("INR")
+                    .availableBalance(BigDecimal.ZERO)
+                    .reservedBalance(BigDecimal.ZERO)
+                    .tenantId("default")
+                    .build());
+            return List.of(ledgerMapper.toAccountResponse(provisioned));
+        }
+        return accounts.stream().map(ledgerMapper::toAccountResponse).toList();
     }
 
     @Transactional(readOnly = true)
