@@ -31,20 +31,43 @@ public class UserRegisteredConsumer {
             UserRegisteredEvent event = objectMapper.readValue(record.value(), UserRegisteredEvent.class);
             String userId = event.getUserId().toString();
 
-            // Persist email, phone + masked email so EMAIL/SMS can be sent on future events.
-            // smsNotificationsEnabled is explicitly set to FALSE at registration:
-            //   - Phone numbers provided at registration are not OTP-verified yet.
-            //   - SMS is only enabled after the user verifies via OTP (UserService.updatePhone
-            //     auto-sets sms_notifications_enabled = true and publishes UserContactUpdatedEvent).
-            //   - This prevents SMS delivery to unverified numbers collected at sign-up.
-            UserContactDocument contact = UserContactDocument.builder()
-                    .userId(userId)
-                    .email(event.getEmail())
-                    .phoneNumber(event.getPhoneNumber())
-                    .maskedEmail(event.getMaskedEmail())
-                    .smsNotificationsEnabled(false)   // explicitly false until OTP-verified
-                    .updatedAt(Instant.now())
-                    .build();
+            // ── Upsert semantics — preserve OTP-verified phone on re-delivery ──────────
+            // Kafka at-least-once delivery means user.registered can be re-delivered if the
+            // consumer pod crashes after receiving but before committing the offset.
+            //
+            // Scenario that a full-replace save() breaks:
+            //   1. User registers (phone=null for social login).
+            //   2. UserRegisteredConsumer processes event → saves {phone=null, smsEnabled=false}.
+            //   3. User adds + OTP-verifies phone → UserContactUpdatedConsumer sets
+            //      {phone="+91...", smsEnabled=true}.
+            //   4. Pod crashes mid-consumer, user.registered re-delivered.
+            //   5. Full-replace save() overwrites → {phone=null, smsEnabled=false}. ← BUG
+            //      All future SMS notifications silently dropped forever.
+            //
+            // Fix: find the existing document first; only set phone/smsEnabled from this
+            // event if no phone is already on file.  Email fields are always safe to
+            // overwrite — they come from the IdP and may legitimately change.
+            UserContactDocument contact = userContactRepository.findById(userId)
+                    .orElseGet(() -> UserContactDocument.builder()
+                            .userId(userId)
+                            .smsNotificationsEnabled(false)
+                            .build());
+
+            // Email is authoritative from the IdP — always update.
+            contact.setEmail(event.getEmail());
+            contact.setMaskedEmail(event.getMaskedEmail());
+
+            // Phone: only set from the registration event if not already OTP-verified.
+            // UserContactUpdatedConsumer is authoritative for phone (phone must be OTP-verified
+            // before smsNotificationsEnabled is set to true). If a verified phone is already
+            // on file, preserve it and leave smsNotificationsEnabled unchanged.
+            if (contact.getPhoneNumber() == null || contact.getPhoneNumber().isBlank()) {
+                contact.setPhoneNumber(event.getPhoneNumber());
+                // smsNotificationsEnabled stays false at registration — phone is not yet
+                // OTP-verified.  Only UserContactUpdatedConsumer may flip it to true.
+            }
+
+            contact.setUpdatedAt(Instant.now());
             userContactRepository.save(contact);
 
             dispatcher.dispatch(userId, NotificationType.USER_REGISTERED, "WEBSOCKET", null, Map.of());
