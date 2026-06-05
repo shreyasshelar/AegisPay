@@ -98,7 +98,7 @@ services:
     enabled: true
     image:
       repository: user-service
-      tag: dev-c66f714ac3baab28947a297938a57d94e2eeb01e
+      tag: dev-5a29d361aa7f13ff747d729b21e9b77aa809fe43
     replicas: 1
     port: 8081
     resources:
