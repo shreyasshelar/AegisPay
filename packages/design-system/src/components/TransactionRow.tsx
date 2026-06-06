@@ -27,7 +27,13 @@ export function AegisTransactionRow({
   const isFailed = transaction.status === 'FAILED' || transaction.status === 'ROLLED_BACK'
 
   // Always format as absolute value — the arrow / X icon already conveys direction & outcome.
-  const formattedAmount = new Intl.NumberFormat('en-IN', {
+  // Locale is derived from currency so INR uses lakh grouping (₹1,00,000) and foreign
+  // currencies use Western thousands grouping ($1,000 / £1,000 / €1,000).
+  const txLocale =
+    transaction.currency === 'INR' ? 'en-IN' :
+    transaction.currency === 'EUR' ? 'en-IE' :
+    transaction.currency === 'GBP' ? 'en-GB' : 'en-US'
+  const formattedAmount = new Intl.NumberFormat(txLocale, {
     style: 'currency',
     currency: transaction.currency,
     minimumFractionDigits: 2,
