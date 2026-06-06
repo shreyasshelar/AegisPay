@@ -20,6 +20,7 @@ import { Header }               from '@/components/header'
 import { useAuthGuard }         from '@/lib/useAuthGuard'
 import { formatAmount, cn }     from '@/lib/utils'
 import { inrToCurrency, currencyToInr } from '@/lib/currency'
+import { useFxRates }           from '@/lib/useFxRates'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -80,6 +81,11 @@ export function WalletClient({ userId }: WalletClientProps) {
   const { data: account, isLoading: accountLoading } = useAccount(userId)
   const topUp = useTopUp()
 
+  // Live exchange rates from Frankfurter (ECB, no API key).
+  // Format: 1 INR = fxRates[currency] — e.g. { GBP: 0.00936, USD: 0.01190 }
+  // Stale time 1 h; falls back to static FALLBACK_RATES_INR_PER_UNIT while loading.
+  const { data: fxRates, isLoading: fxLoading } = useFxRates()
+
   const [step,     setStep]     = useState<Step>('form')
   const [amount,   setAmount]   = useState('')
   const [currency, setCurrency] = useState<Currency>('INR')
@@ -90,33 +96,36 @@ export function WalletClient({ userId }: WalletClientProps) {
 
   // ── Balance cap logic ────────────────────────────────────────────────────────
   // The backend limit is ₹1,00,000 INR (aegispay.ledger.topup.max-balance).
-  // For non-INR top-ups Stripe converts at LIVE rates before the balance is
-  // credited — those rates differ from every static table we could maintain.
+  // For non-INR top-ups Stripe converts at its own live rates before crediting.
+  // We now use Frankfurter (ECB) live rates for the best possible approximation.
   //
   // Rule:
-  //   INR selected  → exact client-side check: safe to hard-block.
-  //   Non-INR       → informational display only (show ~approx in foreign
-  //                   currency + remaining room in INR). Never hard-block
-  //                   client-side; the backend is the single authority.
-  //                   Static FX rates are indicative only and will drift.
+  //   INR selected  → exact client-side check with hard block.
+  //   Non-INR       → live-rate estimate displayed; backend still authoritative
+  //                   (Stripe's rate may differ slightly from ECB). We soft-warn
+  //                   when the live-rate estimate would exceed the limit, but do
+  //                   not hard-block to avoid false positives from the ECB/Stripe
+  //                   spread (~0–2%).
   const accountCurrency        = account?.currency ?? 'INR'
   const currentBalance         = account?.availableBalance ?? 0
   const parsedAmt              = parseAmount(amount) ?? 0
   const isInr                  = currency === 'INR'
 
-  // Always work in INR for comparisons
-  const currentBalanceInInr    = currencyToInr(currentBalance, accountCurrency)
-  const parsedAmtInInr         = currencyToInr(parsedAmt, currency)
+  // All comparisons in INR (liveRates passed through; falls back to static when null)
+  const currentBalanceInInr    = currencyToInr(currentBalance, accountCurrency, fxRates)
+  const parsedAmtInInr         = currencyToInr(parsedAmt, currency, fxRates)
   const remainingRoomInInr     = Math.max(0, BALANCE_LIMIT_INR - currentBalanceInInr)
 
-  // Approximate foreign-currency equivalents (shown with "~" to signal indicative)
-  const approxMaxInCurrency    = inrToCurrency(BALANCE_LIMIT_INR, currency)
-  const approxRoomInCurrency   = inrToCurrency(remainingRoomInInr, currency)
+  // Display equivalents in selected currency using live rates
+  const approxMaxInCurrency    = inrToCurrency(BALANCE_LIMIT_INR, currency, fxRates)
+  const approxRoomInCurrency   = inrToCurrency(remainingRoomInInr, currency, fxRates)
 
-  // Hard block ONLY when the selected currency matches the account currency (INR).
-  // For foreign currencies the static rate is stale; showing a hard limit in £/$/€
-  // that contradicts Stripe's live rate is actively misleading.
+  // INR: exact hard block.
+  // Non-INR: soft warning only (ECB rate ≠ Stripe rate by ~0–2%; hard-blocking
+  // on ECB rate risks false rejection. Backend is the single authority for FX.)
   const wouldExceedLimit       = isInr && parsedAmt > 0 &&
+    (currentBalanceInInr + parsedAmtInInr) > BALANCE_LIMIT_INR
+  const approachesLimitFx      = !isInr && parsedAmt > 0 &&
     (currentBalanceInInr + parsedAmtInInr) > BALANCE_LIMIT_INR
 
   // ── Handlers ────────────────────────────────────────────────────────────────
@@ -240,9 +249,8 @@ export function WalletClient({ userId }: WalletClientProps) {
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-xs font-medium text-slate-500">Amount</label>
-                {/* Always show the limit in INR — it is the authoritative backend unit.
-                    For non-INR currencies add a "~" approximate so users know it is
-                    indicative (Stripe converts at live rates which differ from our table). */}
+                {/* INR: show exact limit. Non-INR: show INR limit + live-rate equivalent.
+                    "live" label only shown once rates have resolved (not while loading). */}
                 <span className="text-xs text-slate-400">
                   {isInr ? (
                     <>
@@ -256,15 +264,20 @@ export function WalletClient({ userId }: WalletClientProps) {
                   ) : (
                     <>
                       Wallet limit: {formatAmount(BALANCE_LIMIT_INR, 'INR')}
-                      <span className="ml-1 text-slate-300">
-                        (~{formatAmount(approxMaxInCurrency, currency)} indicative)
-                      </span>
+                      {!fxLoading && (
+                        <span className="ml-1 text-slate-300">
+                          (~{formatAmount(approxMaxInCurrency, currency)}{' '}
+                          <span className="italic">live</span>)
+                        </span>
+                      )}
                       {remainingRoomInInr < BALANCE_LIMIT_INR && (
                         <span className="ml-1">
                           · room: {formatAmount(remainingRoomInInr, 'INR')}
-                          <span className="text-slate-300">
-                            {' '}(~{formatAmount(approxRoomInCurrency, currency)})
-                          </span>
+                          {!fxLoading && (
+                            <span className="text-slate-300">
+                              {' '}(~{formatAmount(approxRoomInCurrency, currency)})
+                            </span>
+                          )}
                         </span>
                       )}
                     </>
@@ -299,11 +312,18 @@ export function WalletClient({ userId }: WalletClientProps) {
                     : ' Your wallet is full.'}
                 </p>
               )}
-              {/* Non-INR: informational note — Stripe rate is live, not our static table */}
-              {!isInr && (
+              {/* Non-INR: soft warning when live-rate estimate exceeds limit */}
+              {approachesLimitFx && (
+                <p className="mt-1.5 text-xs text-warning-600">
+                  At the current ECB rate this may exceed the {formatAmount(BALANCE_LIMIT_INR, 'INR')} wallet
+                  limit. Stripe converts at its own live rate — the actual result may differ slightly.
+                </p>
+              )}
+              {/* Non-INR: always show conversion notice */}
+              {!isInr && !approachesLimitFx && (
                 <p className="mt-1.5 text-xs text-slate-400">
-                  {currency} amounts are converted to INR by Stripe at live exchange rates.
-                  The wallet limit is {formatAmount(BALANCE_LIMIT_INR, 'INR')} regardless of currency.
+                  {currency} is converted to INR by Stripe at live rates.
+                  Wallet limit: {formatAmount(BALANCE_LIMIT_INR, 'INR')}.
                 </p>
               )}
             </div>
