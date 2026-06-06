@@ -65,7 +65,7 @@ services:
     enabled: true
     image:
       repository: api-gateway
-      tag: dev-2ab91daf2875c64d84b2de0345b309a6e765e269
+      tag: dev-e0994b47e39efcb45f0e5a1564ed481561337147
     replicas: 1
     port: 8080
     resources:
@@ -98,7 +98,7 @@ services:
     enabled: true
     image:
       repository: user-service
-      tag: dev-6ca19d5049e86b5e206e248aa3e1b3b340612af5
+      tag: dev-e0994b47e39efcb45f0e5a1564ed481561337147
     replicas: 1
     port: 8081
     resources:
@@ -117,7 +117,7 @@ services:
     enabled: true
     image:
       repository: transaction-service
-      tag: dev-2ab91daf2875c64d84b2de0345b309a6e765e269
+      tag: dev-e0994b47e39efcb45f0e5a1564ed481561337147
     replicas: 1
     port: 8082
     resources:
@@ -136,7 +136,7 @@ services:
     enabled: true
     image:
       repository: ledger-service
-      tag: dev-6f55811f8880d3b6f7444b39593e8e6baf0abdf4
+      tag: dev-e0994b47e39efcb45f0e5a1564ed481561337147
     replicas: 1
     port: 8083
     resources:
@@ -155,7 +155,7 @@ services:
     enabled: true
     image:
       repository: payment-orchestrator
-      tag: dev-2ab91daf2875c64d84b2de0345b309a6e765e269
+      tag: dev-e0994b47e39efcb45f0e5a1564ed481561337147
     replicas: 1
     port: 8084
     resources:
@@ -174,7 +174,7 @@ services:
     enabled: true
     image:
       repository: risk-engine
-      tag: dev-3804380a376cd190995e17137b9acea538b15a30
+      tag: dev-e0994b47e39efcb45f0e5a1564ed481561337147
     replicas: 1
     port: 8085
     resources:
@@ -193,7 +193,7 @@ services:
     enabled: true
     image:
       repository: notification-service
-      tag: dev-8f5879e987ffa06f1397b61e8f54dd9da6577a32
+      tag: dev-e0994b47e39efcb45f0e5a1564ed481561337147
     replicas: 1
     port: 8086
     resources:
@@ -244,7 +244,7 @@ services:
     enabled: true
     image:
       repository: reconciliation-service
-      tag: dev-3804380a376cd190995e17137b9acea538b15a30
+      tag: dev-e0994b47e39efcb45f0e5a1564ed481561337147
     replicas: 1
     port: 8087
     resources:
@@ -261,7 +261,7 @@ services:
     enabled: true
     image:
       repository: ai-platform
-      tag: dev-2ab91daf2875c64d84b2de0345b309a6e765e269
+      tag: dev-e0994b47e39efcb45f0e5a1564ed481561337147
     replicas: 1
     port: 8088
     resources:
