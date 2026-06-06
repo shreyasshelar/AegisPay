@@ -47,9 +47,9 @@ secrets:
   # AI provider fallback chain — each provider activated when secretName is set.
   # GCP SM secrets created; ESO service account granted secretAccessor role.
   groq:
-    secretName: "aegispay-groq-api-key"    # GCP SM → aegispay-groq-secret K8s secret
+    secretName: "aegispay-groq-api-key" # GCP SM → aegispay-groq-secret K8s secret
   gemini:
-    secretName: "aegispay-gemini-api-key"  # GCP SM → aegispay-gemini-secret K8s secret
+    secretName: "aegispay-gemini-api-key" # GCP SM → aegispay-gemini-secret K8s secret
   stripe:
     secretPath: "secret/data/aegispay/stripe"
   smtp:
@@ -267,7 +267,7 @@ services:
     enabled: true
     image:
       repository: ai-platform
-      tag: dev-7522c416f7e7ba4527c2e59c8e2ddd5321fdc1c1
+      tag: dev-3be8fb0ca061035a7d4942bebbaa5e33883ed406
     replicas: 1
     port: 8088
     resources:
