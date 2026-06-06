@@ -151,7 +151,7 @@ spec:
         checksum/config: {{ include (print $ctx.Template.BasePath "/" $name "/configmap.yaml") $ctx | sha256sum }}
     spec:
       serviceAccountName: {{ $name }}
-      automountServiceAccountToken: false
+      automountServiceAccountToken: {{ $svc.automountServiceAccountToken | default false }}
       securityContext:
         runAsNonRoot: true
         runAsUser: 1001
@@ -333,6 +333,7 @@ Generic ServiceAccount.
 {{- define "aegispay.serviceAccount" -}}
 {{- $name := .name -}}
 {{- $ctx  := .context -}}
+{{- $svc  := index $ctx.Values.services (replace "-" "_" $name) | default dict -}}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -341,7 +342,7 @@ metadata:
   labels:
     {{- include "aegispay.labels" $ctx | nindent 4 }}
     app.kubernetes.io/name: {{ $name }}
-automountServiceAccountToken: false
+automountServiceAccountToken: {{ $svc.automountServiceAccountToken | default false }}
 {{- end }}
 
 {{/*

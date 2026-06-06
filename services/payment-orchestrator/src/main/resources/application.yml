@@ -59,7 +59,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,prometheus,metrics
+        include: health,info,prometheus,metrics,circuitbreakers
   metrics:
     tags:
       service: ${spring.application.name}
