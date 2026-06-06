@@ -1,14 +1,23 @@
 /**
- * Approximate INR exchange rates: 1 unit of the key currency = N INR.
+ * Live exchange rates format (Frankfurter / ECB):
+ *   1 INR = liveRates[currency] units of that currency
+ *   e.g. { USD: 0.011905, EUR: 0.010989, GBP: 0.009434 }
  *
- * These are used exclusively for client-side UX validation and display.
- * The backend is always authoritative; these rates give early feedback so
- * users see limits in their selected currency without a server round-trip.
- *
- * Update these values periodically to keep UX limits reasonable. The backend
- * will catch any edge cases that arise from rate drift.
+ * Use `useFxRates()` to obtain live rates. Pass them to `inrToCurrency` and
+ * `currencyToInr` so every calculation uses the current ECB rate instead of a
+ * stale hardcoded table.
  */
-export const FX_RATES_TO_INR: Record<string, number> = {
+export type LiveRates = Record<string, number>
+
+/**
+ * Fallback rates used ONLY when the Frankfurter API is unreachable (offline /
+ * first render before the query resolves). Documented as fallback — never use
+ * these for hard validation decisions; always prefer live rates.
+ *
+ * Format: 1 unit of the key currency = FALLBACK_RATES[key] INR.
+ * (Inverse of Frankfurter's format so fallback maths stays readable.)
+ */
+export const FALLBACK_RATES_INR_PER_UNIT: Record<string, number> = {
   INR: 1,
   USD: 84,
   EUR: 91,
@@ -16,9 +25,9 @@ export const FX_RATES_TO_INR: Record<string, number> = {
 }
 
 /**
- * Correct locale per currency so Intl.NumberFormat produces the right number
- * grouping. INR uses lakh/crore grouping (₹1,00,000); all others use Western
- * thousands grouping ($1,000 / £1,000 / €1,000).
+ * Correct locale per currency for Intl.NumberFormat grouping.
+ * INR → en-IN (lakh/crore: ₹1,00,000)
+ * All others → Western thousands (£1,000 / €1,000 / $1,000)
  */
 export const CURRENCY_LOCALE: Record<string, string> = {
   INR: 'en-IN',
@@ -28,25 +37,47 @@ export const CURRENCY_LOCALE: Record<string, string> = {
 }
 
 /**
- * Convert an amount defined in INR to its equivalent in another currency.
- * Used to display INR-defined backend limits (e.g. ₹1,00,000 max balance)
- * in whatever currency the user has selected.
+ * Convert an INR amount to another currency.
+ *
+ * Prefers `liveRates` (Frankfurter format: 1 INR = liveRates[currency]).
+ * Falls back to the static table when live rates are unavailable.
  */
-export function inrToCurrency(amountInr: number, toCurrency: string): number {
+export function inrToCurrency(
+  amountInr: number,
+  toCurrency: string,
+  liveRates?: LiveRates | null,
+): number {
   if (toCurrency === 'INR') return amountInr
-  const rate = FX_RATES_TO_INR[toCurrency]
-  if (!rate) return amountInr
-  return amountInr / rate
+
+  if (liveRates?.[toCurrency] != null) {
+    // Frankfurter: 1 INR = liveRates[toCurrency] units
+    return amountInr * liveRates[toCurrency]
+  }
+
+  // Fallback: table stores INR-per-unit → divide
+  const rate = FALLBACK_RATES_INR_PER_UNIT[toCurrency]
+  return rate ? amountInr / rate : amountInr
 }
 
 /**
- * Convert an amount in a given currency to INR.
- * Used to validate user-entered amounts against INR-defined backend limits
- * before submitting (e.g. top-up balance cap, risk-engine thresholds).
+ * Convert a foreign-currency amount to INR.
+ *
+ * Prefers `liveRates` (Frankfurter format: 1 INR = liveRates[currency]).
+ * Falls back to the static table when live rates are unavailable.
  */
-export function currencyToInr(amount: number, fromCurrency: string): number {
+export function currencyToInr(
+  amount: number,
+  fromCurrency: string,
+  liveRates?: LiveRates | null,
+): number {
   if (fromCurrency === 'INR') return amount
-  const rate = FX_RATES_TO_INR[fromCurrency]
-  if (!rate) return amount
-  return amount * rate
+
+  if (liveRates?.[fromCurrency] != null) {
+    // Frankfurter: 1 INR = liveRates[fromCurrency] units → invert
+    return amount / liveRates[fromCurrency]
+  }
+
+  // Fallback: table stores INR-per-unit → multiply
+  const rate = FALLBACK_RATES_INR_PER_UNIT[fromCurrency]
+  return rate ? amount * rate : amount
 }

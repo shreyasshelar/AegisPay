@@ -11,6 +11,7 @@ import {
 import { useSendMoneyStore } from '@/lib/useSendMoneyStore'
 import { formatAmount } from '@/lib/utils'
 import { currencyToInr, inrToCurrency } from '@/lib/currency'
+import { useFxRates } from '@/lib/useFxRates'
 
 const CURRENCIES = ['INR', 'USD', 'EUR', 'GBP'] as const
 
@@ -45,15 +46,18 @@ export function StepAmount() {
     },
   })
 
+  // Live exchange rates — passed through to conversion helpers
+  const { data: fxRates } = useFxRates()
+
   // Watch currency so symbol stays in sync with selection
   const selectedCurrency = watch('currency')
   const watchedAmount    = watch('amount')
 
-  // Convert entered amount to INR for risk threshold comparison
+  // Convert entered amount to INR using live rates for risk threshold comparison
   const parsedAmt              = parseFloat(watchedAmount) || 0
-  const parsedAmtInInr         = currencyToInr(parsedAmt, selectedCurrency)
+  const parsedAmtInInr         = currencyToInr(parsedAmt, selectedCurrency, fxRates)
   const exceedsRiskThreshold   = parsedAmt > 0 && parsedAmtInInr > RISK_REVIEW_THRESHOLD_INR
-  const riskThresholdDisplay   = inrToCurrency(RISK_REVIEW_THRESHOLD_INR, selectedCurrency)
+  const riskThresholdDisplay   = inrToCurrency(RISK_REVIEW_THRESHOLD_INR, selectedCurrency, fxRates)
 
   function onSubmit(values: FormValues) {
     setAmount(values.amount)
