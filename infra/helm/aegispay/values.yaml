@@ -351,6 +351,20 @@ services:
           secretKeyRef:
             name: aegispay-ai-secret
             key: openrouter-api-key
+      # ── AI fallback chain keys (optional — provider skipped if key is absent) ──
+      # K8s secrets are created by ESO only after secrets.groq/gemini.secretName is set.
+      - name: GROQ_API_KEY
+        valueFrom:
+          secretKeyRef:
+            name: aegispay-groq-secret
+            key: groq-api-key
+            optional: true   # pod starts normally even if GCP SM secret not yet created
+      - name: GEMINI_API_KEY
+        valueFrom:
+          secretKeyRef:
+            name: aegispay-gemini-secret
+            key: gemini-api-key
+            optional: true   # pod starts normally even if GCP SM secret not yet created
       - name: MONGO_PASSWORD
         valueFrom:
           secretKeyRef:
@@ -494,6 +508,16 @@ secrets:
   ai:
     secretPath: "aegispay/ai-keys"
     secretName: "aegispay-openrouter-api-key"
+  # AI fallback chain providers — set secretName once the GCP SM secret exists.
+  # Leave blank ("") to skip that provider (no ExternalSecret created, env var empty,
+  # provider silently excluded from the fallback chain at startup).
+  # Create GCP SM secret first:
+  #   gcloud secrets create aegispay-groq-api-key --replication-policy=automatic
+  #   echo -n "gsk_xxx" | gcloud secrets versions add aegispay-groq-api-key --data-file=-
+  groq:
+    secretName: ""   # set to "aegispay-groq-api-key" after creating the GCP SM secret
+  gemini:
+    secretName: ""   # set to "aegispay-gemini-api-key" after creating the GCP SM secret
   stripe:
     secretPath: "aegispay/stripe"
     secretName: "aegispay-stripe-secret-key"
