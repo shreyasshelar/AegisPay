@@ -110,7 +110,10 @@ public class SecurityConfig {
                     "/actuator/health",
                     "/actuator/health/**",
                     "/actuator/info",
-                    "/actuator/prometheus"
+                    "/actuator/prometheus",
+                    "/actuator/metrics",
+                    "/actuator/metrics/**",
+                    "/actuator/circuitbreakers"
                 ).permitAll()
                 .anyRequest().authenticated()
             )

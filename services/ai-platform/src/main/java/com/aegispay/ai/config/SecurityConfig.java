@@ -93,6 +93,9 @@ public class SecurityConfig {
                     "/actuator/health/**",
                     "/actuator/info",
                     "/actuator/prometheus",
+                    "/actuator/metrics",
+                    "/actuator/metrics/**",
+                    "/actuator/circuitbreakers",
                     // Internal service-to-service endpoints — called by risk-engine
                     // without a user JWT (no end-user context, Keycloak service account
                     // not configured).  Network-level security (NetworkPolicy) restricts

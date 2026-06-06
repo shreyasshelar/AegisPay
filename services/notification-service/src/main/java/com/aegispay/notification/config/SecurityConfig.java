@@ -34,6 +34,9 @@ public class SecurityConfig {
                     "/actuator/health/**",
                     "/actuator/info",
                     "/actuator/prometheus",
+                    "/actuator/metrics",
+                    "/actuator/metrics/**",
+                    "/actuator/circuitbreakers",
                     // STOMP WebSocket handshake — auth is enforced by
                     // StompAuthChannelInterceptor on the CONNECT frame, not here.
                     "/ws/**"
