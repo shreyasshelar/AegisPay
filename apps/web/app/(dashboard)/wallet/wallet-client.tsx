@@ -88,24 +88,36 @@ export function WalletClient({ userId }: WalletClientProps) {
 
   if (blocking) return null
 
-  // ── Balance cap check (client-side early validation) ────────────────────────
-  // The backend limit is ₹1,00,000 INR. For non-INR top-ups the backend converts
-  // the entered amount to INR before checking, so we do the same here using
-  // approximate FX rates to give early UX feedback.
-  const accountCurrency      = account?.currency ?? 'INR'
-  const currentBalance       = account?.availableBalance ?? 0
-  const parsedAmt            = parseAmount(amount) ?? 0
+  // ── Balance cap logic ────────────────────────────────────────────────────────
+  // The backend limit is ₹1,00,000 INR (aegispay.ledger.topup.max-balance).
+  // For non-INR top-ups Stripe converts at LIVE rates before the balance is
+  // credited — those rates differ from every static table we could maintain.
+  //
+  // Rule:
+  //   INR selected  → exact client-side check: safe to hard-block.
+  //   Non-INR       → informational display only (show ~approx in foreign
+  //                   currency + remaining room in INR). Never hard-block
+  //                   client-side; the backend is the single authority.
+  //                   Static FX rates are indicative only and will drift.
+  const accountCurrency        = account?.currency ?? 'INR'
+  const currentBalance         = account?.availableBalance ?? 0
+  const parsedAmt              = parseAmount(amount) ?? 0
+  const isInr                  = currency === 'INR'
 
-  // All comparisons in INR
-  const currentBalanceInInr  = currencyToInr(currentBalance, accountCurrency)
-  const parsedAmtInInr       = currencyToInr(parsedAmt, currency)
+  // Always work in INR for comparisons
+  const currentBalanceInInr    = currencyToInr(currentBalance, accountCurrency)
+  const parsedAmtInInr         = currencyToInr(parsedAmt, currency)
+  const remainingRoomInInr     = Math.max(0, BALANCE_LIMIT_INR - currentBalanceInInr)
 
-  // Display values in selected currency
-  const maxAllowed           = inrToCurrency(BALANCE_LIMIT_INR, currency)
-  const remainingRoomInInr   = Math.max(0, BALANCE_LIMIT_INR - currentBalanceInInr)
-  const remainingRoom        = inrToCurrency(remainingRoomInInr, currency)
+  // Approximate foreign-currency equivalents (shown with "~" to signal indicative)
+  const approxMaxInCurrency    = inrToCurrency(BALANCE_LIMIT_INR, currency)
+  const approxRoomInCurrency   = inrToCurrency(remainingRoomInInr, currency)
 
-  const wouldExceedLimit     = parsedAmt > 0 && (currentBalanceInInr + parsedAmtInInr) > BALANCE_LIMIT_INR
+  // Hard block ONLY when the selected currency matches the account currency (INR).
+  // For foreign currencies the static rate is stale; showing a hard limit in £/$/€
+  // that contradicts Stripe's live rate is actively misleading.
+  const wouldExceedLimit       = isInr && parsedAmt > 0 &&
+    (currentBalanceInInr + parsedAmtInInr) > BALANCE_LIMIT_INR
 
   // ── Handlers ────────────────────────────────────────────────────────────────
 
@@ -117,7 +129,7 @@ export function WalletClient({ userId }: WalletClientProps) {
     }
     if (wouldExceedLimit) {
       toast.error('Balance limit exceeded', {
-        description: `Maximum wallet balance is ${formatAmount(maxAllowed, currency)}. You can add up to ${formatAmount(remainingRoom, currency)} more.`,
+        description: `Maximum wallet balance is ${formatAmount(BALANCE_LIMIT_INR, 'INR')}. You can add up to ${formatAmount(remainingRoomInInr, 'INR')} more.`,
       })
       return
     }
@@ -228,12 +240,34 @@ export function WalletClient({ userId }: WalletClientProps) {
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-xs font-medium text-slate-500">Amount</label>
+                {/* Always show the limit in INR — it is the authoritative backend unit.
+                    For non-INR currencies add a "~" approximate so users know it is
+                    indicative (Stripe converts at live rates which differ from our table). */}
                 <span className="text-xs text-slate-400">
-                  Max balance: {formatAmount(maxAllowed, currency)}
-                  {remainingRoom < maxAllowed && (
-                    <span className="ml-1 text-slate-400">
-                      · room left: {formatAmount(remainingRoom, currency)}
-                    </span>
+                  {isInr ? (
+                    <>
+                      Wallet limit: {formatAmount(BALANCE_LIMIT_INR, 'INR')}
+                      {remainingRoomInInr < BALANCE_LIMIT_INR && (
+                        <span className="ml-1">
+                          · room: {formatAmount(remainingRoomInInr, 'INR')}
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      Wallet limit: {formatAmount(BALANCE_LIMIT_INR, 'INR')}
+                      <span className="ml-1 text-slate-300">
+                        (~{formatAmount(approxMaxInCurrency, currency)} indicative)
+                      </span>
+                      {remainingRoomInInr < BALANCE_LIMIT_INR && (
+                        <span className="ml-1">
+                          · room: {formatAmount(remainingRoomInInr, 'INR')}
+                          <span className="text-slate-300">
+                            {' '}(~{formatAmount(approxRoomInCurrency, currency)})
+                          </span>
+                        </span>
+                      )}
+                    </>
                   )}
                 </span>
               </div>
@@ -256,12 +290,20 @@ export function WalletClient({ userId }: WalletClientProps) {
                   )}
                 />
               </div>
+              {/* INR: exact hard block */}
               {wouldExceedLimit && (
                 <p className="mt-1.5 text-xs text-danger-600">
-                  This would exceed your {formatAmount(maxAllowed, currency)} balance limit.
-                  {remainingRoom > 0
-                    ? ` You can add up to ${formatAmount(remainingRoom, currency)}.`
+                  This would exceed your {formatAmount(BALANCE_LIMIT_INR, 'INR')} balance limit.
+                  {remainingRoomInInr > 0
+                    ? ` You can add up to ${formatAmount(remainingRoomInInr, 'INR')}.`
                     : ' Your wallet is full.'}
+                </p>
+              )}
+              {/* Non-INR: informational note — Stripe rate is live, not our static table */}
+              {!isInr && (
+                <p className="mt-1.5 text-xs text-slate-400">
+                  {currency} amounts are converted to INR by Stripe at live exchange rates.
+                  The wallet limit is {formatAmount(BALANCE_LIMIT_INR, 'INR')} regardless of currency.
                 </p>
               )}
             </div>
