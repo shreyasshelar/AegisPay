@@ -320,6 +320,9 @@ services:
       tag: latest
     replicas: 2
     port: 8091
+    # IncidentTriageAgent tools (LogReaderTool, PodRestartTool) call the K8s API
+    # using the pod's ServiceAccount token. All other services keep false (default).
+    automountServiceAccountToken: true
     resources:
       requests:
         cpu: 500m

@@ -68,7 +68,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,prometheus,metrics,gateway
+        include: health,info,prometheus,metrics,gateway,circuitbreakers
   endpoint:
     health:
       show-details: when_authorized
