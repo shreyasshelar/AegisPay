@@ -65,7 +65,7 @@ services:
     enabled: true
     image:
       repository: api-gateway
-      tag: dev-3804380a376cd190995e17137b9acea538b15a30
+      tag: dev-2ab91daf2875c64d84b2de0345b309a6e765e269
     replicas: 1
     port: 8080
     resources:
@@ -117,7 +117,7 @@ services:
     enabled: true
     image:
       repository: transaction-service
-      tag: dev-3804380a376cd190995e17137b9acea538b15a30
+      tag: dev-2ab91daf2875c64d84b2de0345b309a6e765e269
     replicas: 1
     port: 8082
     resources:
@@ -155,7 +155,7 @@ services:
     enabled: true
     image:
       repository: payment-orchestrator
-      tag: dev-3804380a376cd190995e17137b9acea538b15a30
+      tag: dev-2ab91daf2875c64d84b2de0345b309a6e765e269
     replicas: 1
     port: 8084
     resources:
@@ -261,7 +261,7 @@ services:
     enabled: true
     image:
       repository: ai-platform
-      tag: dev-a89617b2a9e6ca99a497d1894fb83df31271c71a
+      tag: dev-2ab91daf2875c64d84b2de0345b309a6e765e269
     replicas: 1
     port: 8088
     resources:
