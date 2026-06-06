@@ -45,6 +45,9 @@ public class SecurityConfig {
         "/actuator/health/**",
         "/actuator/info",
         "/actuator/prometheus",
+        "/actuator/metrics",
+        "/actuator/metrics/**",
+        "/actuator/circuitbreakers",
     };
 
     private final GatewayProperties gatewayProperties;

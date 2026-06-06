@@ -34,6 +34,9 @@ public class SecurityConfig {
                     "/actuator/health/**",
                     "/actuator/info",
                     "/actuator/prometheus",
+                    "/actuator/metrics",
+                    "/actuator/metrics/**",
+                    "/actuator/circuitbreakers",
                     // WebSocket SockJS HTTP upgrade — token is inside the STOMP CONNECT
                     // frame, not in the HTTP Authorization header, so we cannot validate
                     // it here.  StompAuthInterceptor handles JWT auth at the STOMP layer.
