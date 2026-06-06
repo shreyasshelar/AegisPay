@@ -507,6 +507,11 @@ secrets:
   clickhouse:
     secretPath: "aegispay/clickhouse"
     secretName: "aegispay-clickhouse-password"
+  # Keycloak master-realm admin password — used by KeycloakAdminService.fetchAdminToken()
+  # to write aegispay_user_id back to Keycloak user attributes after registration.
+  # GCP SM secret: aegispay-keycloak-admin-password → K8s secret: aegispay-keycloak-secret
+  keycloak:
+    secretName: "aegispay-keycloak-admin-password"
   cloudflare:
     secretName: "aegispay-cloudflare-tunnel-token"
   web:
