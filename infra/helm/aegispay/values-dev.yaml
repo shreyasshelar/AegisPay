@@ -44,6 +44,12 @@ secrets:
     secretPath: "secret/data/aegispay/kafka"
   ai:
     secretPath: "secret/data/aegispay/ai-keys"
+  # AI provider fallback chain — each provider activated when secretName is set.
+  # GCP SM secrets created; ESO service account granted secretAccessor role.
+  groq:
+    secretName: "aegispay-groq-api-key"    # GCP SM → aegispay-groq-secret K8s secret
+  gemini:
+    secretName: "aegispay-gemini-api-key"  # GCP SM → aegispay-gemini-secret K8s secret
   stripe:
     secretPath: "secret/data/aegispay/stripe"
   smtp:

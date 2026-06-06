@@ -59,3 +59,19 @@ aegispay:
     openrouter:
       site-url: "https://aegispay.shreyasshelar.uk"
       site-name: "AegisPay Dev"
+
+    # ── AI provider fallback chain ─────────────────────────────────────────────
+    # AiModelConfig builds: OpenRouter → Groq → Gemini
+    # Each provider is activated only when its API key env var is present.
+    # API keys come from K8s secrets (ESO → GCP SM); model names are defaults below.
+    providers:
+      groq:
+        # Groq Cloud — OpenAI-compatible, free tier: 14,400 req/day · 500 req/min
+        # Supports tool calling (function_call / tools parameter)
+        # API key env var: GROQ_API_KEY → GCP SM: aegispay-groq-api-key
+        model: "llama-3.3-70b-versatile"
+      gemini:
+        # Google Gemini via OpenAI-compatible endpoint (v1beta)
+        # Free tier: 15 RPM · 1,500 RPD — supports tool calling
+        # API key env var: GEMINI_API_KEY → GCP SM: aegispay-gemini-api-key
+        model: "gemini-2.0-flash"
