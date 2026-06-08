@@ -401,7 +401,7 @@ jobs:
     if: needs.detect-changes.outputs.helm == 'true'
     steps:
       - uses: actions/checkout@v4
-      - uses: azure/setup-helm@v4
+      - uses: azure/setup-helm@v5
         with: { version: v3.15.0 }
       - name: Lint Helm chart
         run: |
