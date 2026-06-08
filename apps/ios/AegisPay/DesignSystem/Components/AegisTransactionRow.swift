@@ -61,12 +61,7 @@ struct AegisTransactionRow: View {
     }
 
     private func formatAmount(_ amount: Decimal, currency: String) -> String {
-        let formatter              = NumberFormatter()
-        formatter.numberStyle      = .currency
-        formatter.currencyCode     = currency
-        formatter.minimumFractionDigits = 2
-        formatter.maximumFractionDigits = 2
-        return formatter.string(from: amount as NSDecimalNumber) ?? "\(amount)"
+        amount.formatted(currency: currency)
     }
 
     private func relativeDate(_ date: Date) -> String {

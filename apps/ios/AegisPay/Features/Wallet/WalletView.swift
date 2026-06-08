@@ -27,8 +27,38 @@ struct WalletView: View {
                         emptyWalletCard
                     } else {
                         ForEach(viewModel.accounts) { account in
-                            BalanceCard(account: account)
+                            BalanceCard(
+                                account:  account,
+                                fxRates:  viewModel.fxRates,
+                                limitLine: account.currency == "INR"
+                                    ? viewModel.limitLine(currency: "INR")
+                                    : nil
+                            )
                         }
+                    }
+
+                    // ── Wallet limit info (INR accounts only) ─────────────────
+                    if let _ = viewModel.accounts.first(where: { $0.currency == "INR" }) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "info.circle")
+                                .foregroundStyle(Color.aegisPrimary)
+                                .font(.caption)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(viewModel.limitLine(currency: "INR"))
+                                    .font(.caption)
+                                    .foregroundStyle(Color.aegisTextMuted)
+                                Text(viewModel.roomLine(currency: "INR"))
+                                    .font(.caption)
+                                    .foregroundStyle(Color.aegisTextMuted)
+                            }
+                            Spacer()
+                            if viewModel.fxLoading {
+                                ProgressView().scaleEffect(0.6)
+                            }
+                        }
+                        .padding(10)
+                        .background(Color.aegisPrimaryLight)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
                     }
 
                     // ── Add money button ──────────────────────────────────────
@@ -74,10 +104,18 @@ struct WalletView: View {
             // ── Amount entry bottom sheet ─────────────────────────────────────
             .sheet(isPresented: $showTopUpSheet) {
                 TopUpAmountSheet(
-                    amountText:  $amountText,
-                    amountError: $amountError,
-                    isLoading:   viewModel.topUpPhase == .creatingIntent,
+                    amountText:   $amountText,
+                    amountError:  $amountError,
+                    isLoading:    viewModel.topUpPhase == .creatingIntent,
+                    inrRoom:      viewModel.inrRoom,
+                    limitLine:    viewModel.limitLine(currency: "INR"),
+                    roomLine:     viewModel.roomLine(currency: "INR"),
                     onConfirm: { amount in
+                        // Hard block — INR limit
+                        if viewModel.wouldExceedLimit(amount: amount) {
+                            amountError = "Amount exceeds your ₹1,00,000 wallet limit. Room: \(viewModel.inrRoom.formatted(currency: "INR"))"
+                            return
+                        }
                         showTopUpSheet = false
                         viewModel.startTopUp(amount: amount)
                     },
@@ -211,18 +249,12 @@ struct WalletView: View {
 // ── Balance Card ──────────────────────────────────────────────────────────────
 
 private struct BalanceCard: View {
-    let account: Account
+    let account:   Account
+    let fxRates:   FxRates
+    let limitLine: String?  // non-nil for INR accounts only
 
-    private var formattedBalance: String { format(account.availableBalance) }
-    private var formattedReserved: String { format(account.reservedBalance) }
-
-    private func format(_ amount: Decimal) -> String {
-        let nf = NumberFormatter()
-        nf.numberStyle           = .currency
-        nf.currencyCode          = account.currency
-        nf.maximumFractionDigits = 2
-        return nf.string(from: amount as NSDecimalNumber) ?? "\(amount)"
-    }
+    private var formattedBalance: String  { account.availableBalance.formatted(currency: account.currency) }
+    private var formattedReserved: String { account.reservedBalance.formatted(currency: account.currency) }
 
     var body: some View {
         AegisCard {
@@ -240,6 +272,17 @@ private struct BalanceCard: View {
                         .font(.caption)
                         .foregroundStyle(Color.secondary)
                 }
+
+                // For non-INR accounts show live INR equivalent
+                if account.currency != "INR",
+                   let rate = fxRates.rate(for: account.currency),
+                   rate > 0
+                {
+                    let inrEquivalent = account.availableBalance / Decimal(rate)
+                    Text("≈ \(inrEquivalent.formatted(currency: "INR")) at live rate")
+                        .font(.caption2)
+                        .foregroundStyle(Color.secondary)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding()
@@ -252,9 +295,12 @@ private struct BalanceCard: View {
 private struct TopUpAmountSheet: View {
     @Binding var amountText:  String
     @Binding var amountError: String?
-    let isLoading: Bool
-    let onConfirm: (Decimal) -> Void
-    let onCancel:  () -> Void
+    let isLoading:  Bool
+    let inrRoom:    Decimal
+    let limitLine:  String
+    let roomLine:   String
+    let onConfirm:  (Decimal) -> Void
+    let onCancel:   () -> Void
 
     private let presets: [Int] = [500, 1_000, 2_000, 5_000]
 
@@ -272,6 +318,18 @@ private struct TopUpAmountSheet: View {
                     }
                 }
 
+                // Wallet limit info
+                Section {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Label(limitLine, systemImage: "shield.fill")
+                            .font(.caption)
+                            .foregroundStyle(Color.aegisTextMuted)
+                        Label(roomLine, systemImage: "arrow.up.circle")
+                            .font(.caption)
+                            .foregroundStyle(inrRoom <= 0 ? Color.red : Color.aegisTextMuted)
+                    }
+                }
+
                 Section("Quick amounts") {
                     LazyVGrid(
                         columns: Array(repeating: .init(.flexible()), count: 4),
@@ -284,6 +342,7 @@ private struct TopUpAmountSheet: View {
                             }
                             .buttonStyle(.bordered)
                             .tint(amountText == "\(preset)" ? .aegisPrimary : .secondary)
+                            .disabled(Decimal(preset) > inrRoom)
                         }
                     }
                 }
@@ -308,7 +367,7 @@ private struct TopUpAmountSheet: View {
                                 .frame(maxWidth: .infinity, alignment: .center)
                         }
                     }
-                    .disabled(isLoading)
+                    .disabled(isLoading || inrRoom <= 0)
                 }
             }
             .navigationTitle("Add Money")

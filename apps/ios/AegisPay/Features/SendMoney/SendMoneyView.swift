@@ -24,6 +24,9 @@ struct SendMoneyView: View {
             .navigationBarTitleDisplayMode(.large)
             .task { await vm.loadKycStatus(userId: authStore.currentUser?.id ?? "") }
             .onAppear { Task { await vm.loadKycStatus(userId: authStore.currentUser?.id ?? "") } }
+            // Recompute risk warning whenever amount or currency changes
+            .onChange(of: vm.amountText) { _, _ in vm.updateRiskWarning() }
+            .onChange(of: vm.currency)   { _, _ in vm.updateRiskWarning() }
         }
     }
 
@@ -247,6 +250,24 @@ struct SendMoneyView: View {
                             )
                     }
                 }
+            }
+
+            // Risk threshold warning (amber) — shown when amount ≥ ₹10,000 equivalent
+            if let warning = vm.riskWarning {
+                HStack(spacing: 10) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(Color.aegisWarning)
+                        .font(.caption)
+                    Text(warning)
+                        .font(.caption)
+                        .foregroundStyle(Color.aegisWarning)
+                        .lineSpacing(3)
+                }
+                .padding(12)
+                .background(Color.aegisWarningLight)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .transition(.opacity.combined(with: .move(edge: .top)))
+                .animation(.easeInOut(duration: 0.2), value: vm.riskWarning)
             }
 
             HStack(spacing: 12) {
@@ -494,11 +515,7 @@ struct SendMoneyView: View {
 
     private var formattedAmount: String {
         guard let amt = vm.amount else { return "\(vm.currency) \(vm.amountText)" }
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencyCode = vm.currency
-        formatter.maximumFractionDigits = 2
-        return formatter.string(from: amt as NSDecimalNumber) ?? "\(vm.currency) \(amt)"
+        return amt.formatted(currency: vm.currency)
     }
 
     private func stepHeader(icon: String, title: String, subtitle: String) -> some View {
