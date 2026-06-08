@@ -45,7 +45,7 @@
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 
     <!-- Dependency versions -->
-    <spring-cloud.version>2023.0.3</spring-cloud.version>
+    <spring-cloud.version>2025.1.1</spring-cloud.version>
     <spring-ai.version>1.0.0</spring-ai.version>
     <mapstruct.version>1.5.5.Final</mapstruct.version>
     <lombok.version>1.18.34</lombok.version>
