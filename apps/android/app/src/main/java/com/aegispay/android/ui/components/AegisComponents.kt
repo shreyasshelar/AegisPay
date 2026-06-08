@@ -309,13 +309,8 @@ fun AegisTextField(
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 
-fun formatAmount(amount: java.math.BigDecimal, currency: String): String {
-    val fmt = NumberFormat.getCurrencyInstance(
-        if (currency == "INR") Locale("en", "IN") else Locale.US
-    )
-    fmt.currency = java.util.Currency.getInstance(currency)
-    return fmt.format(amount)
-}
+fun formatAmount(amount: java.math.BigDecimal, currency: String): String =
+    com.aegispay.android.ui.wallet.formatCurrency(amount, currency)
 
 fun formatRelative(date: Date): String {
     val diffMs = System.currentTimeMillis() - date.time

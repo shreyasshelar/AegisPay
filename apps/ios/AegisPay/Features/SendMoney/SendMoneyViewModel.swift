@@ -28,6 +28,14 @@ final class SendMoneyViewModel: ObservableObject {
     @Published private(set) var isSubmitting    = false
     @Published private(set) var submissionError: String?
 
+    // ── FX / Risk ─────────────────────────────────────────────────────────────
+    /// Live rates for INR equivalent calculation.
+    @Published private(set) var fxRates: FxRates = FxRates(usd: 0.01190, eur: 0.01099, gbp: 0.00936)
+    /// Amber warning when the INR-equivalent amount ≥ ₹10,000 (risk review threshold).
+    @Published private(set) var riskWarning: String? = nil
+
+    private static let RISK_THRESHOLD_INR: Decimal = 10_000
+
     // ── Status step state ─────────────────────────────────────────────────────
     @Published private(set) var createdTx:      Transaction?
     @Published private(set) var isLoadingStatus = false
@@ -47,12 +55,41 @@ final class SendMoneyViewModel: ObservableObject {
     private var socket:    StompWebSocket?
     private var pollTask:  Task<Void, Never>?
 
-    // ── KYC check ────────────────────────────────────────────────────────────
+    // ── KYC check + FX load ───────────────────────────────────────────────────
 
     func loadKycStatus(userId: String) async {
         kycLoading = true
-        kycStatus  = (try? await userService.getProfile(userId: userId))?.kycStatus
+        async let profile = userService.getProfile(userId: userId)
+        async let rates   = FxRateService.shared.rates()
+        kycStatus = (try? await profile)?.kycStatus
+        fxRates   = await rates
         kycLoading = false
+    }
+
+    // ── Risk threshold check ──────────────────────────────────────────────────
+
+    /// Recompute `riskWarning` whenever amount or currency changes.
+    /// Frankfurter rates: 1 INR = rate[currency] units.
+    /// To convert `amt` in foreign currency to INR: inrEquivalent = amt / rate[currency].
+    func updateRiskWarning() {
+        guard let amt = amount, amt > 0 else { riskWarning = nil; return }
+
+        let inrEquivalent: Decimal
+        if currency == "INR" {
+            inrEquivalent = amt
+        } else if let rate = fxRates.rate(for: currency), rate > 0 {
+            // 1 INR = rate foreign units  →  1 foreign unit = 1/rate INR
+            inrEquivalent = amt / Decimal(rate)
+        } else {
+            inrEquivalent = amt
+        }
+
+        if inrEquivalent >= SendMoneyViewModel.RISK_THRESHOLD_INR {
+            let formatted = inrEquivalent.formatted(currency: "INR")
+            riskWarning = "Transfers ≥ ₹10,000 (~\(formatted)) trigger enhanced risk review — approval may take up to 60 s."
+        } else {
+            riskWarning = nil
+        }
     }
 
     // ── Validation ────────────────────────────────────────────────────────────
@@ -204,16 +241,17 @@ final class SendMoneyViewModel: ObservableObject {
 
     func reset() {
         stopLiveUpdates()
-        payeeId         = ""
-        amountText      = ""
-        note            = ""
-        currency        = "INR"
-        createdTx       = nil
-        submissionError = nil
-        statusError     = nil
-        errorResolution = nil
+        payeeId          = ""
+        amountText       = ""
+        note             = ""
+        currency         = "INR"
+        riskWarning      = nil
+        createdTx        = nil
+        submissionError  = nil
+        statusError      = nil
+        errorResolution  = nil
         isResolvingError = false
-        idempotencyKey  = UUID().uuidString
+        idempotencyKey   = UUID().uuidString
         withAnimation(.easeInOut(duration: 0.25)) { step = .payee }
     }
 }

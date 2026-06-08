@@ -5,9 +5,10 @@ import androidx.lifecycle.viewModelScope
 import com.aegispay.android.auth.AuthRepository
 import com.aegispay.android.network.AegisApiService
 import com.aegispay.android.network.CreateTransactionRequest
-import java.math.BigDecimal
 import com.aegispay.android.network.ErrorResolutionRequest
 import com.aegispay.android.network.ErrorResolutionResponse
+import com.aegispay.android.network.FxRateRepository
+import com.aegispay.android.network.FxRates
 import com.aegispay.android.network.KycStatus
 import com.aegispay.android.network.StompWebSocketClient
 import com.aegispay.android.network.Transaction
@@ -17,6 +18,8 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import okhttp3.OkHttpClient
 import java.io.IOException
+import java.math.BigDecimal
+import java.math.RoundingMode
 import java.util.UUID
 import javax.inject.Inject
 
@@ -54,20 +57,30 @@ data class SendMoneyUiState(
 
     // Offline queue
     val isQueuedOffline:    Boolean               = false,
+
+    // Risk threshold warning (amber) — shown when INR equivalent ≥ ₹10,000
+    val riskWarning:        String?               = null,
 )
 
 // ── ViewModel ─────────────────────────────────────────────────────────────────
 
+/** INR threshold above which enhanced risk review is triggered. */
+private val RISK_THRESHOLD_INR = BigDecimal("10000")
+
 @HiltViewModel
 class SendMoneyViewModel @Inject constructor(
-    private val api:                AegisApiService,
-    private val authRepository:     AuthRepository,
-    private val okHttpClient:       OkHttpClient,
+    private val api:                 AegisApiService,
+    private val authRepository:      AuthRepository,
+    private val okHttpClient:        OkHttpClient,
     private val offlinePaymentQueue: OfflinePaymentQueue,
+    private val fxRateRepository:    FxRateRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SendMoneyUiState())
     val uiState: StateFlow<SendMoneyUiState> = _uiState.asStateFlow()
+
+    private val _fxRates = MutableStateFlow(FxRates())
+    val fxRates: StateFlow<FxRates> = _fxRates.asStateFlow()
 
     // Idempotency key — generated once per session, reused on retry
     private var idempotencyKey: String = UUID.randomUUID().toString()
@@ -81,7 +94,10 @@ class SendMoneyViewModel @Inject constructor(
         }
         viewModelScope.launch {
             _uiState.update { it.copy(kycLoading = true) }
-            val status = runCatching { api.getUser(userId).kycStatus }.getOrNull()
+            val statusDeferred = async { runCatching { api.getUser(userId).kycStatus }.getOrNull() }
+            val ratesDeferred  = async { fxRateRepository.rates() }
+            val status = statusDeferred.await()
+            _fxRates.value = ratesDeferred.await()
             _uiState.update { it.copy(kycStatus = status, kycLoading = false) }
         }
     }
@@ -117,9 +133,54 @@ class SendMoneyViewModel @Inject constructor(
     // ── Field mutations ───────────────────────────────────────────────────────
 
     fun onPayeeIdChange(v: String)  = _uiState.update { it.copy(payeeId = v) }
-    fun onAmountChange(v: String)   = _uiState.update { it.copy(amountText = v) }
-    fun onCurrencyChange(v: String) = _uiState.update { it.copy(currency = v) }
     fun onNoteChange(v: String)     = _uiState.update { it.copy(note = v) }
+
+    fun onAmountChange(v: String) {
+        _uiState.update { it.copy(amountText = v) }
+        recalculateRiskWarning()
+    }
+
+    fun onCurrencyChange(v: String) {
+        _uiState.update { it.copy(currency = v) }
+        recalculateRiskWarning()
+    }
+
+    // ── Risk threshold warning ────────────────────────────────────────────────
+
+    /**
+     * Recomputes the amber risk warning every time amount or currency changes.
+     * Frankfurter rates: 1 INR = rate[currency] units.
+     * To convert [amount] foreign currency to INR: inr = amount / rate[currency].
+     */
+    fun recalculateRiskWarning() {
+        val state  = _uiState.value
+        val amount = state.amountText.toBigDecimalOrNull()
+        if (amount == null || amount <= BigDecimal.ZERO) {
+            _uiState.update { it.copy(riskWarning = null) }
+            return
+        }
+
+        val rates = _fxRates.value
+        val inrEquivalent: BigDecimal = if (state.currency == "INR") {
+            amount
+        } else {
+            val rate = rates.forCurrency(state.currency)
+            if (rate != null && rate > 0) {
+                amount.divide(BigDecimal(rate), 4, RoundingMode.HALF_UP)
+            } else amount
+        }
+
+        if (inrEquivalent >= RISK_THRESHOLD_INR) {
+            val fmt = com.aegispay.android.ui.wallet.formatCurrency(
+                inrEquivalent.setScale(0, RoundingMode.HALF_UP), "INR"
+            )
+            _uiState.update {
+                it.copy(riskWarning = "Transfers ≥ ₹10,000 (~$fmt) trigger enhanced risk review — approval may take up to 60 s.")
+            }
+        } else {
+            _uiState.update { it.copy(riskWarning = null) }
+        }
+    }
 
     // ── Step navigation ───────────────────────────────────────────────────────
 
@@ -161,8 +222,6 @@ class SendMoneyViewModel @Inject constructor(
                 }
                 .onFailure { e ->
                     if (e is IOException || e.cause is IOException) {
-                        // Network unreachable — queue for automatic retry when back online
-                        val state = _uiState.value
                         runCatching {
                             offlinePaymentQueue.enqueue(
                                 payeeId  = state.payeeId.trim(),
@@ -179,8 +238,6 @@ class SendMoneyViewModel @Inject constructor(
                             )
                         }
                     } else {
-                        // Server-side or auth error — surface to user for manual action
-                        // idempotencyKey preserved so the user can retry safely
                         _uiState.update { it.copy(isSubmitting = false, submissionError = e.message) }
                     }
                 }
@@ -204,7 +261,6 @@ class SendMoneyViewModel @Inject constructor(
             ).also { it.connect() }
         }
 
-        // Polling fallback every 4 s
         pollingJob = viewModelScope.launch {
             while (true) {
                 delay(4_000)
@@ -223,14 +279,12 @@ class SendMoneyViewModel @Inject constructor(
     }
 
     private fun handleStatusUpdate(tx: Transaction) {
-        val prev = _uiState.value.createdTransaction
         _uiState.update { it.copy(createdTransaction = tx) }
 
         if (tx.status.isTerminal) {
             stopLiveUpdates()
         }
 
-        // Auto-resolve error on first failure
         if ((tx.status.name == "FAILED" || tx.status.name == "ROLLED_BACK") &&
             tx.failureReason != null &&
             _uiState.value.errorResolution == null &&
@@ -252,7 +306,7 @@ class SendMoneyViewModel @Inject constructor(
                 )
             }
                 .onSuccess { res -> _uiState.update { it.copy(isResolvingError = false, errorResolution = res) } }
-                .onFailure  {      _uiState.update { it.copy(isResolvingError = false) } }
+                .onFailure {       _uiState.update { it.copy(isResolvingError = false) } }
         }
     }
 
@@ -268,7 +322,7 @@ class SendMoneyViewModel @Inject constructor(
     fun reset() {
         stopLiveUpdates()
         idempotencyKey = UUID.randomUUID().toString()
-        _uiState.value = SendMoneyUiState()   // resets isQueuedOffline too
+        _uiState.value = SendMoneyUiState()
     }
 
     override fun onCleared() {

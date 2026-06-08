@@ -6,6 +6,7 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import androidx.compose.animation.*
+import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -381,6 +382,39 @@ private fun ColumnScope.AmountStep(vm: SendMoneyViewModel, s: SendMoneyUiState) 
                 placeholder   = "What's this for?",
                 singleLine    = false,
             )
+        }
+    }
+
+    // Risk threshold warning (amber) — shown when INR equivalent ≥ ₹10,000
+    AnimatedVisibility(
+        visible = s.riskWarning != null,
+        enter   = expandVertically(),
+        exit    = shrinkVertically(),
+    ) {
+        s.riskWarning?.let { warning ->
+            Row(
+                modifier            = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        color  = AegisColor.WarningLight,
+                        shape  = MaterialTheme.shapes.small,
+                    )
+                    .padding(12.dp),
+                verticalAlignment   = Alignment.Top,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(
+                    Icons.Default.Warning,
+                    contentDescription = null,
+                    tint     = AegisColor.Warning,
+                    modifier = Modifier.size(16.dp).padding(top = 1.dp),
+                )
+                Text(
+                    text  = warning,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = AegisColor.Warning,
+                )
+            }
         }
     }
 
