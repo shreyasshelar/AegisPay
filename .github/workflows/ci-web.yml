@@ -153,7 +153,7 @@ jobs:
         uses: docker/setup-buildx-action@v4
 
       - name: Build and push web image (dev)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: apps/web/Dockerfile
