@@ -150,12 +150,15 @@ enable email notifications (low priority until post-launch). (commit 8e13f6c)
 
 ## P2 — After stable go-live (maturity)
 
-### P2-1 · CI integration tests completely skipped (-DskipTests)
-**Problem**: Zero test coverage on CI. All services built with `-DskipTests`.
-**Fix**: Add `services:` block in CI workflow for postgres + kafka + redis, or
-use Testcontainers Cloud. Run `mvn test` instead of `package -DskipTests`.
-**Note**: Do NOT add tests until app is stable and deployed — fixing CI is P0 but
-enabling tests is P2 since Testcontainers requires Docker-in-Docker setup.
+### ~~P2-1~~ ✅ CI unit tests enabled
+All 10 service build jobs in `ci-java.yml` now run `mvn test` (dropped `package -DskipTests`).
+Unit tests use `@ExtendWith(MockitoExtension.class)` with no external service dependencies
+(no Docker, no Testcontainers, no GitHub service containers needed).
+`ci-web.yml` unit-tests job now runs `npm run test --workspace=apps/web` (Vitest).
+New test files added: ReconciliationControllerTest, ReconciliationSchedulerTest (Java);
+currency.test.ts, useFxRates.test.ts (Web); FxRateServiceTests, WalletViewModelTests,
+SendMoneyViewModelTests (iOS); FxRateRepositoryTest, WalletViewModelTest,
+SendMoneyViewModelTest (Android).
 
 ### ~~P2-2~~ ✅ Grafana alert rules — ACTIVE
 PrometheusRules `aegispay-alerts` live in `aegispay` namespace. kube-prometheus-stack
@@ -239,7 +242,7 @@ all three backend options (GCP SM / Vault / AWS SM) clearly.
 Vault code path in `externalsecrets.yaml` preserved (behind `useVault: true` flag)
 for future prod use — not misleading now that it's clearly documented as inactive.
 
-### P3-6 · Security scanning — parked items
+### ~~P3-6~~ ✅ Security scanning — Gitleaks + Semgrep + Checkov added
 
 #### Trivy image scan — why it's schedule/dispatch only
 `security-scan.yml` runs Trivy only on `schedule` + `workflow_dispatch`, never on PRs.
@@ -258,16 +261,15 @@ Major version bumps get the `needs-review` label.
 > Repo Settings → General → Pull Requests → check **"Allow auto-merge"**
 Without this, Dependabot PRs can be approved but GitHub won't auto-merge them.
 
-#### Free security scanning — parked, implement after go-live stabilisation
+#### Security scanning — implemented
 
-All four are free for public repos and fill gaps that CodeQL + OWASP + Trivy don't cover.
-**Priority order**: Gitleaks → Semgrep → Checkov → Dependabot (already wired, see above).
-One PR adds all four to `security-scan.yml`.
+All three are now live in `security-scan.yml`. `.gitleaks.toml` allowlists the
+intentionally-public Firebase Web API key and CI placeholder values.
 
 ---
 
 ##### 🔐 Gitleaks — never have another secret leak
-**Status**: ⏸ Parked
+**Status**: ✅ Added to `security-scan.yml`
 **What it catches**: API keys, passwords, tokens, connection strings committed to git.
 Would have caught the Firebase `AIzaSy...` key before it ever reached GitHub.
 **Two layers**:
@@ -293,7 +295,7 @@ gitleaks:
 ---
 
 ##### 🔍 Semgrep — Java SAST for payment code
-**Status**: ⏸ Parked
+**Status**: ✅ Added to `security-scan.yml` (rulesets: p/java p/spring p/secrets p/owasp-top-ten)
 **What it catches**: SQL injection, insecure deserialization, hardcoded credentials, JWT algorithm confusion, broken auth — the exact attack surface in `services/`.
 **Why it matters here**: Payment orchestrator, risk engine, and transaction service handle real money. CodeQL covers generic Java; Semgrep has 300+ fintech-specific rules (e.g. Stripe API misuse, JWT `alg:none`, Spring `@PreAuthorize` bypass patterns).
 **Free for public repos** via `semgrep/semgrep-action`.
@@ -322,7 +324,7 @@ semgrep:
 ---
 
 ##### 🛡️ Checkov — K8s/Helm misconfiguration scanner
-**Status**: ⏸ Parked
+**Status**: ✅ Added to `security-scan.yml` (scans `infra/helm/aegispay`, soft_fail: true, SARIF uploaded)
 **What it catches**: Privileged pods, containers running as root, missing resource limits/requests, missing readOnly root filesystem, hostPath mounts, exposed NodePorts, missing security contexts — misconfigs that matter when pods process live payment transactions.
 **Specific to AegisPay**: payment-orchestrator and ledger-service pods with `privileged: true` or no `runAsNonRoot` would be a critical finding on a financial platform audit.
 
@@ -374,17 +376,14 @@ and GCP SM secret `aegispay-firebase-api-key`, then redeploy the web service.
 
 ---
 
-### P3-7 · No image-build CI for main branch (prod pipeline prerequisite)
-**Current**: Only `cd-dev.yml` builds Docker images, always tagged `dev-<sha>`.
-`cd-prod.yml` (manual-only, disabled) expects images tagged `prod-<sha>` in GHCR.
-No workflow on `main` builds `prod-<sha>` images — prod deploys cannot happen yet.
-**Fix**: Create `.github/workflows/ci-java-prod.yml` that triggers on push to `main`
-(or on a release tag), builds all services, pushes `prod-<sha>` images to GHCR.
-Only then uncomment the `workflow_run` trigger in `cd-prod.yml`.
-**Isolation guarantee already in place**: `cd-dev.yml` → `dev-<sha>` → `values-dev.yaml`;
-`cd-prod.yml` → `prod-<sha>` → `values-prod.yaml`. Tags and value files never overlap.
-**Note**: `cd-gcp.yml` deleted — it was checking out `main` and writing to `values-dev.yaml`
-(exact dev→prod contamination vector). `cd-dev.yml` is now the sole GCP deploy pipeline.
+### ~~P3-7~~ ✅ Production CI pipeline created
+**File**: `.github/workflows/ci-java-prod.yml`
+Triggers on push to `main`. Builds all 10 Java services + Next.js web app.
+Runs `mvn test` on every service (unit tests, no Testcontainers required).
+Pushes images tagged `prod-latest` + `prod-<sha>` to GHCR.
+Image tag isolation: dev pipeline → `dev-<sha>`; prod pipeline → `prod-<sha>` — tags never overlap.
+**To enable automated prod deploys**: uncomment the `workflow_run` trigger in `cd-prod.yml`
+once `ci-java-prod.yml` has a successful run on `main`.
 
 ---
 
@@ -394,11 +393,11 @@ Only then uncomment the `workflow_run` trigger in `cd-prod.yml`.
 |---------|--------|------------|-------------|
 | Grafana alert rules | ❌ Disabled | `files/alerting/aegispay-rules.yaml` | P2-2 |
 | Grafana Slack contact point | ❌ Disabled | Same file | P2-3 |
-| Integration tests | ❌ Skipped | `ci-java.yml` (-DskipTests) | P2-1 |
+| Integration tests | ✅ Unit tests enabled | `ci-java.yml` now runs `mvn test`; Vitest for web | P2-1 ✅ |
 | Web frontend | 🔄 CI building | Dockerfile + Helm done; image building | P1-1 |
 | Keycloak secret rotation write | ✅ Fixed — GCE metadata token + SM REST API | `keycloak-secret-rotation-job.yaml` | P2-5 |
 | SMTP / email notifications | ⚠️ Address set, password needed | `values-dev.yaml` smtp section fixed | P1-7 → P2 |
-| Security scanning on PRs | ⚠️ Main-only | `security-scan.yml` | P3-1 |
+| Security scanning on PRs | ✅ Gitleaks + Semgrep + Checkov added | `security-scan.yml` | P3-1 ✅ P3-6 ✅ |
 | Dependabot auto-merge | ⚠️ Manual | GitHub settings | P2-6 |
 | HPA / autoscaling | ✅ Templates ready, disabled on single-node dev | `values-dev.yaml` (autoscaling.enabled: false) | P3-2 |
 | PodDisruptionBudget | ✅ All 11 services have PDB (minAvailable: 1) | Helm templates | P3-3 |

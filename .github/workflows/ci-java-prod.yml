@@ -1,0 +1,235 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# AegisPay — Production CI  (main branch)
+#
+# Triggers on push to main (production-ready commits only).
+# Builds all Java services + Next.js web app and pushes prod-tagged images
+# to GHCR so cd-prod.yml can deploy them.
+#
+# Image tags: prod-latest  +  prod-<sha>
+# (dev pipeline uses dev-latest / dev-<sha> — tags never overlap)
+#
+# After images are pushed, uncomment the workflow_run trigger in cd-prod.yml
+# to enable automated production deploys.
+# ─────────────────────────────────────────────────────────────────────────────
+name: CI — Java (Prod)
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'libs/**'
+      - 'services/**'
+      - 'apps/web/**'
+      - 'packages/**'
+      - 'pom.xml'
+      - 'turbo.json'
+      - 'package.json'
+      - 'infra/helm/**'
+      - '.github/workflows/ci-java-prod.yml'
+  workflow_dispatch:
+    inputs:
+      force_all:
+        description: "Build all services regardless of changes (true/false)"
+        required: false
+        default: "true"
+        type: string
+
+env:
+  JAVA_VERSION: "21"
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/aegispay
+
+concurrency:
+  group: ci-java-prod-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── Step 1: Build + install shared libs ────────────────────────────────────
+  build-libs:
+    name: Build Shared Libs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+          cache: maven
+
+      - name: Build & install shared libs
+        run: |
+          mvn --batch-mode --no-transfer-progress install -N
+          mvn --batch-mode --no-transfer-progress install -N -f libs/pom.xml
+          mvn --batch-mode --no-transfer-progress clean install \
+            -pl libs/common-domain,libs/common-security,libs/common-kafka,libs/common-observability \
+            -DskipTests
+
+      - name: Save libs cache
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.m2/repository/com/aegispay
+          key: aegispay-libs-prod-${{ github.sha }}
+
+  # ── Step 2: Build + test each service ──────────────────────────────────────
+  build-and-test:
+    name: Build & Test — ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    needs: build-libs
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - api-gateway
+          - user-service
+          - transaction-service
+          - ledger-service
+          - payment-orchestrator
+          - risk-engine
+          - notification-service
+          - ai-platform
+          - data-pipeline
+          - reconciliation-service
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+          cache: maven
+
+      - uses: actions/cache/restore@v4
+        with:
+          path: ~/.m2/repository/com/aegispay
+          key: aegispay-libs-prod-${{ github.sha }}
+          restore-keys: aegispay-libs-prod-
+
+      - name: Build & test
+        run: mvn --batch-mode --no-transfer-progress test -pl services/${{ matrix.service }}
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY_TEST }}
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-prod-${{ matrix.service }}
+          path: services/${{ matrix.service }}/target/surefire-reports/
+          retention-days: 14
+
+  # ── Step 3: Docker build & push (prod tags) ────────────────────────────────
+  build-images:
+    name: Docker — ${{ matrix.service }} (prod)
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - api-gateway
+          - user-service
+          - transaction-service
+          - ledger-service
+          - payment-orchestrator
+          - risk-engine
+          - notification-service
+          - ai-platform
+          - data-pipeline
+          - reconciliation-service
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+          cache: maven
+
+      - uses: actions/cache/restore@v4
+        with:
+          path: ~/.m2/repository/com/aegispay
+          key: aegispay-libs-prod-${{ github.sha }}
+          restore-keys: aegispay-libs-prod-
+
+      - name: Build JAR
+        run: |
+          mvn --batch-mode --no-transfer-progress install -N
+          mvn --batch-mode --no-transfer-progress install -N -f libs/pom.xml
+          mvn --batch-mode --no-transfer-progress clean package \
+            -pl libs/common-domain,libs/common-security,libs/common-kafka,libs/common-observability,services/${{ matrix.service }} \
+            --also-make \
+            -DskipTests
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image (prod)
+        uses: docker/build-push-action@v6
+        with:
+          context: services/${{ matrix.service }}
+          file: services/${{ matrix.service }}/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/${{ matrix.service }}:prod-latest
+            ${{ env.IMAGE_PREFIX }}/${{ matrix.service }}:prod-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ── Step 4: Docker build & push web (prod tags) ────────────────────────────
+  build-web:
+    name: Docker — web (prod)
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build and push web image (prod)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/web:prod-latest
+            ${{ env.IMAGE_PREFIX }}/web:prod-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            NEXT_PUBLIC_API_BASE_URL=https://aegispay-api.shreyasshelar.uk
+            NEXT_PUBLIC_WS_BASE_URL=wss://aegispay-ws.shreyasshelar.uk
+            NEXT_PUBLIC_FIREBASE_API_KEY=${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}
+            NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}
+            NEXT_PUBLIC_FIREBASE_PROJECT_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}
+            NEXT_PUBLIC_FIREBASE_APP_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}

@@ -70,14 +70,8 @@ jobs:
       - name: Install dependencies
         run: npm install --prefer-offline
 
-      - name: Run tests (skip gracefully if no test script)
-        # `npm run test` exits 1 if script is missing; we guard until tests are added
-        run: |
-          if npm run test --workspace=apps/web 2>/dev/null; then
-            echo "Tests passed"
-          else
-            echo "::warning::No test script found or tests skipped — see P2-1 in docs/COMPROMISED-FEATURES.md"
-          fi
+      - name: Run unit tests
+        run: npm run test --workspace=apps/web
 
       - name: Upload coverage
         if: always()
