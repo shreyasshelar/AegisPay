@@ -170,7 +170,7 @@ final class CertificatePinningDelegate: NSObject, URLSessionDelegate {
         guard index < data.endIndex, data[index] == expectedTag else { return false }
         index = data.index(after: index)
         guard let length = readLength(in: data, at: &index) else { return false }
-        index = index + length
+        index += length
         return index <= data.endIndex
     }
 
