@@ -213,7 +213,7 @@ class OnboardingViewModelTest {
     @Test
     fun `same idempotency key is reused on retry`() = runTest {
         coEvery { api.registerUser(any(), any()) }
-            .throws(RuntimeException("fail")) andThenReturns fakeProfile("uid-retry")
+            .throws(RuntimeException("fail")) andThen fakeProfile("uid-retry")
 
         setValidFields()
         viewModel.register()
