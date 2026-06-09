@@ -262,9 +262,17 @@ class AuthRepository @Inject constructor(
             // The claim is required for STOMP session routing via StompAuthChannelInterceptor.
             // Best-effort: if refresh fails the app still works via HTTP (token has userId in store).
             runCatching { refresh() }
-            // persistTokens() nulls userId if claim is absent — restore it from the known value.
-            if (tokenStore.userId.isNullOrBlank()) tokenStore.userId = storedId
-            _authState.value = AuthState.Authenticated(buildUser())
+            // Emit Authenticated using storedId directly — avoids relying on tokenStore.userId
+            // being readable after refresh() (persistTokens() can wipe the userId claim if
+            // aegispay_user_id is still absent from the freshly-issued JWT).
+            _authState.value = AuthState.Authenticated(
+                AuthUser(
+                    id    = storedId,
+                    role  = tokenStore.userRole  ?: "CUSTOMER",
+                    email = tokenStore.userEmail,
+                    name  = tokenStore.userName,
+                )
+            )
         } catch (e: HttpException) {
             if (e.code() == 404) {
                 _authState.value = AuthState.NeedsRegistration(email = tokenStore.userEmail)
