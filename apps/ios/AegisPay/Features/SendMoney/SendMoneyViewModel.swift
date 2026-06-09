@@ -30,7 +30,8 @@ final class SendMoneyViewModel: ObservableObject {
 
     // ── FX / Risk ─────────────────────────────────────────────────────────────
     /// Live rates for INR equivalent calculation.
-    @Published private(set) var fxRates: FxRates = FxRates(usd: 0.01190, eur: 0.01099, gbp: 0.00936)
+    /// No `private(set)` so tests can inject rates directly via `vm.fxRates = ...`.
+    @Published var fxRates: FxRates = FxRates(usd: 0.01190, eur: 0.01099, gbp: 0.00936)
     /// Amber warning when the INR-equivalent amount ≥ ₹10,000 (risk review threshold).
     @Published private(set) var riskWarning: String? = nil
 

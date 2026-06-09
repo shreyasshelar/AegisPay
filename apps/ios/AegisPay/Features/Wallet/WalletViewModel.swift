@@ -31,7 +31,8 @@ final class WalletViewModel: ObservableObject {
     @Published var topUpPhase:   TopUpPhase = .idle
 
     /// Live ECB-sourced FX rates (1 INR → X foreign currency).
-    @Published private(set) var fxRates: FxRates = FxRates(usd: 0.01190, eur: 0.01099, gbp: 0.00936)
+    /// No `private(set)` so tests can inject rates directly via `vm.fxRates = ...`.
+    @Published var fxRates: FxRates = FxRates(usd: 0.01190, eur: 0.01099, gbp: 0.00936)
     @Published private(set) var fxLoading: Bool = false
 
     /**
