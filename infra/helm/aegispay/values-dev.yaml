@@ -250,7 +250,7 @@ services:
     enabled: true
     image:
       repository: reconciliation-service
-      tag: dev-e0994b47e39efcb45f0e5a1564ed481561337147
+      tag: dev-771f91f14ef8b569afdc0beb9aa857dffb48cd89
     replicas: 1
     port: 8087
     resources:
@@ -290,11 +290,11 @@ services:
     enabled: true
     image:
       repository: web
-      tag: dev-11b62530ae682e801dbb72eb5beca10a4980ea94
+      tag: dev-771f91f14ef8b569afdc0beb9aa857dffb48cd89
     # Updated by cd-dev.yml on every successful web image build.
     # Injected as a pod annotation so ArgoCD detects a spec change and rolls
     # the pod even when the image tag stays "dev-latest" (reused tag scenario).
-    deployTimestamp: "11b62530ae682e801dbb72eb5beca10a4980ea94"
+    deployTimestamp: "771f91f14ef8b569afdc0beb9aa857dffb48cd89"
     replicas: 1
     port: 3000
     resources:
