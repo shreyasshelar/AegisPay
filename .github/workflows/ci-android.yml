@@ -52,10 +52,7 @@ jobs:
         run: gradle wrapper --gradle-version ${{ env.GRADLE_VERSION }}
 
       - name: Run Android Lint
-        # Skip processDebugGoogleServices — the debug variant uses com.aegispay.android.debug
-        # which is not in google-services.json (release package name only). Unit tests and lint
-        # do not require Firebase at runtime, so we exclude that task.
-        run: ./gradlew lint -x processDebugGoogleServices --stacktrace
+        run: ./gradlew lint --stacktrace
         env:
           API_BASE_URL: "http://localhost:8080/"
           WS_BASE_URL: "ws://localhost:8080/"
@@ -94,8 +91,7 @@ jobs:
         run: gradle wrapper --gradle-version ${{ env.GRADLE_VERSION }}
 
       - name: Run unit tests
-        # Skip processDebugGoogleServices — not needed for unit tests (no Firebase runtime)
-        run: ./gradlew testDebugUnitTest -x processDebugGoogleServices --stacktrace
+        run: ./gradlew testDebugUnitTest --stacktrace
         env:
           API_BASE_URL: "http://localhost:8080/"
           WS_BASE_URL: "ws://localhost:8080/"
