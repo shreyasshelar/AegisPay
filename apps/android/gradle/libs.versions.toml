@@ -105,6 +105,7 @@ stripe-android               = { group = "com.stripe",                   name = 
 
 # Coroutines
 coroutines-android           = { group = "org.jetbrains.kotlinx",        name = "kotlinx-coroutines-android",    version.ref = "coroutines" }
+coroutines-test              = { group = "org.jetbrains.kotlinx",        name = "kotlinx-coroutines-test",       version.ref = "coroutines" }
 
 # Testing
 junit                        = { group = "junit",                        name = "junit",                         version.ref = "junit" }
