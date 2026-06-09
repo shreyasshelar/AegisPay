@@ -110,7 +110,8 @@ class SendMoneyViewModel @Inject constructor(
     val payeeIdError: String?
         get() {
             val id = _uiState.value.payeeId
-            if (id.isBlank()) return "Payee ID is required"
+            // Return null for untouched/empty field — error only shown when user has typed something
+            if (id.isBlank()) return null
             val uuidRegex = Regex(
                 "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
             )
@@ -120,7 +121,8 @@ class SendMoneyViewModel @Inject constructor(
     val amountError: String?
         get() {
             val text = _uiState.value.amountText
-            if (text.isBlank()) return "Amount is required"
+            // Return null for untouched/empty field — matches iOS behaviour and avoids eager error flash
+            if (text.isBlank()) return null
             val v = text.toBigDecimalOrNull() ?: return "Enter a valid amount"
             if (v <= BigDecimal.ZERO) return "Amount must be greater than zero"
             if (v > BigDecimal("1000000")) return "Maximum 10,00,000 per transfer"
