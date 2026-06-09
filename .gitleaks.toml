@@ -1,0 +1,33 @@
+# Gitleaks configuration for AegisPay
+# https://github.com/zricethezav/gitleaks
+
+title = "AegisPay Gitleaks Configuration"
+
+[extend]
+# Use the default ruleset as a base
+useDefault = true
+
+[[allowlists]]
+description = "Firebase Web API key — intentionally public (embedded in Next.js JS bundle)"
+# Firebase client-side API keys are designed to be public; security is enforced
+# via Firebase Authorized Domains and Security Rules, not key secrecy.
+# See: https://firebase.google.com/docs/projects/api-keys
+regexes = [
+  '''AIzaSyCN4tJBSceEYIzGqbVaqjGSuSlvcm-LoU8''',
+]
+
+[[allowlists]]
+description = "CI placeholder / dummy values used in workflow env blocks"
+regexes = [
+  '''ci-secret-not-real''',
+  '''ci-secret''',
+]
+
+[[allowlists]]
+description = "Test fixtures — fake credentials in test source files"
+paths = [
+  '''.*Test\.java$''',
+  '''.*Tests\.swift$''',
+  '''.*Test\.kt$''',
+  '''.*\.test\.ts$''',
+]

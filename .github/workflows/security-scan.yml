@@ -100,3 +100,53 @@ jobs:
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
+
+  # ── Gitleaks — secret scanning ─────────────────────────────────────────────
+  gitleaks:
+    name: Gitleaks Secret Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── Semgrep — Java SAST ─────────────────────────────────────────────────────
+  semgrep:
+    name: Semgrep SAST
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: semgrep/semgrep-action@v1
+        with:
+          config: >-
+            p/java
+            p/spring
+            p/secrets
+            p/owasp-top-ten
+
+  # ── Checkov — Helm / K8s misconfiguration ──────────────────────────────────
+  checkov:
+    name: Checkov IaC Scan
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: infra/helm/aegispay
+          framework: helm
+          output_format: sarif
+          output_file_path: checkov.sarif
+          soft_fail: true
+
+      - uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: checkov.sarif
