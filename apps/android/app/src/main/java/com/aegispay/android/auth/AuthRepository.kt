@@ -51,7 +51,10 @@ class AuthRepository @Inject constructor(
     private val tokenStore: TokenStore,
     private val api:        AegisApiService,
 ) {
-    private val authService = AuthorizationService(context)
+    // Lazy so unit tests can construct AuthRepository with a mocked Context without
+    // triggering AppAuth's AuthorizationService init (which binds Android services
+    // and enumerates custom-tab packages — fails on a JVM-only test runner).
+    private val authService by lazy { AuthorizationService(context) }
 
     private val _authState = MutableStateFlow<AuthState>(AuthState.Loading)
     val authState: StateFlow<AuthState> = _authState.asStateFlow()
