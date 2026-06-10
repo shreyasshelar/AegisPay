@@ -64,9 +64,9 @@ export function LedgerClient() {
     <>
       <Header title="Ledger" subtitle="Immutable financial record" />
 
-      <div className="p-6 space-y-5 animate-fade-in">
+      <div className="p-4 space-y-5 sm:p-6 animate-fade-in">
         {/* Search — Account by User ID */}
-        <div className="flex gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row">
           <input
             value={userId}
             onChange={(e) => setUserId(e.target.value)}
@@ -77,14 +77,14 @@ export function LedgerClient() {
           <button
             onClick={lookUpAccount}
             disabled={userId.length < 10}
-            className="rounded-xl bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50 transition"
+            className="rounded-xl bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50 transition sm:shrink-0"
           >
             Look Up Account
           </button>
         </div>
 
         {/* Search — Entries by Transaction ID */}
-        <div className="flex gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row">
           <input
             value={txId}
             onChange={(e) => setTxId(e.target.value)}
@@ -95,7 +95,7 @@ export function LedgerClient() {
           <button
             onClick={lookUpEntries}
             disabled={txId.length < 10}
-            className="rounded-xl bg-slate-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50 transition"
+            className="rounded-xl bg-slate-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50 transition sm:shrink-0"
           >
             Look Up Entries
           </button>
@@ -113,7 +113,7 @@ export function LedgerClient() {
         )}
 
         {account && (
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             {[
               { label: 'Available',  value: formatAmount(account.availableBalance, account.currency) },
               { label: 'Reserved',   value: formatAmount(account.reservedBalance,  account.currency) },

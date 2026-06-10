@@ -96,7 +96,7 @@ export function DashboardClient({ userId }: DashboardClientProps) {
         subtitle={`Welcome back${account ? ' — your balance is live' : ''}`}
       />
 
-      <div className="p-6 space-y-6 animate-fade-in">
+      <div className="p-4 space-y-5 animate-fade-in sm:p-6 sm:space-y-6">
         {/* ── Stat cards ── */}
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           {accountLoading ? (

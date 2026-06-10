@@ -1,12 +1,13 @@
 'use client'
 
 import { useSession } from 'next-auth/react'
-import { Bell, Search, RefreshCw } from 'lucide-react'
+import { Bell, RefreshCw, Menu } from 'lucide-react'
 import Link from 'next/link'
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import { useNotificationStore } from '@/lib/useNotificationStore'
+import { useSidebarContext } from '@/lib/sidebar-context'
 
 interface HeaderProps {
   title?:    string
@@ -20,6 +21,7 @@ export function Header({ title, subtitle, action }: HeaderProps) {
   const queryClient             = useQueryClient()
   const [spinning, setSpinning] = useState(false)
   const unreadCount             = useNotificationStore((s) => s.unreadCount)
+  const { openSidebar }         = useSidebarContext()
 
   async function handleRefresh() {
     setSpinning(true)
@@ -28,15 +30,24 @@ export function Header({ title, subtitle, action }: HeaderProps) {
   }
 
   return (
-    <header className="flex h-16 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-6">
-      {/* Left — page title + optional action */}
-      <div className="flex items-center gap-4">
+    <header className="flex h-16 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4 md:px-6">
+      {/* Left — hamburger (mobile only) + page title + optional action */}
+      <div className="flex items-center gap-3">
+        {/* Hamburger — hidden on md+ where sidebar is always visible */}
+        <button
+          onClick={openSidebar}
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700 md:hidden"
+          aria-label="Open navigation"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+
         <div>
           {title && (
-            <h1 className="text-lg font-semibold text-slate-900">{title}</h1>
+            <h1 className="text-base font-semibold text-slate-900 sm:text-lg">{title}</h1>
           )}
           {subtitle && (
-            <p className="text-xs text-slate-400">{subtitle}</p>
+            <p className="hidden text-xs text-slate-400 sm:block">{subtitle}</p>
           )}
         </div>
         {action}

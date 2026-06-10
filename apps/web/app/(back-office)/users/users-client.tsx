@@ -112,7 +112,7 @@ export function UsersClient() {
         subtitle={`${totalEl.toLocaleString()} total users`}
       />
 
-      <div className="px-6 pb-10 space-y-4 animate-fade-in">
+      <div className="px-4 pb-10 pt-4 space-y-4 animate-fade-in sm:px-6 sm:pt-5">
 
         {/* ── Toolbar ───────────────────────────────────────────────────────── */}
         <div className="flex flex-wrap items-center gap-3">
@@ -173,7 +173,8 @@ export function UsersClient() {
               <p className="text-sm">No users found</p>
             </div>
           ) : (
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] text-sm">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50">
                   <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">User</th>
@@ -236,6 +237,7 @@ export function UsersClient() {
                 ))}
               </tbody>
             </table>
+            </div>
           )}
         </div>
 

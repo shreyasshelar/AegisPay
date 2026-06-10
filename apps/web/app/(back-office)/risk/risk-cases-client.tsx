@@ -337,7 +337,8 @@ export function RiskCasesClient() {
         </div>
 
         {/* ── Content area ─────────────────────────────────────────────────── */}
-        <div className="flex gap-6">
+        {/* On mobile: single column stack. On lg+: side-by-side. */}
+        <div className="flex flex-col gap-4 lg:flex-row lg:gap-6">
           {/* ── Cases list ───────────────────────────────────────────────────── */}
           <div className="flex-1 rounded-xl bg-white shadow-sm ring-1 ring-slate-200 overflow-hidden">
             {isLoading ? (
@@ -415,7 +416,7 @@ export function RiskCasesClient() {
 
           {/* ── Detail / AI panel ──────────────────────────────────────────────── */}
           {selectedCase && (
-            <div className="w-96 shrink-0 space-y-4 rounded-xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+            <div className="w-full space-y-4 rounded-xl bg-white p-6 shadow-sm ring-1 ring-slate-200 lg:w-96 lg:shrink-0">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-slate-900">Case Detail</h3>
                 <RiskDecisionPill decision={selectedCase.decision} />

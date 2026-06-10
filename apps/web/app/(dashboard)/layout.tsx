@@ -1,13 +1,15 @@
 import { redirect } from 'next/navigation'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { Sidebar } from '@/components/sidebar'
+import { ShellClient } from '@/components/shell-client'
 
 /**
  * Dashboard route group layout.
  *
  * Server component — verifies session before rendering.
  * Unauthenticated users are redirected to /login.
+ * The ShellClient child owns the mobile sidebar open/close state so this
+ * layout can remain a Server Component.
  */
 export default async function DashboardLayout({
   children,
@@ -23,17 +25,5 @@ export default async function DashboardLayout({
     redirect('/login')
   }
 
-  return (
-    <div className="flex h-screen overflow-hidden bg-slate-50">
-      {/* Persistent sidebar */}
-      <Sidebar />
-
-      {/* Main content area */}
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <main className="flex-1 overflow-y-auto">
-          {children}
-        </main>
-      </div>
-    </div>
-  )
+  return <ShellClient>{children}</ShellClient>
 }
