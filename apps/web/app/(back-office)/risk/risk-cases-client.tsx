@@ -380,22 +380,26 @@ export function RiskCasesClient() {
                         setSelectedCase(rc)
                         setExplanation(null)
                       }}
-                      className={`flex cursor-pointer items-center gap-4 px-5 py-4 transition hover:bg-slate-50 ${
+                      className={`cursor-pointer px-4 py-3.5 transition hover:bg-slate-50 sm:flex sm:items-center sm:gap-4 sm:px-5 sm:py-4 ${
                         selectedCase?.id === rc.id ? 'bg-primary-50' : ''
                       }`}
                     >
-                      <div className="flex-1 min-w-0">
+                      {/* Top row on xs / left block on sm+: Tx ID + date */}
+                      <div className="mb-2 min-w-0 flex-1 sm:mb-0">
                         <p className="truncate text-sm font-medium text-slate-800">
                           Tx {maskId(rc.transactionId)}
                         </p>
-                        <p className="text-xs text-slate-400">{formatDate(rc.createdAt)}</p>
+                        <p className="mt-0.5 text-xs text-slate-400">{formatDate(rc.createdAt)}</p>
                       </div>
-                      <div className="w-28 text-right">
-                        <p className="text-sm font-bold text-slate-900">Score: {rc.riskScore}</p>
-                        <RiskScoreBar score={rc.riskScore} />
+                      {/* Bottom row on xs / right group on sm+: score bar + pill + chevron */}
+                      <div className="flex items-center gap-3 sm:gap-4">
+                        <div className="w-28 shrink-0 text-right">
+                          <p className="text-sm font-bold text-slate-900">Score: {rc.riskScore}</p>
+                          <RiskScoreBar score={rc.riskScore} />
+                        </div>
+                        <RiskDecisionPill decision={rc.decision} />
+                        <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" />
                       </div>
-                      <RiskDecisionPill decision={rc.decision} />
-                      <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" />
                     </li>
                   ))}
                 </ul>
