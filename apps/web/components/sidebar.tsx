@@ -19,6 +19,7 @@ import {
   Users2,
   Wallet,
   Stethoscope,
+  X,
 } from 'lucide-react'
 import { useTransactionSocket, userKeys } from '@aegispay/api-client'
 import { useNotificationStore } from '@/lib/useNotificationStore'
@@ -51,7 +52,14 @@ const BACKOFFICE_ITEMS: NavItem[] = [
   { label: 'AI Triage',  href: '/triage', icon: Stethoscope,   roles: ['BACK_OFFICE', 'ADMIN'] },
 ]
 
-export function Sidebar() {
+interface SidebarProps {
+  /** Controls visibility on mobile (< md). Ignored on md+ where sidebar is always shown. */
+  open?: boolean
+  /** Called when the user taps the backdrop or the close button on mobile. */
+  onClose?: () => void
+}
+
+export function Sidebar({ open = false, onClose }: SidebarProps) {
   const pathname          = usePathname()
   const { data: session, status: sessionStatus } = useSession()
   const queryClient        = useQueryClient()
@@ -146,13 +154,43 @@ export function Sidebar() {
   )
 
   return (
-    <aside className="flex h-full w-64 shrink-0 flex-col border-r border-slate-200 bg-white">
-      {/* Logo */}
-      <div className="flex h-16 items-center gap-2.5 border-b border-slate-100 px-5">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-600">
-          <ShieldCheck className="h-5 w-5 text-white" />
+    <>
+      {/* Mobile backdrop — tapping it closes the sidebar */}
+      {open && (
+        <div
+          className="fixed inset-0 z-30 bg-black/40 md:hidden"
+          onClick={onClose}
+          aria-hidden="true"
+        />
+      )}
+
+      <aside
+        className={cn(
+          // Base: full-height column with border
+          'flex h-full w-64 shrink-0 flex-col border-r border-slate-200 bg-white',
+          // Mobile: slide in from left as a fixed overlay above content
+          'fixed inset-y-0 left-0 z-40 transition-transform duration-200 ease-in-out',
+          open ? 'translate-x-0' : '-translate-x-full',
+          // Desktop (md+): static, always visible, no transform needed
+          'md:static md:z-auto md:translate-x-0',
+        )}
+      >
+      {/* Logo + mobile close button */}
+      <div className="flex h-16 items-center justify-between border-b border-slate-100 px-5">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-600">
+            <ShieldCheck className="h-5 w-5 text-white" />
+          </div>
+          <span className="text-lg font-bold tracking-tight text-slate-900">AegisPay</span>
         </div>
-        <span className="text-lg font-bold tracking-tight text-slate-900">AegisPay</span>
+        {/* Close button — mobile only */}
+        <button
+          onClick={onClose}
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 md:hidden"
+          aria-label="Close navigation"
+        >
+          <X className="h-5 w-5" />
+        </button>
       </div>
 
       {/* Navigation */}
@@ -224,5 +262,6 @@ export function Sidebar() {
         </button>
       </div>
     </aside>
+    </>
   )
 }
