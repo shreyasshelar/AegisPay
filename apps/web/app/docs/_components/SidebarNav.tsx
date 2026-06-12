@@ -12,6 +12,8 @@ import {
   Brain,
   Server,
   Database,
+  Shield,
+  Activity,
   Menu,
   X,
 } from 'lucide-react'
@@ -22,6 +24,8 @@ const NAV_ITEMS = [
   { href: '/docs/flows', label: 'Transaction Flow', icon: GitBranch },
   { href: '/docs/patterns', label: 'Patterns', icon: Puzzle },
   { href: '/docs/ai', label: 'AI Platform', icon: Brain },
+  { href: '/docs/security', label: 'Security', icon: Shield },
+  { href: '/docs/observability', label: 'Observability', icon: Activity },
   { href: '/docs/infrastructure', label: 'Infrastructure', icon: Server },
   { href: '/docs/services', label: 'Services', icon: Database },
 ]
