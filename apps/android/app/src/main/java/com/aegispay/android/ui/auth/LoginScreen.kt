@@ -18,8 +18,9 @@ import com.aegispay.android.ui.theme.AegisColor
 
 @Composable
 fun LoginScreen(
-    viewModel:       AuthViewModel,
-    onStartAuthFlow: () -> Unit,
+    viewModel:        AuthViewModel,
+    onStartAuthFlow:  () -> Unit,
+    onNavigateToDocs: () -> Unit = {},
 ) {
     val authState by viewModel.authState.collectAsState()
     val isLoading = authState is AuthState.Loading
@@ -107,6 +108,16 @@ fun LoginScreen(
                 style     = MaterialTheme.typography.bodySmall,
                 textAlign = TextAlign.Center,
             )
+
+            TextButton(
+                onClick = onNavigateToDocs,
+                colors  = ButtonDefaults.textButtonColors(contentColor = Color.White.copy(alpha = 0.8f)),
+            ) {
+                Text(
+                    text  = "📄  Architecture & Developer Docs",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
         }
     }
 }

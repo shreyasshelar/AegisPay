@@ -34,6 +34,7 @@ fun DashboardScreen(
     onNavigateToProfile:       () -> Unit,
     onNavigateToBackOffice:    () -> Unit = {},
     onNavigateToWallet:        () -> Unit = {},
+    onNavigateToDocs:          () -> Unit = {},
 ) {
     val uiState       by viewModel.uiState.collectAsState()
     val badgeCount    by viewModel.badgeCount.collectAsState()
@@ -210,6 +211,55 @@ fun DashboardScreen(
                                 modifier = Modifier.size(18.dp),
                             )
                         }
+                    }
+                }
+            }
+
+            // ── Developer docs entry ──────────────────────────────────────────
+            item {
+                Card(
+                    onClick  = onNavigateToDocs,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape    = RoundedCornerShape(14.dp),
+                    colors   = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                ) {
+                    Row(
+                        modifier              = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment     = Alignment.CenterVertically,
+                    ) {
+                        Box(
+                            modifier         = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(AegisColor.Primary.copy(alpha = 0.1f)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                Icons.Default.MenuBook,
+                                contentDescription = null,
+                                tint     = AegisColor.Primary,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "Developer Docs",
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                                color = AegisColor.Text,
+                            )
+                            Text(
+                                "Architecture · Flows · AI · Security",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = AegisColor.TextMuted,
+                            )
+                        }
+                        Icon(
+                            Icons.Default.ChevronRight,
+                            contentDescription = null,
+                            tint     = AegisColor.TextSubtle,
+                            modifier = Modifier.size(18.dp),
+                        )
                     }
                 }
             }

@@ -1,9 +1,11 @@
 import SwiftUI
+import SafariServices
 
 struct LoginView: View {
     @EnvironmentObject var authStore: AuthStore
-    @State private var isSigningIn = false
+    @State private var isSigningIn  = false
     @State private var errorMessage: String?
+    @State private var showDocs     = false
 
     var body: some View {
         ZStack {
@@ -83,15 +85,38 @@ struct LoginView: View {
                 }
                 .aegisButtonStyle(.primary, loading: isSigningIn, fullWidth: true)
 
-                // ── Fine print ────────────────────────────────────────────────
-                Text("Protected by OAuth 2.0 + PKCE · Zero-trust")
-                    .font(.aegisCaption)
-                    .foregroundStyle(Color.aegisTextSubtle)
-                    .padding(.top, 20)
-                    .padding(.bottom, 40)
+                // ── Fine print + docs link ────────────────────────────────────
+                VStack(spacing: 12) {
+                    Text("Protected by OAuth 2.0 + PKCE · Zero-trust")
+                        .font(.aegisCaption)
+                        .foregroundStyle(Color.aegisTextSubtle)
+
+                    Button {
+                        showDocs = true
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "doc.text")
+                                .font(.system(size: 12))
+                            Text("Architecture & Developer Docs")
+                                .font(.system(size: 13, weight: .medium))
+                        }
+                        .foregroundStyle(Color.aegisPrimary)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(Color.aegisPrimary.opacity(0.08))
+                        .clipShape(Capsule())
+                        .overlay(Capsule().stroke(Color.aegisPrimary.opacity(0.2), lineWidth: 1))
+                    }
+                }
+                .padding(.top, 20)
+                .padding(.bottom, 40)
             }
             .padding(.horizontal, 28)
             .animation(.easeInOut, value: errorMessage)
+        }
+        .sheet(isPresented: $showDocs) {
+            SafariView(url: AppConfig.docsURL)
+                .ignoresSafeArea()
         }
     }
 

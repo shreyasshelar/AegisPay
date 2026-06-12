@@ -10,6 +10,7 @@ import com.aegispay.android.auth.BiometricAuthManager
 import com.aegispay.android.ui.auth.AuthViewModel
 import com.aegispay.android.ui.auth.LoginScreen
 import com.aegispay.android.ui.backoffice.BackOfficeScreen
+import com.aegispay.android.ui.docs.DocsScreen
 import com.aegispay.android.ui.triage.TriageScreen
 import com.aegispay.android.ui.dashboard.DashboardScreen
 import com.aegispay.android.ui.notifications.NotificationsScreen
@@ -34,10 +35,12 @@ object Route {
     const val BACK_OFFICE        = "backoffice"
     const val WALLET             = "wallet"
     const val TRIAGE             = "triage?txId={txId}&service={service}"
+    const val DOCS               = "docs?section={section}"
 
     fun transactionDetail(id: String) = "transactions/$id"
     fun triage(txId: String? = null, service: String? = null) =
         "triage?txId=${txId ?: ""}&service=${service ?: ""}"
+    fun docs(section: String = "") = "docs?section=$section"
 }
 
 private val BACK_OFFICE_ROLES = setOf("BACK_OFFICE", "ADMIN")
@@ -103,8 +106,9 @@ fun AegisNavHost(
 
         composable(Route.LOGIN) {
             LoginScreen(
-                viewModel       = authViewModel,
-                onStartAuthFlow = onStartAuthFlow,
+                viewModel        = authViewModel,
+                onStartAuthFlow  = onStartAuthFlow,
+                onNavigateToDocs = { navController.navigate(Route.docs()) },
             )
         }
 
@@ -127,6 +131,7 @@ fun AegisNavHost(
                 onNavigateToProfile       = { navController.navigate(Route.PROFILE) },
                 onNavigateToBackOffice    = { navController.navigate(Route.BACK_OFFICE) },
                 onNavigateToWallet        = { navController.navigate(Route.WALLET) },
+                onNavigateToDocs          = { navController.navigate(Route.docs()) },
             )
         }
 
@@ -239,6 +244,20 @@ fun AegisNavHost(
                     viewModel            = hiltViewModel(),
                 )
             }
+        }
+
+        // ── Developer Docs (accessible to all — pre and post auth) ───────────
+        composable(
+            route     = Route.DOCS,
+            arguments = listOf(
+                navArgument("section") { type = NavType.StringType; defaultValue = "" },
+            ),
+        ) { back ->
+            val section = back.arguments?.getString("section") ?: ""
+            DocsScreen(
+                onNavigateUp = { navController.navigateUp() },
+                section      = section,
+            )
         }
     }
 }

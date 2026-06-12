@@ -1,6 +1,7 @@
 package com.aegispay.ai.error;
 
 import com.aegispay.ai.rag.RagPipelineService;
+import com.aegispay.ai.repository.KnowledgeDocumentRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
@@ -16,10 +17,17 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class BankErrorKnowledgeBase {
 
+    private static final String SOURCE = "bank-errors";
+
     private final RagPipelineService ragPipeline;
+    private final KnowledgeDocumentRepository repository;
 
     @EventListener(ApplicationReadyEvent.class)
     public void ingest() {
+        if (!repository.findBySource(SOURCE).isEmpty()) {
+            log.info("Bank error knowledge base already seeded — skipping ingestion");
+            return;
+        }
         log.info("Ingesting bank error knowledge base...");
         List<Document> docs = List.of(
             new Document("Error code INSUFFICIENT_FUNDS: The payer's account does not have enough " +

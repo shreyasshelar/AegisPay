@@ -95,6 +95,18 @@ struct MainTabView: View {
                     }
                     .tag(7)
             }
+
+            // ── Docs tab — visible to every role ─────────────────────────────
+            DocsView()
+                .tabItem {
+                    Label(
+                        "Docs",
+                        systemImage: selectedTab == 8
+                            ? "doc.text.fill"
+                            : "doc.text"
+                    )
+                }
+                .tag(8)
         }
         .tint(Color.aegisPrimary)
         // Set role-based initial tab — mirrors web ROLE_LANDING and Android nav host.

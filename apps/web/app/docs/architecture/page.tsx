@@ -6,6 +6,11 @@ const TechStackDemo = dynamic(
   { ssr: false, loading: () => <div className="animate-pulse bg-gray-100 rounded-xl h-64" /> }
 )
 
+const ServiceTopologyDemo = dynamic(
+  () => import('../_components/ServiceTopologyDemo'),
+  { ssr: false, loading: () => <div className="animate-pulse bg-gray-100 rounded-xl h-48" /> }
+)
+
 const KAFKA_TOPICS = `transaction.initiated
     ↓
 balance.reserved
@@ -54,6 +59,16 @@ export default function ArchitecturePage() {
           frontend. Every design decision is driven by one guarantee: money must never be lost or doubled,
           even when any single component fails.
         </p>
+      </section>
+
+      {/* Service Topology */}
+      <section>
+        <h2 className="text-2xl font-semibold text-gray-900 mb-2">Service Topology</h2>
+        <p className="text-gray-600 mb-4">
+          Click any service to explore its role, data store, and Kafka topic participation. All services
+          communicate asynchronously through Kafka; synchronous HTTP is only used within the Gateway → Service hop.
+        </p>
+        <ServiceTopologyDemo />
       </section>
 
       {/* Tech Stack Demo */}

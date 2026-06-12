@@ -23,6 +23,8 @@ android {
             "\"${project.findProperty("API_BASE_URL") ?: "http://10.0.2.2:8080"}\"")
         buildConfigField("String", "WS_BASE_URL",
             "\"${project.findProperty("WS_BASE_URL") ?: "ws://10.0.2.2:8090"}\"")
+        buildConfigField("String", "WEB_BASE_URL",
+            "\"${project.findProperty("WEB_BASE_URL") ?: "http://10.0.2.2:3000"}\"")
         buildConfigField("String", "KEYCLOAK_ISSUER",
             "\"${project.findProperty("KEYCLOAK_ISSUER") ?: "http://10.0.2.2:8180/realms/aegispay"}\"")
         buildConfigField("String", "OAUTH_CLIENT_ID",
