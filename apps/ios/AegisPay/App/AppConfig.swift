@@ -34,6 +34,18 @@ enum AppConfig {
         Bundle.main.object(forInfoDictionaryKey: "WS_BASE_URL") as? String
         ?? "ws://localhost:8090"
 
+    // Web app base URL — the Next.js frontend (not the API gateway).
+    // In dev: http://localhost:3000, in prod: https://aegispay.shreyasshelar.uk
+    static let webBaseURL: URL = {
+        let raw = Bundle.main.object(forInfoDictionaryKey: "WEB_BASE_URL") as? String
+            ?? "http://localhost:3000"
+        return URL(string: raw)!
+    }()
+
+    static var docsURL: URL {
+        webBaseURL.appendingPathComponent("docs")
+    }
+
     // ── Stripe ────────────────────────────────────────────────────────────────
     /// Stripe publishable key — pk_test_* for development, pk_live_* injected by CI via Info.plist.
     /// The test key below is safe to commit — publishable keys are public client-side credentials.
