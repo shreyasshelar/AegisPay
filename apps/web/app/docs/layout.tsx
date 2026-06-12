@@ -1,9 +1,19 @@
 // FILE: apps/web/app/docs/layout.tsx
 import Link from 'next/link'
-import { ArrowRight, Shield } from 'lucide-react'
+import { ArrowRight, Shield, LogIn } from 'lucide-react'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
+import { ROLE_LANDING } from '@/lib/role-routing'
 import { DesktopSidebar, MobileSidebar } from './_components/SidebarNav'
 
-export default function DocsLayout({ children }: { children: React.ReactNode }) {
+export default async function DocsLayout({ children }: { children: React.ReactNode }) {
+  const session = await getServerSession(authOptions)
+  const appHref = session?.user?.role
+    ? (ROLE_LANDING[session.user.role] ?? '/dashboard')
+    : '/login'
+  const appLabel   = session ? 'Open App' : 'Sign in'
+  const AppIcon    = session ? ArrowRight : LogIn
+
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       {/* Top header */}
@@ -19,11 +29,11 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
             </Link>
           </div>
           <Link
-            href="/dashboard"
-            className="flex items-center gap-1.5 text-sm text-blue-600 font-medium hover:text-blue-700 transition-colors"
+            href={appHref}
+            className="flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700"
           >
-            Open App
-            <ArrowRight size={14} />
+            {appLabel}
+            <AppIcon size={14} />
           </Link>
         </div>
       </header>
