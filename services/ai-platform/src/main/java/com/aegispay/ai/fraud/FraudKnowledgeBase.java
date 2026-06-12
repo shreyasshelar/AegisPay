@@ -1,6 +1,7 @@
 package com.aegispay.ai.fraud;
 
 import com.aegispay.ai.rag.RagPipelineService;
+import com.aegispay.ai.repository.KnowledgeDocumentRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
@@ -16,10 +17,17 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class FraudKnowledgeBase {
 
+    private static final String SOURCE = "fraud-kb";
+
     private final RagPipelineService ragPipeline;
+    private final KnowledgeDocumentRepository repository;
 
     @EventListener(ApplicationReadyEvent.class)
     public void ingest() {
+        if (!repository.findBySource(SOURCE).isEmpty()) {
+            log.info("Fraud knowledge base already seeded — skipping ingestion");
+            return;
+        }
         log.info("Ingesting fraud knowledge base into vector store...");
         List<Document> docs = List.of(
             new Document("High velocity fraud pattern: When a user submits more than 10 transactions " +
