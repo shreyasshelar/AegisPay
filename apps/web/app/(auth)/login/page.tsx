@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { signIn, signOut, useSession } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Loader2, ShieldCheck, AlertCircle } from 'lucide-react'
+import Link from 'next/link'
+import { Loader2, ShieldCheck, AlertCircle, BookOpen } from 'lucide-react'
 import { ROLE_LANDING } from '@/lib/role-routing'
 
 const RATE_LIMIT_MS = 3_000 // 3 s cooldown between sign-in attempts
@@ -126,9 +127,18 @@ export default function LoginPage() {
           </p>
         </div>
 
-        <p className="mt-6 text-center text-xs text-slate-400">
-          Protected by OAuth 2.0 + PKCE · Zero-trust architecture
-        </p>
+        <div className="mt-6 flex flex-col items-center gap-3">
+          <p className="text-center text-xs text-slate-400">
+            Protected by OAuth 2.0 + PKCE · Zero-trust architecture
+          </p>
+          <Link
+            href="/docs"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm transition-colors hover:border-primary-300 hover:bg-primary-50 hover:text-primary-700"
+          >
+            <BookOpen className="h-3.5 w-3.5" />
+            Architecture &amp; Developer Docs
+          </Link>
+        </div>
       </div>
     </div>
   )

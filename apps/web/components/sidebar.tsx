@@ -20,6 +20,7 @@ import {
   Wallet,
   Stethoscope,
   X,
+  BookOpen,
 } from 'lucide-react'
 import { useTransactionSocket, userKeys } from '@aegispay/api-client'
 import { useNotificationStore } from '@/lib/useNotificationStore'
@@ -221,6 +222,11 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
             </ul>
           </>
         )}
+
+        {/* Resources — visible to every role */}
+        <div className="mt-3 border-t border-slate-100 pt-3">
+          <NavLink item={{ label: 'Docs', href: '/docs', icon: BookOpen }} />
+        </div>
       </nav>
 
       {/* User + sign-out */}
