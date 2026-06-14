@@ -110,9 +110,11 @@ describe('useFxRates', () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining('frankfurter.app'),
+      expect.objectContaining({ cache: 'no-store' }),
     )
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining('base=INR'),
+      expect.objectContaining({ cache: 'no-store' }),
     )
   })
 })

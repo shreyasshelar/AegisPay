@@ -25,7 +25,11 @@ describe('useAuthGuard', () => {
 
   // ── Loading state ─────────────────────────────────────────────────────────
 
-  it('returns true (loading) while session status is loading', () => {
+  it('returns false (not blocking) while session status is loading', () => {
+    // The hook intentionally does NOT block on 'loading': DashboardLayout already
+    // verified the session server-side, so blocking here causes a blank-page flash
+    // on every SSO redirect / hard-refresh. The useEffect will redirect once the
+    // revalidation resolves.
     mockUseSession.mockReturnValue({
       status: 'loading',
       data:   null,
@@ -33,7 +37,7 @@ describe('useAuthGuard', () => {
     })
 
     const { result } = renderHook(() => useAuthGuard())
-    expect(result.current).toBe(true)
+    expect(result.current).toBe(false)
     expect(mockReplace).not.toHaveBeenCalled()
   })
 

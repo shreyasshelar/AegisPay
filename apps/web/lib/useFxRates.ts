@@ -45,7 +45,6 @@ export function useFxRates() {
     },
     staleTime: 60 * 60 * 1000,        // 1 hour — re-fetch in background after this
     gcTime:    2  * 60 * 60 * 1000,   // 2 hours — keep in cache
-    retry:     2,
     refetchOnWindowFocus: false,       // rates don't change on tab-switch
   })
 }
