@@ -11,6 +11,11 @@ const ServiceTopologyDemo = dynamic(
   { ssr: false, loading: () => <div className="animate-pulse bg-gray-100 rounded-xl h-48" /> }
 )
 
+const AegisPaySystemMap = dynamic(
+  () => import('../_components/AegisPaySystemMap'),
+  { ssr: false, loading: () => <div className="animate-pulse bg-gray-100 rounded-xl h-64" /> }
+)
+
 const KAFKA_TOPICS = `transaction.initiated
     ↓
 balance.reserved
@@ -75,6 +80,17 @@ export default function ArchitecturePage() {
       <section>
         <h2 className="text-2xl font-semibold text-gray-900 mb-4">Tech Stack</h2>
         <TechStackDemo />
+      </section>
+
+      {/* Interactive System Map */}
+      <section>
+        <h2 className="text-2xl font-semibold text-gray-900 mb-4">Interactive System Map</h2>
+        <p className="text-gray-600 mb-4">
+          Explore all 20 components across four tiers: client, gateway, backend services, and data
+          infrastructure. Switch between the services view, Kafka event flow, and data pipeline to
+          understand how each component connects.
+        </p>
+        <AegisPaySystemMap />
       </section>
 
       {/* Architecture tiers */}

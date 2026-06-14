@@ -1,257 +1,194 @@
-// FILE: apps/web/app/docs/_components/TechStackDemo.tsx
 'use client'
 
-import { useState } from 'react'
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import { useState } from "react";
 
-type TechItem = {
-  name: string
-  role: string
-  why: string
-  tag: string
-  tagColor: string
-}
+const LAYERS = [
+  {
+    id: "client", label: "Client Tier", icon: "📱", color: "#0ea5e9", bg: "#f0f9ff",
+    desc: "Three native/web clients sharing the same backend API via JWT auth.",
+    techs: [
+      { name: "Next.js 14",      role: "Web app (dashboard + back-office)",  why: "App Router, Server Components, NextAuth.js for Keycloak OIDC. STOMP WebSocket for real-time status.", tag: "Web" },
+      { name: "SwiftUI",         role: "iOS native app",                     why: "Combine for reactive state. FaceID/TouchID via LocalAuthentication. CoreData for offline queue. Stripe PaymentSheet.", tag: "iOS" },
+      { name: "Jetpack Compose", role: "Android native app",                 why: "Hilt DI, ViewModel, Room DB. WorkManager for offline payment sync. Biometric API. ProGuard/R8 hardened.", tag: "Android" },
+      { name: "TypeScript",      role: "Type safety across web",             why: "Strict mode. Zod schema validation at API boundaries. No any-typed API responses.", tag: "Web" },
+    ],
+  },
+  {
+    id: "gateway", label: "Auth & Gateway", icon: "🔐", color: "#8b5cf6", bg: "#faf5ff",
+    desc: "Every request passes through here — auth, rate limiting, idempotency, routing.",
+    techs: [
+      { name: "Spring Cloud Gateway", role: "API Gateway — single entry point", why: "JWT validation (Keycloak JWKS), rate limiting (Redis), idempotency-key enforcement, circuit breaker, retry.", tag: "Gateway" },
+      { name: "Keycloak 24",          role: "Identity Provider (OIDC/OAuth2)", why: "Custom realm: aegispay. Protocol mappers add aegispay_user_id claim. Federates Google, Microsoft, GitHub, Apple.", tag: "Auth" },
+      { name: "Resilience4j",         role: "Circuit breaker + retry",         why: "Protects gateway from downstream failures. Retry on 502/503 (GET + POST). Half-open state for gradual recovery.", tag: "Resilience" },
+      { name: "Redis 7",              role: "Rate limiting + idempotency cache", why: "INCR sliding window counters. SET NX PX 86400000 for 24h idempotency keys. Cluster mode in prod.", tag: "Cache" },
+    ],
+  },
+  {
+    id: "backend", label: "Backend Services", icon: "⚙️", color: "#059669", bg: "#ecfdf5",
+    desc: "8 Spring Boot microservices — each owns a bounded context and a dedicated PostgreSQL database.",
+    techs: [
+      { name: "Spring Boot 3.2",  role: "All 8 microservices",              why: "Spring Security Resource Server, Spring Data JPA (open-in-view=false), Spring Kafka, Actuator + Micrometer.", tag: "Framework" },
+      { name: "PostgreSQL 16",    role: "Primary OLTP store (8 databases)", why: "One DB per service (bounded context isolation). pgvector extension for 1536-dim AI embeddings. pgcrypto for UUID gen.", tag: "Database" },
+      { name: "Apache Kafka 3.6", role: "Event backbone (10 topics)",       why: "Outbox relay → at-least-once delivery. 3 partitions + RF=3 in prod. Consumer groups per service. DLQ for unprocessable events.", tag: "Messaging" },
+      { name: "MongoDB 7",        role: "CQRS read models",                 why: "TransactionView (< 15ms reads). UserContactDocument for notification routing. No migrations needed for read model schema changes.", tag: "Database" },
+      { name: "Stripe SDK",       role: "Payment processing (Orchestrator)", why: "PaymentIntents API. Error mapping: Stripe error codes → internal failureCodes. Refund API for saga compensation.", tag: "Payment" },
+      { name: "Anthropic Claude", role: "AI explanations + RAG (AI Platform)", why: "Haiku for fast per-transaction RAG queries. Sonnet for deep fraud explanations. Tool use for structured JSON output.", tag: "AI" },
+    ],
+  },
+  {
+    id: "data", label: "Data & Analytics", icon: "📊", color: "#d97706", bg: "#fffbeb",
+    desc: "Event-driven analytics pipeline. Never on the critical payment path.",
+    techs: [
+      { name: "Kafka Streams",   role: "Data Pipeline — event processing",  why: "TopologyTestDriver for unit tests. TransactionMetricsStream + RiskAnalyticsStream. 5-second batch flush to ClickHouse.", tag: "Streaming" },
+      { name: "ClickHouse 24.4", role: "OLAP analytics store",              why: "MergeTree engine. 4 tables + 3 materialized views. Array(String) for rule_flags. P99 < 100ms on 100M rows. 2yr TTL.", tag: "Database" },
+      { name: "Spring Batch",    role: "Reconciliation (nightly at 02:00)", why: "Diffs PostgreSQL ledger_entries vs Stripe payment_intents. Writes AMOUNT_MISMATCH / MISSING_IN_LEDGER breaks to ClickHouse.", tag: "Batch" },
+      { name: "Grafana 10.4",    role: "Business dashboards",               why: "3 ClickHouse-backed dashboards: Payment Ops, Fraud Intelligence, SLA & Latency. 1–5 min auto-refresh. Provisioned via ConfigMap.", tag: "Viz" },
+    ],
+  },
+  {
+    id: "infra", label: "Infrastructure", icon: "🏗️", color: "#64748b", bg: "#f8fafc",
+    desc: "Kubernetes-first deployment. Local Docker Compose mirrors prod structure exactly.",
+    techs: [
+      { name: "Kubernetes (EKS)", role: "Container orchestration (all envs)", why: "HPA, PDB, init-containers for DB health checks. 4 namespaces: dev, staging, prod, on-prem (k3s). Helm chart for all services.", tag: "Orchestration" },
+      { name: "Docker Compose",   role: "Local development stack",            why: "Full stack: all 8 services + all infra. Seed scripts inject test data. Port forwarding matches k8s services.", tag: "Local" },
+      { name: "Prometheus",       role: "Metrics collection",                why: "Scrapes all Spring Boot /actuator/prometheus endpoints. PrometheusRules: SagaTimeout, BalanceNegative, DLQDepth, KafkaLag.", tag: "Monitoring" },
+      { name: "Alertmanager",     role: "Alert routing",                     why: "Critical → Slack + Email. Warning → Slack only. Credentials mounted as secret files (not env vars).", tag: "Monitoring" },
+      { name: "HashiCorp Vault",  role: "Secrets management (prod)",         why: "Prod environment only. Dev/staging use AWS Secrets Manager. Local uses plaintext .env.local.", tag: "Security" },
+      { name: "AWS EKS",          role: "Managed Kubernetes (dev/staging/prod)", why: "3 clusters: aegispay-dev, aegispay-staging, aegispay-prod. Fargate for batch jobs. RDS Postgres in prod.", tag: "Cloud" },
+    ],
+  },
+  {
+    id: "testing", label: "Testing Stack", icon: "🧪", color: "#6366f1", bg: "#eef2ff",
+    desc: "85%+ unit coverage. Integration and E2E tests per platform.",
+    techs: [
+      { name: "JUnit 5 + Mockito",   role: "Java service unit tests",      why: "All service layers. TopologyTestDriver for Kafka Streams. TestContainers for Postgres integration tests.", tag: "Backend" },
+      { name: "TopologyTestDriver",  role: "Kafka Streams unit tests",     why: "TransactionMetricsStreamTest (7 tests), RiskAnalyticsStreamTest (5 tests). No broker required.", tag: "Backend" },
+      { name: "XCTest",              role: "iOS unit + integration tests",  why: "BiometricAuthManagerTests, CoreData persistence, Combine publisher tests.", tag: "iOS" },
+      { name: "JUnit (Android)",     role: "Android unit tests",           why: "ViewModel tests, Room DAO tests, WorkManager tests.", tag: "Android" },
+      { name: "Playwright",          role: "Web E2E tests",                why: "Full transaction flow E2E. Back-office triage workflow. Cross-browser: Chrome, Firefox, Safari.", tag: "Web" },
+      { name: "AssertJ",             role: "Fluent assertions (Java)",      why: "Record field assertions for Kafka Streams test captors. Readable failure messages.", tag: "Backend" },
+    ],
+  },
+];
 
-type Layer = {
-  id: string
-  label: string
-  color: string
-  bg: string
-  border: string
-  items: TechItem[]
-}
-
-const LAYERS: Layer[] = [
-  {
-    id: 'client',
-    label: 'Client Tier',
-    color: 'text-blue-700',
-    bg: 'bg-blue-50',
-    border: 'border-blue-200',
-    items: [
-      {
-        name: 'Next.js 14',
-        role: 'Web frontend',
-        why: 'App Router SSR + streaming for fast dashboards',
-        tag: 'Web',
-        tagColor: 'bg-blue-100 text-blue-700',
-      },
-      {
-        name: 'SwiftUI',
-        role: 'iOS app',
-        why: 'Native performance, Face ID biometric auth',
-        tag: 'iOS',
-        tagColor: 'bg-gray-100 text-gray-700',
-      },
-      {
-        name: 'Jetpack Compose',
-        role: 'Android app',
-        why: 'Declarative UI, Kotlin coroutines for async ops',
-        tag: 'Android',
-        tagColor: 'bg-green-100 text-green-700',
-      },
-      {
-        name: 'TypeScript',
-        role: 'Type safety',
-        why: 'End-to-end type safety with shared-types package',
-        tag: 'Language',
-        tagColor: 'bg-blue-100 text-blue-700',
-      },
-    ],
-  },
-  {
-    id: 'gateway',
-    label: 'Auth & Gateway',
-    color: 'text-purple-700',
-    bg: 'bg-purple-50',
-    border: 'border-purple-200',
-    items: [
-      {
-        name: 'Spring Cloud Gateway',
-        role: 'API gateway',
-        why: 'JWT validation, rate limiting, circuit breaker, routing',
-        tag: 'Gateway',
-        tagColor: 'bg-purple-100 text-purple-700',
-      },
-      {
-        name: 'Keycloak 24',
-        role: 'Identity provider',
-        why: 'OAuth2/OIDC, multi-IdP (Google, GitHub, Apple, Microsoft)',
-        tag: 'Auth',
-        tagColor: 'bg-purple-100 text-purple-700',
-      },
-      {
-        name: 'Resilience4j',
-        role: 'Resilience patterns',
-        why: 'Circuit breaker, retry, bulkhead — prevents cascade failures',
-        tag: 'Resilience',
-        tagColor: 'bg-orange-100 text-orange-700',
-      },
-      {
-        name: 'Redis 7',
-        role: 'Cache / rate limit',
-        why: 'Sliding window rate limits (100 req/60s), idempotency keys, sessions',
-        tag: 'Cache',
-        tagColor: 'bg-red-100 text-red-700',
-      },
-    ],
-  },
-  {
-    id: 'backend',
-    label: 'Backend Services',
-    color: 'text-green-700',
-    bg: 'bg-green-50',
-    border: 'border-green-200',
-    items: [
-      {
-        name: 'Spring Boot 3.2',
-        role: '10 microservices',
-        why: 'Virtual threads (Loom), actuator, Micrometer metrics, Flyway migrations',
-        tag: 'Core',
-        tagColor: 'bg-green-100 text-green-700',
-      },
-      {
-        name: 'PostgreSQL 16',
-        role: 'Transactional store',
-        why: 'ACID guarantees, optimistic locking, FOR UPDATE, pgvector for RAG',
-        tag: 'DB',
-        tagColor: 'bg-sky-100 text-sky-700',
-      },
-      {
-        name: 'Apache Kafka 3.6',
-        role: 'Event backbone',
-        why: 'At-least-once delivery with consumer idempotency = exactly-once semantics',
-        tag: 'Events',
-        tagColor: 'bg-amber-100 text-amber-700',
-      },
-      {
-        name: 'MongoDB 7',
-        role: 'CQRS read models',
-        why: 'Denormalised read projections for tx history and notification contacts',
-        tag: 'DB',
-        tagColor: 'bg-sky-100 text-sky-700',
-      },
-      {
-        name: 'Stripe SDK',
-        role: 'Payment processing',
-        why: 'PCI-DSS compliant card processing with idempotency key per saga step',
-        tag: 'Payments',
-        tagColor: 'bg-indigo-100 text-indigo-700',
-      },
-      {
-        name: 'Anthropic Claude',
-        role: 'AI inference',
-        why: 'RAG explanations, fraud copilot, incident triage — with Groq/Gemini fallback',
-        tag: 'AI',
-        tagColor: 'bg-rose-100 text-rose-700',
-      },
-    ],
-  },
-  {
-    id: 'data',
-    label: 'Data & Analytics',
-    color: 'text-amber-700',
-    bg: 'bg-amber-50',
-    border: 'border-amber-200',
-    items: [
-      {
-        name: 'Kafka Streams',
-        role: 'Stream processing',
-        why: 'Real-time aggregations before sink to ClickHouse (5s batch flush)',
-        tag: 'Streaming',
-        tagColor: 'bg-amber-100 text-amber-700',
-      },
-      {
-        name: 'ClickHouse 24.4',
-        role: 'Analytics OLAP',
-        why: 'Columnar storage for transaction_facts, risk_assessments, saga_latencies',
-        tag: 'Analytics',
-        tagColor: 'bg-amber-100 text-amber-700',
-      },
-      {
-        name: 'Spring Batch',
-        role: 'Reconciliation',
-        why: 'Nightly batch reconciliation — flags any breaks between ledger and Stripe',
-        tag: 'Batch',
-        tagColor: 'bg-gray-100 text-gray-700',
-      },
-      {
-        name: 'Grafana 10.4',
-        role: 'Dashboards',
-        why: 'Two instances: kube-prometheus (JVM/K8s) + AegisPay (ClickHouse analytics)',
-        tag: 'Observability',
-        tagColor: 'bg-orange-100 text-orange-700',
-      },
-    ],
-  },
-]
+const TAG_COLORS: Record<string, string> = {
+  Web: "#0ea5e9", iOS: "#6366f1", Android: "#059669", Gateway: "#8b5cf6",
+  Auth: "#8b5cf6", Resilience: "#d97706", Cache: "#dc2626", Framework: "#059669",
+  Database: "#3b82f6", Messaging: "#dc2626", Payment: "#f59e0b", AI: "#8b5cf6",
+  Streaming: "#d97706", Batch: "#64748b", Viz: "#0891b2", Orchestration: "#374151",
+  Local: "#64748b", Monitoring: "#059669", Security: "#dc2626", Cloud: "#0ea5e9",
+  Backend: "#059669", Frontend: "#0ea5e9", "": "#94a3b8",
+};
 
 export default function TechStackDemo() {
-  const [openLayers, setOpenLayers] = useState<Set<string>>(new Set(['client']))
+  const [activeLayer, setActiveLayer] = useState<string | null>(null);
+  const [hoveredTech, setHoveredTech] = useState<string | null>(null);
 
-  const toggle = (id: string) => {
-    setOpenLayers((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
+  const layer = activeLayer ? LAYERS.find((l) => l.id === activeLayer) : null;
 
   return (
-    <div className="rounded-xl border border-gray-100 shadow-sm bg-white overflow-hidden">
-      <div className="px-5 py-4 border-b border-gray-100">
-        <h3 className="font-semibold text-gray-900">Tech Stack Explorer</h3>
-        <p className="text-sm text-gray-500 mt-0.5">Click a layer to expand its components</p>
-      </div>
-      <div className="divide-y divide-gray-100">
-        {LAYERS.map((layer) => {
-          const isOpen = openLayers.has(layer.id)
-          return (
-            <div key={layer.id}>
-              <button
-                onClick={() => toggle(layer.id)}
-                className={`w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors ${
-                  isOpen ? layer.bg : ''
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className={`w-2.5 h-2.5 rounded-full ${layer.bg} border-2 ${layer.border}`} />
-                  <span className={`font-medium ${isOpen ? layer.color : 'text-gray-700'}`}>
-                    {layer.label}
-                  </span>
-                  <span className="text-xs text-gray-400">{layer.items.length} technologies</span>
-                </div>
-                {isOpen ? (
-                  <ChevronDown size={16} className="text-gray-400" />
-                ) : (
-                  <ChevronRight size={16} className="text-gray-400" />
-                )}
-              </button>
+    <div style={{ fontFamily: "'IBM Plex Sans', system-ui, sans-serif", maxWidth: 900, margin: "0 auto", padding: 24 }}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');`}</style>
 
-              {isOpen && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 px-5 pb-4">
-                  {layer.items.map((item) => (
-                    <div
-                      key={item.name}
-                      className="rounded-lg border border-gray-100 bg-white p-4 hover:shadow-sm transition-shadow"
-                    >
-                      <div className="flex items-start justify-between gap-2 mb-1.5">
-                        <p className="font-semibold text-gray-900 text-sm">{item.name}</p>
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${item.tagColor}`}>
-                          {item.tag}
-                        </span>
-                      </div>
-                      <p className="text-xs text-gray-500 font-medium mb-1">{item.role}</p>
-                      <p className="text-xs text-gray-400">{item.why}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )
-        })}
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 4 }}>AegisPay · Architecture</div>
+        <div style={{ fontSize: 24, fontWeight: 700, color: "#0f172a", letterSpacing: "-0.02em" }}>Tech Stack Explorer</div>
+        <div style={{ fontSize: 13, color: "#64748b", marginTop: 2 }}>Every technology in the stack — what it is, what it does, why it was chosen</div>
       </div>
+
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 24 }}>
+        {LAYERS.map((l) => (
+          <button key={l.id} onClick={() => setActiveLayer(activeLayer === l.id ? null : l.id)}
+            style={{ padding: "8px 16px", borderRadius: 10, border: `2px solid ${activeLayer === l.id ? l.color : "#e2e8f0"}`, background: activeLayer === l.id ? l.color : "#fff", color: activeLayer === l.id ? "#fff" : "#374151", fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, transition: "all 0.15s" }}>
+            <span>{l.icon}</span> {l.label}
+          </button>
+        ))}
+      </div>
+
+      {!layer && (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+            {LAYERS.map((l) => (
+              <div key={l.id} onClick={() => setActiveLayer(l.id)} style={{ background: "#fff", borderRadius: 12, border: `1.5px solid ${l.color}44`, padding: 16, cursor: "pointer", transition: "all 0.15s", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                  <span style={{ fontSize: 18 }}>{l.icon}</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: l.color }}>{l.label}</span>
+                </div>
+                <div style={{ fontSize: 11, color: "#64748b", lineHeight: 1.5, marginBottom: 10 }}>{l.desc}</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                  {l.techs.slice(0, 4).map((t) => <span key={t.name} style={{ fontSize: 10, background: l.bg, color: l.color, border: `1px solid ${l.color}33`, borderRadius: 4, padding: "2px 7px", fontWeight: 600 }}>{t.name}</span>)}
+                  {l.techs.length > 4 && <span style={{ fontSize: 10, color: "#94a3b8", padding: "2px 4px" }}>+{l.techs.length - 4}</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{ marginTop: 20, display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+            {[
+              { label: "Total technologies", value: LAYERS.reduce((s, l) => s + l.techs.length, 0), color: "#6366f1" },
+              { label: "Backend services",   value: "8",  color: "#059669" },
+              { label: "Languages",          value: "4",  color: "#d97706", note: "Java, TypeScript, Swift, Kotlin" },
+              { label: "Databases",          value: "5",  color: "#3b82f6", note: "Postgres, Redis, Mongo, ClickHouse, Kafka" },
+            ].map((s) => (
+              <div key={s.label} style={{ background: "#f8fafc", borderRadius: 10, padding: "12px 14px", border: "1px solid #e2e8f0", textAlign: "center" }}>
+                <div style={{ fontSize: 28, fontWeight: 700, color: s.color, fontFamily: "monospace" }}>{s.value}</div>
+                <div style={{ fontSize: 10, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 2 }}>{s.label}</div>
+                {"note" in s && s.note && <div style={{ fontSize: 9, color: "#b8c4ce", marginTop: 3 }}>{s.note}</div>}
+              </div>
+            ))}
+          </div>
+          <div style={{ marginTop: 20 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#0f172a", marginBottom: 10 }}>Design Principles Behind Stack Choices</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              {[
+                { icon: "🔒", title: "Bounded-context DB isolation",   desc: "One PostgreSQL database per microservice. No cross-service JOINs. Services communicate via Kafka events, not shared tables.", color: "#059669" },
+                { icon: "📝", title: "Eventual consistency by design",  desc: "MongoDB read models are updated asynchronously via Kafka. A 200ms eventual consistency delay is acceptable — financial correctness lives in Postgres.", color: "#3b82f6" },
+                { icon: "⚡", title: "Analytics never on critical path",desc: "ClickHouse, Grafana, Data Pipeline are downstream consumers. A ClickHouse outage has zero impact on payment processing.", color: "#d97706" },
+                { icon: "🔁", title: "Idempotency everywhere",          desc: "Every Kafka consumer, every Outbox relay, every Saga step is idempotent. At-least-once delivery becomes effectively-once processing.", color: "#8b5cf6" },
+              ].map((p) => (
+                <div key={p.title} style={{ background: "#f8fafc", borderRadius: 10, padding: "12px 14px", borderLeft: `3px solid ${p.color}` }}>
+                  <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 4 }}>
+                    <span style={{ fontSize: 16 }}>{p.icon}</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "#0f172a" }}>{p.title}</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: "#64748b", lineHeight: 1.6 }}>{p.desc}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
+      {layer && (
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+            <span style={{ fontSize: 24 }}>{layer.icon}</span>
+            <div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: layer.color }}>{layer.label}</div>
+              <div style={{ fontSize: 12, color: "#64748b" }}>{layer.desc}</div>
+            </div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            {layer.techs.map((tech) => {
+              const tagColor = TAG_COLORS[tech.tag] || "#94a3b8";
+              return (
+                <div key={tech.name} onMouseEnter={() => setHoveredTech(tech.name)} onMouseLeave={() => setHoveredTech(null)}
+                  style={{ background: "#fff", borderRadius: 12, padding: 16, border: `1.5px solid ${hoveredTech === tech.name ? layer.color : "#e2e8f0"}`, transition: "all 0.15s" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>{tech.name}</div>
+                    <span style={{ fontSize: 9, background: tagColor + "18", color: tagColor, border: `1px solid ${tagColor}33`, borderRadius: 4, padding: "2px 7px", fontWeight: 700, whiteSpace: "nowrap", marginLeft: 8 }}>{tech.tag}</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: "#64748b", marginBottom: 8, fontStyle: "italic" }}>{tech.role}</div>
+                  <div style={{ height: 1, background: "#f1f5f9", marginBottom: 8 }} />
+                  <div style={{ fontSize: 11, color: "#374151", lineHeight: 1.65 }}>
+                    <span style={{ fontSize: 9, fontWeight: 700, color: layer.color, textTransform: "uppercase", letterSpacing: "0.06em" }}>Why: </span>
+                    {tech.why}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
-  )
+  );
 }

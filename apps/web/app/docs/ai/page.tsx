@@ -11,6 +11,16 @@ const IncidentTriageDemo = dynamic(
   { ssr: false, loading: () => <div className="animate-pulse bg-gray-100 rounded-xl h-64" /> }
 )
 
+const HnswVectorSpaceDemo = dynamic(
+  () => import('../_components/HnswVectorSpaceDemo'),
+  { ssr: false, loading: () => <div className="animate-pulse bg-gray-100 rounded-xl h-64" /> }
+)
+
+const KycPlatformExplorer = dynamic(
+  () => import('../_components/KycPlatformExplorer'),
+  { ssr: false, loading: () => <div className="animate-pulse bg-gray-100 rounded-xl h-64" /> }
+)
+
 const AI_CAPABILITIES = [
   {
     icon: '🛡️',
@@ -92,6 +102,29 @@ export default function AiPage() {
           readLogs, queryMetrics, restartDeployment). Watch it triage a real saga failure spike below.
         </p>
         <IncidentTriageDemo />
+      </section>
+
+      {/* HNSW Vector Space */}
+      <section>
+        <h2 className="text-2xl font-semibold text-gray-900 mb-4">HNSW Vector Index</h2>
+        <p className="text-gray-600 mb-4">
+          The Risk Engine and AI Platform use pgvector with HNSW (Hierarchical Navigable Small World)
+          indexing for sub-millisecond approximate nearest-neighbour search across hundreds of thousands
+          of fraud pattern embeddings. Drag query vectors in the visualisation to see how ef_search and
+          m parameters affect recall vs. latency.
+        </p>
+        <HnswVectorSpaceDemo />
+      </section>
+
+      {/* KYC Platform */}
+      <section>
+        <h2 className="text-2xl font-semibold text-gray-900 mb-4">KYC Platform</h2>
+        <p className="text-gray-600 mb-4">
+          The KYC (Know Your Customer) flow uses Claude vision to extract and validate identity fields
+          from uploaded documents (Aadhaar, PAN, passport). Each document passes through classification,
+          field extraction, anomaly detection, and compliance gating before the user account is activated.
+        </p>
+        <KycPlatformExplorer />
       </section>
 
       {/* Fallback chain */}
