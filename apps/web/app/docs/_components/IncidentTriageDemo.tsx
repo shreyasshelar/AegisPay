@@ -1,242 +1,479 @@
-// FILE: apps/web/app/docs/_components/IncidentTriageDemo.tsx
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
-import { Play, RotateCcw } from 'lucide-react'
+import { useState, useEffect, useRef } from "react";
 
-type StepType = 'think' | 'act' | 'report'
+const SCENARIO = {
+  title: "payment-orchestrator failures spike",
+  description: "47 saga failures/min at 14:31. Payment success rate dropped from 99.1% → 84.3%.",
+};
 
-type TriageStep = {
-  type: StepType
-  title: string
-  content: string
-  tool?: string
-  toolResult?: string
-}
+const LOOP_STEPS = [
+  {
+    type: "think",
+    label: "Reasoning",
+    content: "There are saga failures in payment-orchestrator. I need to understand what errors are occurring. Let me read the recent logs first to identify the error type and timing.",
+    tool: null as string | null,
+    color: "#6366f1",
+    bg: "#eef2ff",
+    icon: "🧠",
+    result: undefined as string | undefined,
+  },
+  {
+    type: "act",
+    label: "Tool call",
+    content: 'readLogs(service="payment-orchestrator", since="15m ago")',
+    tool: "readLogs",
+    color: "#0891b2",
+    bg: "#ecfeff",
+    icon: "⚡",
+    result: `[14:28:01] INFO  payment-orchestrator v2.3.1 started
+[14:28:15] INFO  PaymentSagaCoordinator initialized
+[14:31:02] ERROR NullPointerException at PaymentSagaCoordinator.java:247
+[14:31:02] ERROR   at SagaStepExecutor.executeWithRetry(SagaStepExecutor.java:89)
+[14:31:02] ERROR   at PaymentSagaCoordinator.processRiskEvent(PaymentSagaCoordinator.java:247)
+[14:31:04] ERROR NullPointerException at PaymentSagaCoordinator.java:247
+[14:31:06] ERROR NullPointerException at PaymentSagaCoordinator.java:247
+[14:31:11] WARN  47 saga failures in last 60s — threshold exceeded`,
+  },
+  {
+    type: "think",
+    label: "Reasoning",
+    content: "I can see NullPointerExceptions in PaymentSagaCoordinator at line 247, starting at 14:31:02. The service started at 14:28 — so failures began 3 minutes after startup. Let me check the metrics to see the exact failure rate and timing.",
+    tool: null as string | null,
+    color: "#6366f1",
+    bg: "#eef2ff",
+    icon: "🧠",
+    result: undefined as string | undefined,
+  },
+  {
+    type: "act",
+    label: "Tool call",
+    content: 'queryMetrics(metric="payment_saga_failures", window="20m")',
+    tool: "queryMetrics",
+    color: "#059669",
+    bg: "#ecfdf5",
+    icon: "⚡",
+    result: `{
+  "metric": "payment_saga_failures",
+  "series": [
+    {"ts": "14:28", "value": 0},
+    {"ts": "14:29", "value": 0},
+    {"ts": "14:30", "value": 0},
+    {"ts": "14:31", "value": 47},
+    {"ts": "14:32", "value": 51},
+    {"ts": "14:33", "value": 49}
+  ],
+  "baseline_p99": 2
+}`,
+  },
+  {
+    type: "think",
+    label: "Reasoning",
+    content: "Failures jumped from 0 to 47/min at exactly 14:31. The service started at 14:28. This is a classic post-deployment regression — the new version worked for 3 minutes before external traffic triggered the NPE. Let me check recent deployments to confirm.",
+    tool: null as string | null,
+    color: "#6366f1",
+    bg: "#eef2ff",
+    icon: "🧠",
+    result: undefined as string | undefined,
+  },
+  {
+    type: "act",
+    label: "Tool call",
+    content: 'getRecentDeployments(service="payment-orchestrator", since="1h ago")',
+    tool: "getRecentDeployments",
+    color: "#d97706",
+    bg: "#fffbeb",
+    icon: "⚡",
+    result: `[
+  {
+    "version": "v2.3.1",
+    "deployed_at": "14:28:00",
+    "deployed_by": "ci-pipeline",
+    "git_sha": "a3f9c12",
+    "commit_msg": "feat: add risk score caching to saga coordinator"
+  },
+  {
+    "version": "v2.3.0",
+    "deployed_at": "11:14:00",
+    "deployed_by": "ci-pipeline",
+    "note": "previous stable version"
+  }
+]`,
+  },
+  {
+    type: "conclude",
+    label: "Root cause",
+    content: `**Root cause identified:** payment-orchestrator v2.3.1 was deployed at 14:28:00. NullPointerExceptions began at 14:31:02 in PaymentSagaCoordinator.java:247 — the new risk score caching feature introduced a null-check regression when processing RiskAssessedEvents with unexpected payload shapes.
 
-const INCIDENT_STEPS: TriageStep[] = [
-  {
-    type: 'think',
-    title: 'Reasoning',
-    content:
-      'I can see saga failures spiking to 47/min at 14:31 in payment-orchestrator. This is severe — let me start by reading recent logs to find the root error.',
-  },
-  {
-    type: 'act',
-    title: 'Tool Call',
-    tool: 'readLogs("payment-orchestrator", "15m")',
-    toolResult: `[14:31:02] ERROR PaymentSagaCoordinator.java:247 - NullPointerException
-  at com.aegispay.orchestrator.PaymentSagaCoordinator.processRisk(PaymentSagaCoordinator.java:247)
-  at com.aegispay.orchestrator.SagaWorker.run(SagaWorker.java:89)
-Caused by: java.lang.NullPointerException: Cannot invoke getRiskScore() on null
-[14:31:03] ERROR PaymentSagaCoordinator.java:247 - NullPointerException (repeated x 47)`,
-    content: 'Logs retrieved — clear NullPointerException pattern.',
-  },
-  {
-    type: 'think',
-    title: 'Reasoning',
-    content:
-      'NullPointerException at PaymentSagaCoordinator.java:247 calling getRiskScore(). This started right at 14:31. Let me check metrics to see when this failure rate began and correlate with deployment events.',
-  },
-  {
-    type: 'act',
-    title: 'Tool Call',
-    tool: 'queryMetrics("payment-orchestrator", "saga_failure_rate", "30m")',
-    toolResult: `14:00 ████░░░░░░ 0.2/min (baseline)
-14:10 ████░░░░░░ 0.3/min
-14:20 ████░░░░░░ 0.1/min
-14:28 ████░░░░░░ 0.0/min  ← DEPLOY
-14:29 ████████░░ 12/min
-14:30 ██████████ 38/min
-14:31 ██████████ 47/min  ← ALERT TRIGGERED`,
-    content: 'Metrics show spike began at exactly 14:29, one minute after a deployment at 14:28.',
-  },
-  {
-    type: 'think',
-    title: 'Reasoning',
-    content:
-      'Clear correlation: NPE started after deployment at 14:28. getRiskScore() returning null suggests an API contract change in a dependency. Let me check what was deployed at 14:28.',
-  },
-  {
-    type: 'act',
-    title: 'Tool Call',
-    tool: 'getDeploymentHistory("payment-orchestrator", "1h")',
-    toolResult: `14:28:04 DEPLOY payment-orchestrator:2.1.4
-  Commit: a4f7c2e
-  Author: Rohan Mehta
-  Message: feat: upgrade stripe sdk 5.0 → 6.0
-  Changed files:
-    - pom.xml (stripe-java 5.0.0 → 6.0.0)
-    - PaymentSagaCoordinator.java (getRiskAssessment() call)`,
-    content: 'Found it: Stripe SDK upgraded from 5.0 to 6.0 in this deployment.',
-  },
-  {
-    type: 'think',
-    title: 'Reasoning',
-    content:
-      'Stripe SDK 6.0 breaking change: getRiskAssessment() return type changed from Optional<RiskAssessment> to nullable RiskAssessment. The code calls .getRiskScore() without null check — NPE on every transaction. Fix requires rollback or null guard. Fastest resolution: rollback the deployment immediately.',
-  },
-  {
-    type: 'act',
-    title: 'Tool Call',
-    tool: 'restartDeployment("payment-orchestrator", "2.1.3", "NPE in Stripe 6.0 SDK getRiskAssessment() nullable — rolling back to 2.1.3")',
-    toolResult: `✅ Rolling back payment-orchestrator: 2.1.4 → 2.1.3
-✅ New pods healthy (3/3 ready)
-✅ Saga failure rate: 47/min → 0.2/min (14:33)
-✅ PagerDuty incident #4821 resolved`,
-    content: 'Rollback successful. Service restored within 2 minutes of diagnosis.',
-  },
-  {
-    type: 'report',
-    title: 'Incident Report',
-    content: `**Root Cause**: Stripe SDK upgrade 5.0→6.0 introduced breaking change: \`getRiskAssessment()\` return type changed from \`Optional<RiskAssessment>\` to nullable \`RiskAssessment\`. Code at \`PaymentSagaCoordinator.java:247\` called \`.getRiskScore()\` without null guard.
+**Affected:** payment success rate 99.1% → 84.3% (~847 failed transactions in 18 minutes)
 
-**Contributing Factors**: No integration test covering null \`RiskAssessment\` response. SDK upgrade PR lacked changelog review for breaking changes.
+**Immediate action:** Rollback to v2.3.0 via \`helm rollback payment-orchestrator 1\`
+**Follow-up:** Add null safety to SagaStepExecutor.java:89 before re-deploying v2.3.1`,
+    tool: null as string | null,
+    color: "#dc2626",
+    bg: "#fef2f2",
+    icon: "🎯",
+    result: undefined as string | undefined,
+  },
+];
 
-**Actions Taken**: Identified NPE within 90s via log analysis. Correlated with deployment via metrics. Rolled back to 2.1.3 at 14:33.
-
-**Remediation**: (1) Add null-safe guard in 2.1.5. (2) Add integration test for null risk assessment. (3) Add SDK changelog review to PR checklist.`,
-  },
-]
-
-const STEP_STYLES: Record<StepType, { bg: string; border: string; badge: string; badgeBg: string }> = {
-  think: {
-    bg: 'bg-blue-50',
-    border: 'border-blue-200',
-    badge: '🧠 Reasoning',
-    badgeBg: 'bg-blue-500 text-white',
-  },
-  act: {
-    bg: 'bg-amber-50',
-    border: 'border-amber-200',
-    badge: '⚡ Tool',
-    badgeBg: 'bg-amber-500 text-white',
-  },
-  report: {
-    bg: 'bg-green-50',
-    border: 'border-green-200',
-    badge: '📋 Report',
-    badgeBg: 'bg-green-600 text-white',
-  },
+function MetricSparkline({ active }: { active: boolean }) {
+  const data = [0, 0, 0, 47, 51, 49];
+  const max = 60;
+  const w = 160, h = 50;
+  const pts = data.map((v, i) => `${(i / (data.length - 1)) * w},${h - (v / max) * h}`).join(" ");
+  return (
+    <svg width={w} height={h + 16} style={{ display: "block" }}>
+      <polyline points={pts} fill="none" stroke={active ? "#dc2626" : "#e2e8f0"} strokeWidth={1.5} />
+      {data.map((v, i) => (
+        <circle
+          key={i}
+          cx={(i / (data.length - 1)) * w}
+          cy={h - (v / max) * h}
+          r={v > 0 ? 3 : 2}
+          fill={v > 0 ? "#dc2626" : "#94a3b8"}
+        />
+      ))}
+      {["14:28", "14:29", "14:30", "14:31", "14:32", "14:33"].map((t, i) => (
+        <text key={i} x={(i / 5) * w} y={h + 14} textAnchor="middle" fontSize={7} fill="#94a3b8" fontFamily="monospace">
+          {i % 2 === 0 ? t : ""}
+        </text>
+      ))}
+    </svg>
+  );
 }
 
 export default function IncidentTriageDemo() {
-  const [visibleSteps, setVisibleSteps] = useState(0)
-  const [playing, setPlaying] = useState(false)
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-
-  useEffect(() => {
-    if (playing) {
-      intervalRef.current = setInterval(() => {
-        setVisibleSteps((prev) => {
-          if (prev >= INCIDENT_STEPS.length) {
-            setPlaying(false)
-            return prev
-          }
-          return prev + 1
-        })
-      }, 1500)
-    }
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current)
-    }
-  }, [playing])
+  const [runState, setRunState] = useState("idle");
+  const [currentStep, setCurrentStep] = useState(-1);
+  const [shownSteps, setShownSteps] = useState<number[]>([]);
+  const [typedContent, setTypedContent] = useState("");
+  const [typingDone, setTypingDone] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   const reset = () => {
-    setPlaying(false)
-    setVisibleSteps(0)
-  }
+    setRunState("idle");
+    setCurrentStep(-1);
+    setShownSteps([]);
+    setTypedContent("");
+    setTypingDone(false);
+  };
 
-  const replay = () => {
-    reset()
-    setTimeout(() => setPlaying(true), 100)
-  }
+  const run = () => {
+    reset();
+    setTimeout(() => setRunState("running"), 100);
+  };
+
+  useEffect(() => {
+    if (runState !== "running") return;
+    if (currentStep === -1) {
+      setTimeout(() => setCurrentStep(0), 400);
+      return;
+    }
+    if (currentStep >= LOOP_STEPS.length) {
+      setRunState("done");
+    }
+  }, [runState, currentStep]);
+
+  useEffect(() => {
+    if (currentStep < 0 || currentStep >= LOOP_STEPS.length) return;
+    const step = LOOP_STEPS[currentStep];
+    setTypedContent("");
+    setTypingDone(false);
+    let i = 0;
+    const words = step.content.split(" ");
+    const interval = setInterval(() => {
+      i++;
+      setTypedContent(words.slice(0, i).join(" "));
+      if (i >= words.length) {
+        clearInterval(interval);
+        setTypingDone(true);
+      }
+    }, 30);
+    return () => clearInterval(interval);
+  }, [currentStep]);
+
+  useEffect(() => {
+    if (!typingDone || currentStep < 0 || currentStep >= LOOP_STEPS.length) return;
+    const step = LOOP_STEPS[currentStep];
+    const delay = step.type === "act" ? 1200 : step.type === "conclude" ? 0 : 600;
+    const t = setTimeout(() => {
+      setShownSteps((s) => [...s, currentStep]);
+      if (step.type !== "conclude") {
+        setCurrentStep((c) => c + 1);
+      } else {
+        setRunState("done");
+      }
+    }, delay);
+    return () => clearTimeout(t);
+  }, [typingDone, currentStep]);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [shownSteps, typedContent]);
+
+  const toolCallCount = shownSteps.filter((i) => LOOP_STEPS[i].type === "act").length;
+  const thinkCount = shownSteps.filter((i) => LOOP_STEPS[i].type === "think").length;
+
+  const renderContent = (text: string) => {
+    return text.split("**").map((part, i) =>
+      i % 2 === 1 ? (
+        <strong key={i} style={{ color: "#0f172a" }}>{part}</strong>
+      ) : (
+        part
+      )
+    );
+  };
 
   return (
-    <div className="rounded-xl border border-gray-100 shadow-sm bg-white overflow-hidden">
-      <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h3 className="font-semibold text-gray-900">AI Incident Triage</h3>
-          <p className="text-sm text-gray-500 mt-0.5">
-            🚨 Incident: payment-orchestrator saga failures — 47/min at 14:31
-          </p>
+    <div style={{ fontFamily: "'IBM Plex Sans', system-ui, sans-serif", padding: "20px", maxWidth: 780, margin: "0 auto" }}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono&display=swap');
+      @keyframes blink { 0%,100%{opacity:1}50%{opacity:0.2} }
+      `}</style>
+
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.1em", color: "#94a3b8", textTransform: "uppercase", marginBottom: 4 }}>
+          AegisPay · AI Platform · Incident Triage Agent
         </div>
-        <div className="flex gap-2">
-          <button onClick={reset} className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100">
-            <RotateCcw size={14} />
-          </button>
-          {visibleSteps === 0 ? (
-            <button
-              onClick={() => setPlaying(true)}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-red-500 text-white font-medium hover:bg-red-600"
-            >
-              <Play size={12} /> Triage Incident
-            </button>
-          ) : visibleSteps >= INCIDENT_STEPS.length ? (
-            <button
-              onClick={replay}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-blue-500 text-white font-medium hover:bg-blue-600"
-            >
-              <RotateCcw size={12} /> Replay
-            </button>
-          ) : (
-            <button
-              onClick={() => setPlaying((p) => !p)}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-blue-500 text-white font-medium hover:bg-blue-600"
-            >
-              {playing ? '⏸ Pause' : '▶ Resume'}
-            </button>
-          )}
+        <div style={{ fontSize: 20, fontWeight: 600, color: "#0f172a" }}>ReAct loop — Think → Act → Observe → Repeat</div>
+        <div style={{ fontSize: 13, color: "#64748b", marginTop: 2 }}>
+          The LLM decides which tools to call, in what order, based on what it discovers — no hardcoded sequence
         </div>
       </div>
 
-      <div className="p-5 space-y-3 max-h-[600px] overflow-y-auto">
-        {visibleSteps === 0 && (
-          <div className="text-center py-12 text-sm text-gray-400">
-            Press "Triage Incident" to watch the AI agent reason through the incident
+      <div
+        style={{
+          background: "#fef2f2",
+          border: "1px solid #fca5a5",
+          borderRadius: 10,
+          padding: "12px 16px",
+          marginBottom: 16,
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: 12,
+        }}
+      >
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+            <span style={{ fontSize: 14 }}>🚨</span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: "#dc2626" }}>INCIDENT TRIGGERED</span>
+          </div>
+          <div style={{ fontSize: 12, color: "#374151", fontWeight: 500 }}>{SCENARIO.title}</div>
+          <div style={{ fontSize: 11, color: "#64748b" }}>{SCENARIO.description}</div>
+        </div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <MetricSparkline active={runState !== "idle"} />
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <button
+              onClick={run}
+              disabled={runState === "running"}
+              style={{
+                background: runState === "running" ? "#e2e8f0" : "#dc2626",
+                color: runState === "running" ? "#94a3b8" : "#fff",
+                border: "none",
+                borderRadius: 8,
+                padding: "8px 16px",
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: runState === "running" ? "not-allowed" : "pointer",
+              }}
+            >
+              {runState === "idle" ? "▶ Run triage" : runState === "running" ? "⟳ Triaging..." : "✓ Done"}
+            </button>
+            {runState !== "idle" && (
+              <button
+                onClick={reset}
+                style={{
+                  background: "none",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: 6,
+                  padding: "4px 12px",
+                  fontSize: 11,
+                  cursor: "pointer",
+                  color: "#64748b",
+                }}
+              >
+                ↺ reset
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {runState !== "idle" && (
+        <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
+          {[
+            { label: "Reasoning steps", value: thinkCount, color: "#6366f1" },
+            { label: "Tool calls", value: toolCallCount, color: "#0891b2" },
+            { label: "Tools available", value: 3, color: "#059669" },
+          ].map((stat) => (
+            <div
+              key={stat.label}
+              style={{
+                flex: 1,
+                background: "#f8fafc",
+                border: "1px solid #e2e8f0",
+                borderRadius: 8,
+                padding: "8px 12px",
+                textAlign: "center",
+              }}
+            >
+              <div style={{ fontSize: 20, fontWeight: 600, color: stat.color }}>{stat.value}</div>
+              <div style={{ fontSize: 10, color: "#64748b" }}>{stat.label}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div
+        ref={scrollRef}
+        style={{
+          background: "#0f172a",
+          borderRadius: 12,
+          padding: 16,
+          minHeight: 200,
+          maxHeight: 480,
+          overflowY: "auto",
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 11,
+        }}
+      >
+        {runState === "idle" && (
+          <div style={{ color: "#475569", textAlign: "center", paddingTop: 40 }}>
+            Click &quot;Run triage&quot; to start the agent loop ↑
           </div>
         )}
-        {INCIDENT_STEPS.slice(0, visibleSteps).map((step, idx) => {
-          const style = STEP_STYLES[step.type]
+
+        {shownSteps.map((i) => {
+          const step = LOOP_STEPS[i];
           return (
-            <div
-              key={idx}
-              className={`rounded-xl border ${style.bg} ${style.border} overflow-hidden`}
-            >
-              <div className="flex items-center gap-2 px-4 py-2.5 border-b border-white/50">
-                <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${style.badgeBg}`}>
-                  {style.badge}
+            <div key={i} style={{ marginBottom: 16 }}>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
+                <span style={{ fontSize: 12 }}>{step.icon}</span>
+                <span
+                  style={{
+                    fontSize: 9,
+                    fontWeight: 700,
+                    color: step.color,
+                    border: `1px solid ${step.color}44`,
+                    padding: "1px 6px",
+                    borderRadius: 4,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.08em",
+                  }}
+                >
+                  {step.type === "think" ? "reasoning" : step.type === "act" ? "tool call" : "conclusion"}
                 </span>
-                <span className="text-xs text-gray-400">Step {idx + 1}</span>
               </div>
-              <div className="px-4 py-3 space-y-2">
-                <p className="text-sm text-gray-700">{step.content}</p>
-                {step.tool && (
-                  <div className="mt-2">
-                    <pre className="bg-gray-900 text-amber-300 rounded-lg p-3 text-xs font-mono overflow-x-auto">
-                      {`→ ${step.tool}`}
-                    </pre>
-                    {step.toolResult && (
-                      <pre className="bg-gray-800 text-gray-200 rounded-b-lg px-3 pb-3 text-xs font-mono overflow-x-auto -mt-2 pt-2 whitespace-pre-wrap">
-                        {step.toolResult}
-                      </pre>
-                    )}
-                  </div>
-                )}
-                {step.type === 'report' && (
-                  <div className="mt-2 space-y-1.5 text-sm text-gray-700">
-                    {step.content.split('\n\n').map((para, i) => (
-                      <p key={i} className={para.startsWith('**') ? 'font-medium' : ''}>
-                        {para.replace(/\*\*/g, '')}
-                      </p>
-                    ))}
-                  </div>
-                )}
+              <div
+                style={{
+                  color: step.type === "think" ? "#94a3b8" : step.type === "act" ? "#7dd3fc" : "#fbbf24",
+                  lineHeight: 1.6,
+                  marginBottom: step.result ? 8 : 0,
+                }}
+              >
+                {step.type === "act" ? `> ${step.content}` : renderContent(step.content)}
               </div>
+              {step.result && (
+                <div
+                  style={{
+                    background: "#1e293b",
+                    borderRadius: 6,
+                    padding: "8px 12px",
+                    color: "#86efac",
+                    fontSize: 10,
+                    whiteSpace: "pre",
+                    overflowX: "auto",
+                    borderLeft: `2px solid ${step.color}`,
+                  }}
+                >
+                  {step.result}
+                </div>
+              )}
             </div>
-          )
+          );
         })}
+
+        {currentStep >= 0 && currentStep < LOOP_STEPS.length && !shownSteps.includes(currentStep) && (
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
+              <span style={{ fontSize: 12 }}>{LOOP_STEPS[currentStep].icon}</span>
+              <span
+                style={{
+                  fontSize: 9,
+                  fontWeight: 700,
+                  color: LOOP_STEPS[currentStep].color,
+                  border: `1px solid ${LOOP_STEPS[currentStep].color}44`,
+                  padding: "1px 6px",
+                  borderRadius: 4,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.08em",
+                }}
+              >
+                {LOOP_STEPS[currentStep].type === "think" ? "reasoning" : LOOP_STEPS[currentStep].type === "act" ? "tool call" : "conclusion"}
+              </span>
+              <span
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: "50%",
+                  background: LOOP_STEPS[currentStep].color,
+                  animation: "blink 1s infinite",
+                  display: "inline-block",
+                }}
+              />
+            </div>
+            <div
+              style={{
+                color: LOOP_STEPS[currentStep].type === "think" ? "#94a3b8" : LOOP_STEPS[currentStep].type === "act" ? "#7dd3fc" : "#fbbf24",
+                lineHeight: 1.6,
+              }}
+            >
+              {LOOP_STEPS[currentStep].type === "act" ? `> ${typedContent}` : renderContent(typedContent)}
+              <span style={{ animation: "blink 0.7s infinite", color: "#6366f1" }}>▋</span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div style={{ marginTop: 16 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: "#64748b", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+          @Tool methods registered with Spring AI ChatClient
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+          {[
+            { name: "readLogs()", desc: "Log aggregation · service + window", called: shownSteps.some((i) => LOOP_STEPS[i].tool === "readLogs"), color: "#0891b2" },
+            { name: "queryMetrics()", desc: "Prometheus/ClickHouse · metric + window", called: shownSteps.some((i) => LOOP_STEPS[i].tool === "queryMetrics"), color: "#059669" },
+            { name: "getRecentDeployments()", desc: "CI/CD history · service + lookback", called: shownSteps.some((i) => LOOP_STEPS[i].tool === "getRecentDeployments"), color: "#d97706" },
+          ].map((tool) => (
+            <div
+              key={tool.name}
+              style={{
+                background: tool.called ? tool.color + "11" : "#f8fafc",
+                border: `1px solid ${tool.called ? tool.color + "44" : "#e2e8f0"}`,
+                borderRadius: 8,
+                padding: "10px 12px",
+                transition: "all 0.3s",
+              }}
+            >
+              <div style={{ fontSize: 11, fontWeight: 600, fontFamily: "monospace", color: tool.called ? tool.color : "#94a3b8" }}>
+                {tool.called ? "✓ " : ""}{tool.name}
+              </div>
+              <div style={{ fontSize: 10, color: "#64748b", marginTop: 2 }}>{tool.desc}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ marginTop: 12, padding: "10px 14px", background: "#f8fafc", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 11, color: "#64748b" }}>
+        <strong style={{ color: "#374151" }}>Why ReAct vs hardcoded sequence:</strong> If logs show an infrastructure timeout instead of an NPE, the agent skips
+        the deployment check and queries network metrics instead. The tool-use loop adapts to what it discovers — a hardcoded
+        sequence can&apos;t do that.
       </div>
     </div>
-  )
+  );
 }

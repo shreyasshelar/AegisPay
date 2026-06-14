@@ -1,185 +1,222 @@
-// FILE: apps/web/app/docs/_components/OutboxPatternDemo.tsx
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
-import { Play, Pause, RotateCcw, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react'
+import { useState, useEffect } from "react";
 
-type FlowStep = {
-  actor: string
-  action: string
-  result: 'ok' | 'fail' | 'warn' | 'info'
-  note?: string
-}
+const BAD_STEPS = [
+  { id: 1, actor: "Transaction Service", action: "INSERT INTO transactions (status=PENDING)", result: "✅ Row written to Postgres", good: true,  crash: false },
+  { id: 2, actor: "Transaction Service", action: "💥 SERVICE CRASHES HERE",                   result: "❌ Crash before Kafka publish!", good: false, crash: true  },
+  { id: 3, actor: "Kafka",               action: "transaction.initiated never published",     result: "❌ No event — payment flow stalls forever", good: false, crash: false },
+  { id: 4, actor: "System",              action: "Ghost transaction stuck in PENDING",        result: "❌ User never notified. Ledger never reserved.", good: false, crash: false },
+];
 
-const SCENARIOS: Record<string, { label: string; steps: FlowStep[] }> = {
-  without: {
-    label: '❌ Without Outbox',
-    steps: [
-      { actor: 'Transaction Svc', action: 'INSERT transactions (id, status=PENDING)', result: 'ok' },
-      { actor: 'Transaction Svc', action: 'SERVICE CRASHES before kafka.send()', result: 'fail', note: 'Process killed — no event ever published' },
-      { actor: 'Kafka', action: 'transaction.initiated never published', result: 'fail' },
-      { actor: 'Ledger Svc', action: 'Never receives event — funds never reserved', result: 'fail' },
-      { actor: 'DB', action: 'Transaction stuck in PENDING state forever — ghost record', result: 'fail', note: 'Manual intervention required' },
-    ],
-  },
-  with: {
-    label: '✅ With Outbox',
-    steps: [
-      { actor: 'Transaction Svc', action: 'BEGIN TRANSACTION', result: 'info' },
-      { actor: 'Transaction Svc', action: 'INSERT transactions (id, status=PENDING)', result: 'ok' },
-      { actor: 'Transaction Svc', action: 'INSERT outbox_events (aggregate_id, event_type=\'transaction.initiated\', published=false)', result: 'ok', note: 'Same DB transaction — atomic!' },
-      { actor: 'Transaction Svc', action: 'COMMIT', result: 'ok' },
-      { actor: 'Outbox Relay', action: 'SELECT * FROM outbox_events WHERE published=false (poll every 100ms)', result: 'info' },
-      { actor: 'Outbox Relay', action: 'kafkaTemplate.send("transaction.initiated", event)', result: 'ok' },
-      { actor: 'Outbox Relay', action: 'UPDATE outbox_events SET published=true WHERE id=?', result: 'ok' },
-      { actor: 'Kafka Consumers', action: 'Ledger + Risk Engine consume transaction.initiated', result: 'ok' },
-    ],
-  },
-  crash: {
-    label: '⚠️ Relay Crash Recovery',
-    steps: [
-      { actor: 'Transaction Svc', action: 'BEGIN → INSERT transactions + INSERT outbox_events → COMMIT', result: 'ok' },
-      { actor: 'Outbox Relay', action: 'kafkaTemplate.send("transaction.initiated") ✅', result: 'ok' },
-      { actor: 'Outbox Relay', action: 'RELAY CRASHES before UPDATE published=true', result: 'warn', note: 'Did not mark as published — will re-publish on restart' },
-      { actor: 'Outbox Relay', action: 'Relay restarts — finds outbox_event still published=false — re-publishes (duplicate)', result: 'warn' },
-      { actor: 'Kafka Consumer', action: 'Idempotency check: SELECT FROM processed_events WHERE event_id=?', result: 'ok', note: 'Already processed — duplicate detected' },
-      { actor: 'Kafka Consumer', action: 'Duplicate safely ignored — no double processing', result: 'ok' },
-    ],
-  },
-}
+const GOOD_STEPS = [
+  { id: 1, actor: "Transaction Service", action: "BEGIN TRANSACTION",                                                    result: "", good: true, crash: false },
+  { id: 2, actor: "Postgres",            action: "INSERT INTO transactions (status=PENDING)",                             result: "✅ Domain entity written", good: true, crash: false },
+  { id: 3, actor: "Postgres",            action: "INSERT INTO outbox_events (topic='transaction.initiated', payload=...)", result: "✅ Event row in SAME transaction", good: true, crash: false },
+  { id: 4, actor: "Transaction Service", action: "COMMIT;",                                                               result: "✅ Both rows committed atomically — or neither!", good: true, crash: false },
+  { id: 5, actor: "Outbox Relay",        action: "SELECT * FROM outbox_events WHERE published=false",                     result: "✅ Relay polls every ~1s", good: true, crash: false },
+  { id: 6, actor: "Outbox Relay",        action: "kafka.send('transaction.initiated', payload)",                          result: "✅ Event published to Kafka broker", good: true, crash: false },
+  { id: 7, actor: "Outbox Relay",        action: "UPDATE outbox_events SET published=true",                               result: "✅ Marked as delivered", good: true, crash: false },
+  { id: 8, actor: "Kafka Consumers",     action: "Ledger, Risk, Pipeline consume event",                                  result: "✅ Payment flow continues normally", good: true, crash: false },
+];
 
-const RESULT_STYLES: Record<string, string> = {
-  ok: 'bg-green-50 border-green-200',
-  fail: 'bg-red-50 border-red-200',
-  warn: 'bg-amber-50 border-amber-200',
-  info: 'bg-blue-50 border-blue-200',
-}
+const CRASH_STEPS = [
+  { id: 1, actor: "Transaction Service", action: "BEGIN → INSERT both rows → COMMIT",              result: "✅ Atomic — both rows in DB", good: true,  crash: false },
+  { id: 2, actor: "Outbox Relay",        action: "kafka.send('transaction.initiated', ...)",       result: "✅ Published to Kafka", good: true,  crash: false },
+  { id: 3, actor: "Outbox Relay",        action: "💥 RELAY CRASHES before UPDATE outbox_events",   result: "⚠️ Crash! Row still shows published=false", good: false, crash: true  },
+  { id: 4, actor: "Outbox Relay",        action: "Service restarts — re-queries unpublished rows", result: "⚠️ Duplicate publish to Kafka!", good: false, crash: false },
+  { id: 5, actor: "Kafka Consumers",     action: "Check: already processed tx-id in MongoDB?",    result: "✅ Idempotency: ON CONFLICT DO NOTHING", good: true,  crash: false },
+  { id: 6, actor: "System",              action: "Duplicate safely ignored",                        result: "✅ Exactly-once processing preserved", good: true,  crash: false },
+];
 
-const RESULT_ICONS: Record<string, React.ReactNode> = {
-  ok: <CheckCircle2 size={14} className="text-green-500 shrink-0" />,
-  fail: <XCircle size={14} className="text-red-500 shrink-0" />,
-  warn: <AlertTriangle size={14} className="text-amber-500 shrink-0" />,
-  info: <div className="w-3.5 h-3.5 rounded-full bg-blue-500 shrink-0" />,
-}
+const SCENARIOS = [
+  { id: "bad",   label: "❌ Without Outbox",           color: "#dc2626", steps: BAD_STEPS   },
+  { id: "good",  label: "✅ With Outbox Pattern",      color: "#059669", steps: GOOD_STEPS  },
+  { id: "crash", label: "⚠️ Relay Crash (duplicate?)", color: "#d97706", steps: CRASH_STEPS },
+];
+
+const ACTOR_COLORS: Record<string, string> = {
+  "Transaction Service": "#6366f1",
+  "Postgres":            "#3b82f6",
+  "Outbox Relay":        "#8b5cf6",
+  "Kafka":               "#dc2626",
+  "Kafka Consumers":     "#059669",
+  "System":              "#64748b",
+};
 
 export default function OutboxPatternDemo() {
-  const [tab, setTab] = useState<keyof typeof SCENARIOS>('without')
-  const [currentStep, setCurrentStep] = useState(0)
-  const [playing, setPlaying] = useState(false)
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const [scenario, setScenario] = useState("bad");
+  const [stepIdx,  setStepIdx]  = useState(0);
+  const [playing,  setPlaying]  = useState(false);
 
-  const scenario = SCENARIOS[tab]
-  const steps = scenario.steps
-
-  useEffect(() => {
-    setCurrentStep(0)
-    setPlaying(false)
-  }, [tab])
+  const scen    = SCENARIOS.find(s => s.id === scenario)!;
+  const steps   = scen.steps;
+  const step    = steps[stepIdx] || steps[0];
+  const maxStep = steps.length - 1;
 
   useEffect(() => {
-    if (playing) {
-      intervalRef.current = setInterval(() => {
-        setCurrentStep((prev) => {
-          if (prev >= steps.length - 1) {
-            setPlaying(false)
-            return prev
-          }
-          return prev + 1
-        })
-      }, 1500)
-    }
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current)
-    }
-  }, [playing, steps.length])
+    if (!playing) return;
+    if (stepIdx >= maxStep) { setPlaying(false); return; }
+    const delay = step.crash ? 1200 : 1400;
+    const t = setTimeout(() => setStepIdx(i => i + 1), delay);
+    return () => clearTimeout(t);
+  }, [playing, stepIdx, maxStep, step]);
 
-  const reset = () => {
-    setPlaying(false)
-    setCurrentStep(0)
-  }
+  const switchScenario = (id: string) => { setScenario(id); setStepIdx(0); setPlaying(false); };
+  const next  = () => setStepIdx(i => Math.min(maxStep, i + 1));
+  const prev  = () => setStepIdx(i => Math.max(0, i - 1));
+  const reset = () => { setStepIdx(0); setPlaying(false); };
 
   return (
-    <div className="rounded-xl border border-gray-100 shadow-sm bg-white overflow-hidden">
-      <div className="border-b border-gray-100">
-        <div className="flex overflow-x-auto">
-          {Object.entries(SCENARIOS).map(([key, { label }]) => (
-            <button
-              key={key}
-              onClick={() => setTab(key as keyof typeof SCENARIOS)}
-              className={`shrink-0 px-5 py-3 text-sm font-medium border-b-2 transition-colors ${
-                tab === key
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+    <div style={{ fontFamily: "'IBM Plex Sans', system-ui, sans-serif", maxWidth: 860, margin: "0 auto", padding: 24 }}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');`}</style>
+
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 4 }}>AegisPay · Patterns</div>
+        <div style={{ fontSize: 24, fontWeight: 700, color: "#0f172a", letterSpacing: "-0.02em" }}>Transactional Outbox Pattern</div>
+        <div style={{ fontSize: 13, color: "#64748b", marginTop: 2 }}>The only safe way to write to both Postgres and Kafka without losing events</div>
       </div>
 
-      <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
-        <p className="text-sm text-gray-500">
-          Step {Math.min(currentStep + 1, steps.length)} of {steps.length}
-        </p>
-        <div className="flex items-center gap-2">
-          <button onClick={reset} className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100">
-            <RotateCcw size={14} />
-          </button>
-          <button
-            onClick={() => setPlaying((p) => !p)}
-            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-blue-500 text-white font-medium hover:bg-blue-600"
-          >
-            {playing ? <Pause size={12} /> : <Play size={12} />}
-            {playing ? 'Pause' : 'Play'}
-          </button>
-        </div>
-      </div>
-
-      <div className="p-5 space-y-2">
-        {steps.map((step, idx) => (
-          <div
-            key={idx}
-            className={`rounded-lg border p-3 transition-all duration-300 ${
-              idx <= currentStep
-                ? RESULT_STYLES[step.result]
-                : 'border-gray-100 bg-white opacity-30'
-            }`}
-          >
-            <div className="flex items-start gap-2.5">
-              {RESULT_ICONS[step.result]}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                    {step.actor}
-                  </span>
-                  <span className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">
-                    Step {idx + 1}
-                  </span>
-                </div>
-                <p className="text-sm font-mono text-gray-800 mt-0.5">{step.action}</p>
-                {step.note && idx <= currentStep && (
-                  <p className="text-xs text-gray-500 mt-1 italic">{step.note}</p>
-                )}
-              </div>
-            </div>
+      <div style={{ background: "#fef2f2", borderRadius: 10, padding: "12px 16px", border: "1px solid #fecaca", marginBottom: 20 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: "#dc2626", marginBottom: 6 }}>⚠️ The Core Problem</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div style={{ fontSize: 11, color: "#374151", lineHeight: 1.6 }}>
+            <strong>Order A:</strong> Write DB first, then publish to Kafka<br/>
+            → Crash between write and publish → event lost → ghost transaction stuck PENDING forever
           </div>
+          <div style={{ fontSize: 11, color: "#374151", lineHeight: 1.6 }}>
+            <strong>Order B:</strong> Publish to Kafka first, then write DB<br/>
+            → Crash after publish → DB write never happens → consumers process event for non-existent transaction
+          </div>
+        </div>
+        <div style={{ marginTop: 8, fontSize: 12, fontWeight: 600, color: "#dc2626" }}>Neither order is safe. You cannot atomically write to two different systems.</div>
+      </div>
+
+      <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+        {SCENARIOS.map(s => (
+          <button key={s.id} onClick={() => switchScenario(s.id)} style={{ padding: "7px 16px", borderRadius: 8, border: `2px solid ${scenario === s.id ? s.color : "#e2e8f0"}`, background: scenario === s.id ? s.color : "#fff", color: scenario === s.id ? "#fff" : "#475569", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+            {s.label}
+          </button>
         ))}
       </div>
 
-      <div className="px-5 pb-4">
-        <div className="flex gap-1">
-          {steps.map((_, idx) => (
-            <button
-              key={idx}
-              onClick={() => { setPlaying(false); setCurrentStep(idx) }}
-              className={`h-1.5 rounded-full flex-1 transition-all ${
-                idx <= currentStep ? 'bg-blue-500' : 'bg-gray-200'
-              }`}
-            />
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 16 }}>
+        <div>
+          <div style={{ background: "#f8fafc", borderRadius: 12, padding: 16, border: "1px solid #e2e8f0", marginBottom: 14 }}>
+            {steps.map((s, i) => {
+              const isActive = i === stepIdx;
+              const isDone   = i < stepIdx;
+              const actorCol = ACTOR_COLORS[s.actor] || "#64748b";
+              return (
+                <div key={s.id} onClick={() => { setStepIdx(i); setPlaying(false); }} style={{ display: "flex", gap: 12, padding: "10px 12px", borderRadius: 8, marginBottom: 6, cursor: "pointer", background: isActive ? (s.crash ? "#fef2f2" : "#f0fdf4") : (isDone ? "#f8fafc" : "#fff"), border: `1.5px solid ${isActive ? (s.crash ? "#dc2626" : "#059669") : "#e2e8f0"}`, transition: "all 0.15s" }}>
+                  <div style={{ width: 22, height: 22, borderRadius: "50%", background: isDone ? actorCol : (isActive ? actorCol : "#e2e8f0"), color: isDone || isActive ? "#fff" : "#94a3b8", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700, flexShrink: 0, marginTop: 1 }}>
+                    {isDone ? "✓" : s.id}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", gap: 8, alignItems: "baseline", marginBottom: 2 }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: actorCol }}>{s.actor}</span>
+                    </div>
+                    <div style={{ fontSize: 11, fontFamily: "monospace", color: s.crash ? "#dc2626" : (isDone ? "#64748b" : "#0f172a"), fontWeight: s.crash ? 700 : 400 }}>{s.action}</div>
+                    {(isActive || isDone) && s.result && (
+                      <div style={{ fontSize: 11, color: s.good ? "#059669" : "#dc2626", marginTop: 3 }}>{s.result}</div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <button onClick={reset} style={{ padding: "7px 14px", borderRadius: 8, border: "1.5px solid #e2e8f0", background: "#fff", color: "#64748b", fontSize: 12, cursor: "pointer" }}>↺ Reset</button>
+            <button onClick={prev} disabled={stepIdx === 0} style={{ padding: "7px 14px", borderRadius: 8, border: "1.5px solid #e2e8f0", background: "#fff", color: stepIdx === 0 ? "#cbd5e1" : "#374151", fontSize: 12, cursor: stepIdx === 0 ? "not-allowed" : "pointer" }}>← Prev</button>
+            <button onClick={next} disabled={stepIdx === maxStep} style={{ padding: "7px 14px", borderRadius: 8, border: `1.5px solid ${stepIdx === maxStep ? "#e2e8f0" : scen.color}`, background: stepIdx === maxStep ? "#fff" : scen.color, color: stepIdx === maxStep ? "#cbd5e1" : "#fff", fontSize: 12, fontWeight: 600, cursor: stepIdx === maxStep ? "not-allowed" : "pointer" }}>Next →</button>
+            <button onClick={() => setPlaying(p => !p)} style={{ padding: "7px 14px", borderRadius: 8, border: "1.5px solid #e2e8f0", background: playing ? "#fef3c7" : "#fff", color: "#374151", fontSize: 12, cursor: "pointer" }}>
+              {playing ? "⏸ Pause" : "▶ Auto"}
+            </button>
+            <div style={{ marginLeft: "auto", fontSize: 11, color: "#94a3b8", fontFamily: "monospace" }}>{stepIdx + 1} / {steps.length}</div>
+          </div>
+        </div>
+
+        <div>
+          <div style={{ background: "#f8fafc", borderRadius: 12, padding: 14, border: "1px solid #e2e8f0", marginBottom: 12 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>🗄 Postgres State</div>
+            <div style={{ marginBottom: 8 }}>
+              <div style={{ fontSize: 10, color: "#94a3b8", fontFamily: "monospace", marginBottom: 4 }}>transactions</div>
+              <div style={{ background: "#fff", borderRadius: 6, padding: "6px 8px", border: "1px solid #e2e8f0", fontFamily: "monospace", fontSize: 10 }}>
+                <div style={{ color: "#059669" }}>id: tx-001 | status: PENDING</div>
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: 10, color: "#94a3b8", fontFamily: "monospace", marginBottom: 4 }}>outbox_events</div>
+              {scenario === "bad" ? (
+                <div style={{ fontSize: 10, color: "#dc2626", background: "#fef2f2", borderRadius: 6, padding: "6px 8px" }}>❌ No outbox table — pattern not implemented!</div>
+              ) : stepIdx >= 3 ? (
+                <div style={{ background: "#fff", borderRadius: 6, padding: "6px 8px", border: "1px solid #e2e8f0", fontFamily: "monospace", fontSize: 10 }}>
+                  <div style={{ color: stepIdx >= 7 ? "#059669" : "#d97706" }}>
+                    id: ev-001 | topic: transaction.initiated<br/>
+                    published: {scenario === "crash" && stepIdx >= 3 && stepIdx <= 4 ? "false (CRASH!)" : (stepIdx >= 7 ? "true" : "false")}
+                  </div>
+                </div>
+              ) : stepIdx >= 1 ? (
+                <div style={{ background: "#fff", borderRadius: 6, padding: "6px 8px", border: "1px solid #e2e8f0", fontFamily: "monospace", fontSize: 10 }}>
+                  <div style={{ color: "#d97706" }}>id: ev-001 | topic: transaction.initiated<br/>published: false</div>
+                </div>
+              ) : (
+                <div style={{ fontSize: 10, color: "#94a3b8" }}>empty</div>
+              )}
+            </div>
+          </div>
+
+          <div style={{ background: "#f8fafc", borderRadius: 12, padding: 14, border: "1px solid #e2e8f0", marginBottom: 12 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>⚡ Kafka Broker</div>
+            {((scenario === "good" && stepIdx >= 6) || (scenario === "crash" && (stepIdx === 2 || stepIdx >= 4))) ? (
+              <div style={{ background: "#f0fdf4", borderRadius: 6, padding: "6px 8px", border: "1px solid #bbf7d0", fontFamily: "monospace", fontSize: 10, color: "#059669" }}>
+                ✓ transaction.initiated<br/>
+                {scenario === "crash" && stepIdx >= 4 ? "⚠️ DUPLICATE (safe)" : ""}
+              </div>
+            ) : scenario === "bad" && stepIdx >= 2 ? (
+              <div style={{ background: "#fef2f2", borderRadius: 6, padding: "6px 8px", border: "1px solid #fecaca", fontFamily: "monospace", fontSize: 10, color: "#dc2626" }}>
+                ❌ No events received
+              </div>
+            ) : (
+              <div style={{ fontSize: 10, color: "#94a3b8" }}>No events yet</div>
+            )}
+          </div>
+
+          <div style={{ background: step.crash ? "#fef2f2" : (step.good ? "#f0fdf4" : "#fff7ed"), borderRadius: 10, padding: "12px 14px", border: `1px solid ${step.crash ? "#fecaca" : (step.good ? "#bbf7d0" : "#fed7aa")}` }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: step.crash ? "#dc2626" : (step.good ? "#166534" : "#c2410c"), textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
+              {step.crash ? "💥 Crash!" : (step.good ? "✅ Success" : "⚠️ Problem")}
+            </div>
+            <div style={{ fontSize: 11, color: "#374151", lineHeight: 1.6 }}>
+              {step.crash
+                ? "Service crashes. Depending on the pattern used, the outcome is either catastrophic data loss or safe idempotent replay."
+                : step.good
+                ? "This step executes successfully. The Outbox pattern ensures atomicity — both domain entity and event are persisted together."
+                : "Without the Outbox pattern, a crash here leaves the system in an inconsistent state with no recovery path."}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ marginTop: 20, background: "#f8fafc", borderRadius: 12, padding: 16, border: "1px solid #e2e8f0" }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: "#0f172a", marginBottom: 12 }}>Outbox Pattern Guarantees</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10 }}>
+          {[
+            { scenario: "DB write succeeds, broker publish fails", outcome: "✅ Event stays in outbox; relay retries on next poll", color: "#059669" },
+            { scenario: "Relay crashes before marking published",   outcome: "✅ Event replayed on restart (consumer idempotency handles duplicate)", color: "#059669" },
+            { scenario: "DB transaction rolls back",                outcome: "✅ Outbox row also rolls back — event never published", color: "#059669" },
+            { scenario: "Without outbox: crash after DB write",     outcome: "❌ Event never published — ghost transaction forever", color: "#dc2626" },
+          ].map((row, i) => (
+            <div key={i} style={{ padding: "10px 12px", background: "#fff", borderRadius: 8, borderLeft: `3px solid ${row.color}` }}>
+              <div style={{ fontSize: 11, color: "#64748b", marginBottom: 4 }}>{row.scenario}</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: row.color }}>{row.outcome}</div>
+            </div>
           ))}
+        </div>
+        <div style={{ marginTop: 12, padding: "8px 12px", background: "#f0f9ff", borderRadius: 8, fontSize: 11, color: "#0369a1" }}>
+          <strong>Key insight:</strong> At-least-once delivery + idempotent consumers = effectively-once processing. Never exactly-once without consumer idempotency.
         </div>
       </div>
     </div>
-  )
+  );
 }
