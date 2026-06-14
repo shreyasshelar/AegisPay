@@ -43,7 +43,7 @@ object Route {
     fun docs(section: String = "") = "docs?section=$section"
 }
 
-private val BACK_OFFICE_ROLES = setOf("BACK_OFFICE", "ADMIN")
+private val BACK_OFFICE_ROLES = setOf("BACK_OFFICE", "ADMIN", "MERCHANT_OPS")
 private val ADMIN_ROLES        = setOf("ADMIN")
 
 // ── Nav host ──────────────────────────────────────────────────────────────────

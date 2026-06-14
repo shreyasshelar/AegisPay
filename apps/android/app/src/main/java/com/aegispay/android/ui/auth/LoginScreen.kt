@@ -22,7 +22,8 @@ fun LoginScreen(
     onStartAuthFlow:  () -> Unit,
     onNavigateToDocs: () -> Unit = {},
 ) {
-    val authState by viewModel.authState.collectAsState()
+    val authState  by viewModel.authState.collectAsState()
+    val loginError by viewModel.loginError.collectAsState()
     val isLoading = authState is AuthState.Loading
 
     Box(
@@ -74,6 +75,22 @@ fun LoginScreen(
             }
 
             Spacer(Modifier.height(16.dp))
+
+            // Error banner — shown when OAuth callback returns without a valid session
+            if (loginError != null) {
+                Card(
+                    shape  = RoundedCornerShape(10.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.15f)),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        text     = loginError!!,
+                        color    = Color.White,
+                        style    = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                    )
+                }
+            }
 
             Button(
                 onClick  = onStartAuthFlow,

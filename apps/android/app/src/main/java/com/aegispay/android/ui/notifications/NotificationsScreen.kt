@@ -133,10 +133,12 @@ private fun NotificationCard(notif: PushNotification) {
 }
 
 private fun notifIconAndTint(type: String): Pair<ImageVector, Color> = when (type) {
-    "TRANSACTION_COMPLETED" -> Icons.Default.CheckCircle to AegisColor.Success
-    "TRANSACTION_FAILED"    -> Icons.Default.Cancel to AegisColor.Danger
+    "TRANSACTION_COMPLETED"   -> Icons.Default.CheckCircle to AegisColor.Success
+    "TRANSACTION_FAILED"      -> Icons.Default.Cancel to AegisColor.Danger
     "TRANSACTION_ROLLED_BACK" -> Icons.Default.Undo to AegisColor.Warning
-    "KYC_STATUS_CHANGED"    -> Icons.Default.Badge to AegisColor.Primary
-    "USER_REGISTERED"       -> Icons.Default.PersonAdd to AegisColor.Primary
-    else                    -> Icons.Default.Info to AegisColor.Primary
+    "KYC_STATUS_CHANGED",
+    "KYC_APPROVED"            -> Icons.Default.Badge to AegisColor.Success
+    "KYC_REJECTED"            -> Icons.Default.Badge to AegisColor.Danger
+    "USER_REGISTERED"         -> Icons.Default.PersonAdd to AegisColor.Primary
+    else                      -> Icons.Default.Info to AegisColor.Primary
 }

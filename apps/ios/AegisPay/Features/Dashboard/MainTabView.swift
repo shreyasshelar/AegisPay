@@ -4,9 +4,10 @@ private let backOfficeRoles: Set<String> = ["BACK_OFFICE", "ADMIN", "MERCHANT_OP
 private let adminRoles:      Set<String> = ["ADMIN"]
 
 struct MainTabView: View {
-    @EnvironmentObject var authStore: AuthStore
-    @State private var selectedTab     = 0
-    @State private var unreadCount     = 0
+    @EnvironmentObject var authStore:     AuthStore
+    @EnvironmentObject var deepLinkRouter: DeepLinkRouter
+    @State private var selectedTab      = 0
+    @State private var unreadCount      = 0
     @State private var didSetInitialTab = false
 
     /// True when the signed-in user has back-office access.
@@ -125,6 +126,18 @@ struct MainTabView: View {
         // Listen for incoming notifications via NotificationCenter (from PushNotificationHandler)
         .onReceive(NotificationCenter.default.publisher(for: .aegisNewNotification)) { _ in
             if selectedTab != 4 { unreadCount += 1 }
+        }
+        // Handle deep links routed from DeepLinkRouter (universal links + custom scheme)
+        .onChange(of: deepLinkRouter.pendingDestination) { _, destination in
+            guard let destination, !isBackOfficeUser else { return }
+            deepLinkRouter.pendingDestination = nil
+            switch destination {
+            case .send:               selectedTab = 2
+            case .wallet:             selectedTab = 3
+            case .profile:            selectedTab = 5
+            case .transactionDetail:  selectedTab = 1   // switch to Transactions tab
+            case .unknown:            break
+            }
         }
     }
 }

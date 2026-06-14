@@ -36,7 +36,7 @@ struct DocsView: View {
     ]
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ScrollView {
                 VStack(spacing: 0) {
                     // Hero
@@ -108,7 +108,7 @@ struct DocsView: View {
                     .padding(.bottom, 32)
                 }
             }
-            .navigationBarHidden(true)
+            .toolbar(.hidden, for: .navigationBar)
         }
         .sheet(isPresented: $showSafari) {
             SafariView(url: safariURL)

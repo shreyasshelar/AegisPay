@@ -138,17 +138,20 @@ struct NotificationsView: View {
         case "TRANSACTION_COMPLETED": return "checkmark.circle.fill"
         case "TRANSACTION_FAILED",
              "TRANSACTION_ROLLED_BACK": return "xmark.circle.fill"
-        case "KYC_APPROVED":  return "person.badge.shield.checkmark.fill"
-        case "KYC_REJECTED":  return "person.crop.circle.badge.xmark"
-        case "USER_REGISTERED": return "person.badge.plus"
+        case "KYC_APPROVED":       return "person.badge.shield.checkmark.fill"
+        case "KYC_REJECTED":       return "person.crop.circle.badge.xmark"
+        case "KYC_STATUS_CHANGED": return "person.badge.shield.checkmark.fill"
+        case "USER_REGISTERED":    return "person.badge.plus"
         default: return "bell.fill"
         }
     }
 
     private func iconColor(for type: String) -> Color {
         switch type {
-        case "TRANSACTION_COMPLETED", "KYC_APPROVED", "USER_REGISTERED": return Color.aegisSuccess
-        case "TRANSACTION_FAILED", "TRANSACTION_ROLLED_BACK", "KYC_REJECTED": return Color.aegisDanger
+        case "TRANSACTION_COMPLETED", "KYC_APPROVED", "KYC_STATUS_CHANGED", "USER_REGISTERED":
+            return Color.aegisSuccess
+        case "TRANSACTION_FAILED", "TRANSACTION_ROLLED_BACK", "KYC_REJECTED":
+            return Color.aegisDanger
         default: return Color.aegisPrimary
         }
     }

@@ -229,7 +229,7 @@ final class SendMoneyViewModel: ObservableObject {
         do {
             errorResolution = try await aiService.resolveError(
                 ErrorResolutionRequest(
-                    errorCode:    reason.components(separatedBy: ":").last?
+                    errorCode:    reason.components(separatedBy: ":").first?
                                        .trimmingCharacters(in: .whitespaces) ?? "UNKNOWN",
                     errorMessage: reason
                 )

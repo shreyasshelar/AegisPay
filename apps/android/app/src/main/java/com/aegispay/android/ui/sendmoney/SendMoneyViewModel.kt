@@ -302,7 +302,7 @@ class SendMoneyViewModel @Inject constructor(
             runCatching {
                 api.resolveError(
                     ErrorResolutionRequest(
-                        errorCode    = failureReason.split(":").last().trim(),
+                        errorCode    = failureReason.split(":").first().trim(),
                         errorMessage = failureReason,
                     )
                 )
@@ -325,6 +325,7 @@ class SendMoneyViewModel @Inject constructor(
         stopLiveUpdates()
         idempotencyKey = UUID.randomUUID().toString()
         _uiState.value = SendMoneyUiState()
+        loadKycStatus()
     }
 
     override fun onCleared() {
