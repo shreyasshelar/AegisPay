@@ -290,11 +290,11 @@ services:
     enabled: true
     image:
       repository: web
-      tag: dev-972fa5472ac211487abd914e32ebe03821c188db
+      tag: dev-6ae06b48182e1ab5b1c0cd49ad793dfcf3f0cb48
     # Updated by cd-dev.yml on every successful web image build.
     # Injected as a pod annotation so ArgoCD detects a spec change and rolls
     # the pod even when the image tag stays "dev-latest" (reused tag scenario).
-    deployTimestamp: "972fa5472ac211487abd914e32ebe03821c188db"
+    deployTimestamp: "6ae06b48182e1ab5b1c0cd49ad793dfcf3f0cb48"
     replicas: 1
     port: 3000
     resources:
