@@ -104,7 +104,7 @@ services:
     enabled: true
     image:
       repository: user-service
-      tag: dev-e0994b47e39efcb45f0e5a1564ed481561337147
+      tag: dev-087e8107c9647027fb7aac0f7246c477ce7a7b43
     replicas: 1
     port: 8081
     resources:
@@ -142,7 +142,7 @@ services:
     enabled: true
     image:
       repository: ledger-service
-      tag: dev-e0994b47e39efcb45f0e5a1564ed481561337147
+      tag: dev-087e8107c9647027fb7aac0f7246c477ce7a7b43
     replicas: 1
     port: 8083
     resources:
