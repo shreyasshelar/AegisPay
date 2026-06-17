@@ -33,7 +33,7 @@ enum TransactionStatus: String, Codable, CaseIterable {
 
 struct Transaction: Codable, Identifiable {
     let transactionId: String
-    let payerId:       String
+    let payerId:       String?
     let payeeId:       String
     let amount:        Decimal
     let currency:      String
@@ -50,7 +50,7 @@ struct PagedTransactions: Codable {
     let content:       [Transaction]
     let totalElements: Int
     let totalPages:    Int
-    let number:        Int
+    let page:          Int
     let size:          Int
     let last:          Bool
 }

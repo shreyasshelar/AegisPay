@@ -25,10 +25,10 @@ final class DashboardViewModel: ObservableObject {
         isLoading    = true
         errorMessage = nil
         do {
-            async let acc     = accountSvc.getAccount(userId: userId)
-            async let txs     = transactionSvc.list(page: 0, size: 8)
-            async let profile = userSvc.getProfile(userId: userId)
-            account   = try await acc
+            async let accounts = accountSvc.getMyAccounts()
+            async let txs      = transactionSvc.list(page: 0, size: 8)
+            async let profile  = userSvc.getProfile(userId: userId)
+            account   = try await accounts.first
             recentTx  = try await txs.content
             kycStatus = (try? await profile)?.kycStatus
         } catch {

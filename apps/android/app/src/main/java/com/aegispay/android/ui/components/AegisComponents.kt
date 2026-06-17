@@ -198,7 +198,7 @@ fun AegisTransactionRow(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text  = if (isSent) "To ${transaction.payeeId.take(8)}…"
-                        else "From ${transaction.payerId.take(8)}…",
+                        else "From ${transaction.payerId?.take(8) ?: "Unknown"}…",
                 style = MaterialTheme.typography.bodyMedium,
                 color = AegisColor.Text,
             )

@@ -32,7 +32,7 @@ enum AppConfig {
 
     static let wsBaseURL: String =
         Bundle.main.object(forInfoDictionaryKey: "WS_BASE_URL") as? String
-        ?? "ws://localhost:8090"
+        ?? "ws://localhost:8086"
 
     // Web app base URL — the Next.js frontend (not the API gateway).
     // In dev: http://localhost:3000, in prod: https://aegispay.shreyasshelar.uk

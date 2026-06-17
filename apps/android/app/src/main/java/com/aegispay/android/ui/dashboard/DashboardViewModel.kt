@@ -58,7 +58,7 @@ class DashboardViewModel @Inject constructor(
             _uiState.update { it.copy(isLoadingAccount = true, isLoadingTransactions = true, error = null) }
 
             // Account balance
-            runCatching { api.getAccount(userId) }
+            runCatching { api.getMyAccount().firstOrNull() }
                 .onSuccess { account ->
                     _uiState.update { it.copy(isLoadingAccount = false, account = account) }
                 }

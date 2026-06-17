@@ -26,7 +26,7 @@ struct AegisTransactionRow: View {
             // Labels
             VStack(alignment: .leading, spacing: 3) {
                 Text(isSent ? "To \(maskId(transaction.payeeId))"
-                           : "From \(maskId(transaction.payerId))")
+                           : "From \(maskId(transaction.payerId ?? "Unknown"))")
                     .font(.aegisBodySmall)
                     .fontWeight(.medium)
                     .foregroundStyle(Color.aegisText)

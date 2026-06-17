@@ -263,7 +263,7 @@ fun TransactionDetailScreen(
                         )
                         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             DetailRow("Transaction ID", tx.transactionId, copyable = true, context = context)
-                            DetailRow("Payer",    tx.payerId)
+                            DetailRow("Payer",    tx.payerId ?: "—")
                             DetailRow("Payee",    tx.payeeId)
                             DetailRow("Currency", tx.currency)
                             DetailRow(
