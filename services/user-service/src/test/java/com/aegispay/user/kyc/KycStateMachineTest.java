@@ -65,8 +65,9 @@ class KycStateMachineTest {
     }
 
     @Test
-    void rejectedIsTerminal() {
-        assertThat(stateMachine.isTerminal(KycStatus.REJECTED)).isTrue();
+    void rejectedIsNotTerminal() {
+        // REJECTED allows re-submission (REJECTED → DOCUMENT_SUBMITTED), so it is not terminal
+        assertThat(stateMachine.isTerminal(KycStatus.REJECTED)).isFalse();
     }
 
     @ParameterizedTest

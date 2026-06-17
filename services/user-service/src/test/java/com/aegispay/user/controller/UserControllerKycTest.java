@@ -2,7 +2,9 @@ package com.aegispay.user.controller;
 
 import com.aegispay.common.domain.enums.KycStatus;
 import com.aegispay.user.config.SecurityConfig;
+import com.aegispay.user.config.UserServiceProperties;
 import com.aegispay.user.domain.dto.*;
+import com.aegispay.user.service.PhoneOtpService;
 import com.aegispay.user.service.UserService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -36,6 +38,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class UserControllerKycTest {
 
     @MockBean JwtDecoder jwtDecoder;
+    // InternalApiKeyFilter (pulled in by SecurityConfig) needs UserServiceProperties
+    @MockBean UserServiceProperties userServiceProperties;
+    // UserController constructor requires PhoneOtpService
+    @MockBean PhoneOtpService phoneOtpService;
     @Autowired private MockMvc mockMvc;
     @Autowired private ObjectMapper objectMapper;
     @MockBean  private UserService userService;

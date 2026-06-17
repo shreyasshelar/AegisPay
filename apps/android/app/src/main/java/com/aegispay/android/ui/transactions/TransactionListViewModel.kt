@@ -92,7 +92,7 @@ class TransactionListViewModel @Inject constructor(
                             isRefreshing = false,
                             transactions = if (page == 0) result.content
                                            else it.transactions + result.content,
-                            currentPage  = result.number,
+                            currentPage  = result.page,
                             totalPages   = result.totalPages,
                         )
                     }
