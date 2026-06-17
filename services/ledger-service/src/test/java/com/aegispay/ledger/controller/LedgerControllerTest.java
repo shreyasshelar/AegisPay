@@ -1,5 +1,6 @@
 package com.aegispay.ledger.controller;
 
+import com.aegispay.ledger.client.UserServiceClient;
 import com.aegispay.ledger.config.SecurityConfig;
 import com.aegispay.ledger.domain.dto.AccountResponse;
 import com.aegispay.ledger.domain.dto.LedgerEntryResponse;
@@ -37,6 +38,10 @@ class LedgerControllerTest {
     // LedgerController constructor requires TopUpService
     @MockBean
     TopUpService topUpService;
+
+    // LedgerController constructor also requires UserServiceClient
+    @MockBean
+    UserServiceClient userServiceClient;
 
     // Provide a JwtDecoder mock so Spring Security can initialise the resource-server
     // filter chain in the @WebMvcTest slice (no issuer-uri available in test context).
