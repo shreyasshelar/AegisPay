@@ -8,6 +8,7 @@ import org.springframework.ai.chat.prompt.Prompt;
 import reactor.core.publisher.Flux;
 
 import java.util.List;
+import java.util.ArrayList;
 
 /**
  * Multi-provider AI chat model with automatic fallback.
@@ -51,10 +52,17 @@ public class FallbackChatModel implements ChatModel {
     @Override
     public ChatResponse call(Prompt prompt) {
         Exception lastException = null;
-        for (NamedProvider provider : providers) {
+        // Prompt without explicit model — lets each fallback provider use its own default model.
+        // The primary provider uses the original prompt (which may carry model options from ChatClient).
+        // Without this, OpenRouter's model name (e.g. anthropic/claude-sonnet-4.5) gets forwarded
+        // to Groq/Gemini, which reject it as an unknown model.
+        Prompt promptWithoutModel = new Prompt(new ArrayList<>(prompt.getInstructions()));
+        for (int i = 0; i < providers.size(); i++) {
+            NamedProvider provider = providers.get(i);
+            Prompt effectivePrompt = (i == 0) ? prompt : promptWithoutModel;
             try {
                 log.debug("AI call → provider={}", provider.name());
-                ChatResponse response = provider.model().call(prompt);
+                ChatResponse response = provider.model().call(effectivePrompt);
                 if (lastException != null) {
                     // We used a fallback — log at INFO so ops can see the provider chain in action
                     log.info("AI fallback succeeded on provider={} (primary failed: {})",
@@ -80,21 +88,22 @@ public class FallbackChatModel implements ChatModel {
 
     @Override
     public Flux<ChatResponse> stream(Prompt prompt) {
-        return streamWithFallback(prompt, 0);
+        return streamWithFallback(prompt, new Prompt(new ArrayList<>(prompt.getInstructions())), 0);
     }
 
-    private Flux<ChatResponse> streamWithFallback(Prompt prompt, int index) {
+    private Flux<ChatResponse> streamWithFallback(Prompt originalPrompt, Prompt promptWithoutModel, int index) {
         if (index >= providers.size()) {
             return Flux.error(new RuntimeException(
                     "All AI providers exhausted for streaming. Chain: "
                             + providers.stream().map(NamedProvider::name).toList()));
         }
         NamedProvider provider = providers.get(index);
-        return Flux.defer(() -> provider.model().stream(prompt))
+        Prompt effectivePrompt = (index == 0) ? originalPrompt : promptWithoutModel;
+        return Flux.defer(() -> provider.model().stream(effectivePrompt))
                 .onErrorResume(e -> {
                     log.warn("AI stream provider='{}' failed — trying next. reason={}",
                             provider.name(), e.getMessage());
-                    return streamWithFallback(prompt, index + 1);
+                    return streamWithFallback(originalPrompt, promptWithoutModel, index + 1);
                 });
     }
 
