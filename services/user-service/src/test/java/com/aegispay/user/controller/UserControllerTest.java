@@ -2,6 +2,7 @@ package com.aegispay.user.controller;
 
 import com.aegispay.common.domain.enums.KycStatus;
 import com.aegispay.user.config.SecurityConfig;
+import com.aegispay.user.config.UserServiceProperties;
 import com.aegispay.user.domain.dto.RegistrationResult;
 import com.aegispay.user.domain.dto.UserRegistrationRequest;
 import com.aegispay.user.domain.dto.UserResponse;
@@ -36,6 +37,9 @@ class UserControllerTest {
     // Provide a JwtDecoder mock so Spring Security can initialise the resource-server
     // filter chain in the @WebMvcTest slice (no issuer-uri available in test context).
     @MockBean JwtDecoder jwtDecoder;
+    // InternalApiKeyFilter (pulled in by SecurityConfig) needs UserServiceProperties
+    // (@ConfigurationProperties), which @WebMvcTest doesn't load automatically.
+    @MockBean UserServiceProperties userServiceProperties;
 
     @Autowired private MockMvc mockMvc;
     @Autowired private ObjectMapper objectMapper;
