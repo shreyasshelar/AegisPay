@@ -267,7 +267,7 @@ services:
     enabled: true
     image:
       repository: ai-platform
-      tag: dev-e6825f3b067ca34d0795ec91a51529c77946a2b9
+      tag: dev-ce3435003925b2177fa7d1711068d2888274655e
     replicas: 1
     port: 8088
     resources:
