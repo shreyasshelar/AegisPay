@@ -189,7 +189,6 @@ final class ApiClient: ObservableObject {
         // Body
         if let body, method != "GET" {
             let encoder = JSONEncoder()
-            encoder.keyEncodingStrategy = .convertToSnakeCase
             request.httpBody = try encoder.encode(body)
         }
 

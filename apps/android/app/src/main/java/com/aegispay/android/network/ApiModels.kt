@@ -26,7 +26,7 @@ enum class TransactionStatus {
 @JsonClass(generateAdapter = true)
 data class Transaction(
     @Json(name = "transactionId") val transactionId: String,
-    @Json(name = "payerId")       val payerId:       String,
+    @Json(name = "payerId")       val payerId:       String?,
     @Json(name = "payeeId")       val payeeId:       String,
     @Json(name = "amount")        val amount:        BigDecimal,
     @Json(name = "currency")      val currency:      String,
@@ -43,7 +43,7 @@ data class PagedTransactions(
     @Json(name = "content")       val content:       List<Transaction>,
     @Json(name = "totalElements") val totalElements: Int,
     @Json(name = "totalPages")    val totalPages:    Int,
-    @Json(name = "number")        val number:        Int,
+    @Json(name = "page")          val page:          Int,
     @Json(name = "size")          val size:          Int,
     @Json(name = "last")          val last:          Boolean,
 )
