@@ -42,18 +42,38 @@ public class IncidentTriageAgent {
               Do NOT reset a breaker that is protecting from an ongoing outage.
 
             ━━━ REPORT FORMAT ━━━
-            After gathering all tool results (and taking any justified actions), produce:
+            After gathering all tool results (and taking any justified actions), produce the report
+            using EXACTLY this Markdown structure. All three client surfaces (web, iOS, Android)
+            parse and render this subset: ## headings, **bold**, `inline code`, - bullet lists,
+            numbered lists, and --- dividers. Use them for visual structure — do not collapse
+            sections into plain prose.
 
-            1. **Root Cause** — based ONLY on what the tools returned. Quote specific log lines.
-            2. **Contributing Factors** — metric values, recent commits, circuit breaker states.
-            3. **Actions Taken** — list any restartDeployment or circuitBreaker resets you triggered,
-               with the exact reason you provided. If no actions were taken, say why.
-            4. **Immediate Mitigation** — specific steps for the on-call engineer if actions were
-               insufficient or if action is outside the agent's scope.
-            5. **Long-term Remediation** — prevent recurrence.
+            ## Root Cause
+            State the precise cause based ONLY on what the tools returned. Quote the exact log line
+            (use `inline code` for log excerpts and class/method names). Never guess or invent facts.
 
-            If tools returned no useful data for a section, say "No data available" — never guess.
-            Quote specific log lines, metric numbers, and commit SHAs you actually observed.
+            ## Contributing Factors
+            - One bullet per factor (metric values, recent commits, circuit breaker states).
+            - Reference specific numbers and commit SHAs you actually observed.
+
+            ## Actions Taken
+            List every `restartDeployment` or `checkAndResetCircuitBreaker` call you made, with the
+            exact reason argument. If no actions were taken, write a single bullet explaining why
+            (e.g. configuration error — restart would not help).
+
+            ## Immediate Mitigation
+            Numbered steps for the on-call engineer. Use `code blocks` for kubectl/curl commands.
+            Only include steps that are still needed after your actions above.
+
+            ## Long-term Remediation
+            Numbered steps to prevent recurrence (code fixes, test gaps, process changes).
+
+            ---
+
+            Rules:
+            - If tools returned no useful data for a section, write "No data available." — never guess.
+            - Always quote specific log lines, metric numbers, and commit SHAs you observed.
+            - Keep each section concise: signal over noise.
             """;
 
     private final ChatClient chatClient;
@@ -117,19 +137,30 @@ public class IncidentTriageAgent {
         log.warn("IncidentTriageAgent fallback triggered for service={}: {}",
                 serviceName, cause != null ? cause.getMessage() : "circuit open");
         String fallback = """
-                ⚠ Triage agent is temporarily unavailable (AI service error or circuit open).
+                ## Root Cause
+                Triage agent is temporarily unavailable — AI service error or circuit breaker open.
+                Automated investigation could not be completed.
 
-                **Immediate manual steps:**
-                1. Check service logs: `kubectl logs -l app.kubernetes.io/name=%s -n aegispay --tail=100`
-                2. Check pod status: `kubectl get pods -n aegispay -l app.kubernetes.io/name=%s`
-                3. Check recent commits: `git log --oneline -10`
-                4. Check Kafka consumer lag in Kafka UI
-                5. Check circuit breakers: `kubectl exec -n aegispay deploy/%s -- curl -s localhost:%d/actuator/circuitbreakers`
-                6. Inspect Grafana → AegisPay SLA & Latency dashboard
+                ## Contributing Factors
+                - `%s`
 
-                **Error details:** %s
-                """.formatted(serviceName, serviceName, serviceName, 8080,
-                cause != null && cause.getMessage() != null ? cause.getMessage() : "Unknown error");
+                ## Actions Taken
+                No autonomous actions were taken (agent did not reach the action phase).
+
+                ## Immediate Mitigation
+                1. `kubectl logs -l app.kubernetes.io/name=%s -n aegispay --tail=100`
+                2. `kubectl get pods -n aegispay -l app.kubernetes.io/name=%s`
+                3. `git log --oneline -10` — check for recent deploys
+                4. Open Kafka UI → check consumer group lag
+                5. `kubectl exec -n aegispay deploy/%s -- curl -s localhost:%d/actuator/circuitbreakers`
+                6. Open Grafana → AegisPay SLA & Latency dashboard
+
+                ## Long-term Remediation
+                - Investigate AI platform availability (check circuit breaker state and LLM provider health).
+                - Re-run triage once the AI service recovers.
+                """.formatted(
+                cause != null && cause.getMessage() != null ? cause.getMessage() : "Unknown error",
+                serviceName, serviceName, serviceName, 8080);
         return new TriageReport(serviceName, incidentDescription, fallback, true);
     }
 
